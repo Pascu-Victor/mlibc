@@ -1,7 +1,7 @@
 #pragma once
 #include <sys/callnums.h>
 
-uint64_t syscall(
+static uint64_t syscall(
     ker::abi::callnums callnum,
     uint64_t a1 = 0,
     uint64_t a2 = 0,
