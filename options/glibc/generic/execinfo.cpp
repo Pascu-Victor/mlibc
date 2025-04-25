@@ -10,7 +10,7 @@
 
 namespace {
 
-using UnwindBacktrace =  _Unwind_Reason_Code (*)(_Unwind_Trace_Fn, void *);
+using UnwindBacktrace = _Unwind_Reason_Code (*)(_Unwind_Trace_Fn, void *);
 using UnwindGetIP = _Unwind_Ptr (*)(_Unwind_Context *);
 
 frg::optional<void *> libgccHandle = frg::null_opt;
@@ -59,15 +59,18 @@ int backtrace(void **buffer, int size) {
 		libgccHandle = dlopen("libgcc_s.so.1", RTLD_LAZY | RTLD_LOCAL);
 		if (!libgccHandle || libgccHandle.value() == nullptr) {
 			auto error = dlerror();
-			mlibc::infoLogger() << "Failed to load libgcc_s.so.1: " << (error ? error : "") << frg::endlog;
+			mlibc::infoLogger() << "Failed to load libgcc_s.so.1: " << (error ? error : "")
+			                    << frg::endlog;
 			return 0;
 		}
 
-		unwindBacktrace = reinterpret_cast<UnwindBacktrace>(dlsym(libgccHandle.value(), "_Unwind_Backtrace"));
+		unwindBacktrace =
+		    reinterpret_cast<UnwindBacktrace>(dlsym(libgccHandle.value(), "_Unwind_Backtrace"));
 		unwindGetIP = reinterpret_cast<UnwindGetIP>(dlsym(libgccHandle.value(), "_Unwind_GetIP"));
 
 		if (!unwindBacktrace || !unwindGetIP) {
-			mlibc::infoLogger() << "Failed to find unwind functions in libgcc_s.so.1: " << dlerror() << frg::endlog;
+			mlibc::infoLogger() << "Failed to find unwind functions in libgcc_s.so.1: " << dlerror()
+			                    << frg::endlog;
 			return 0;
 		}
 	}
@@ -93,9 +96,14 @@ void backtrace_symbols_fd(void *const *buffer, int size, int fd) {
 				write(fd, info.dli_fname, strlen(info.dli_fname));
 
 			if (info.dli_sname != nullptr)
-				dprintf(fd, "(%s+0x%" PRIxPTR ") ", info.dli_sname,
-					reinterpret_cast<uintptr_t>(buffer[frame_num]) - reinterpret_cast<uintptr_t>(info.dli_saddr));
-			else if(info.dli_saddr)
+				dprintf(
+				    fd,
+				    "(%s+0x%" PRIxPTR ") ",
+				    info.dli_sname,
+				    reinterpret_cast<uintptr_t>(buffer[frame_num])
+				        - reinterpret_cast<uintptr_t>(info.dli_saddr)
+				);
+			else if (info.dli_saddr)
 				dprintf(fd, "(+%p) ", info.dli_saddr);
 			else
 				dprintf(fd, "() ");

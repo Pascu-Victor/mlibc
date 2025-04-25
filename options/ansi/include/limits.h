@@ -6,7 +6,7 @@
 #define CHAR_BIT 8
 
 #ifndef MB_LEN_MAX
-# define MB_LEN_MAX 4
+#define MB_LEN_MAX 4
 #endif
 
 #undef SCHAR_MIN
@@ -30,29 +30,29 @@
 #define SCHAR_MIN (-__SCHAR_MAX__ - 1)
 #define SCHAR_MAX __SCHAR_MAX__
 #if __SCHAR_MAX__ == __INT_MAX__
-# define UCHAR_MAX (__SCHAR_MAX__ * 2U + 1U)
+#define UCHAR_MAX (__SCHAR_MAX__ * 2U + 1U)
 #else
-# define UCHAR_MAX (__SCHAR_MAX__ * 2 + 1)
+#define UCHAR_MAX (__SCHAR_MAX__ * 2 + 1)
 #endif
 
 #ifdef __CHAR_UNSIGNED__
-# define CHAR_MAX UCHAR_MAX
-# if __SCHAR_MAX__ == __INT_MAX__
-#  define CHAR_MIN 0U
-# else
-#  define CHAR_MIN 0
-# endif
+#define CHAR_MAX UCHAR_MAX
+#if __SCHAR_MAX__ == __INT_MAX__
+#define CHAR_MIN 0U
 #else
-# define CHAR_MAX SCHAR_MAX
-# define CHAR_MIN SCHAR_MIN
+#define CHAR_MIN 0
+#endif
+#else
+#define CHAR_MAX SCHAR_MAX
+#define CHAR_MIN SCHAR_MIN
 #endif
 
 #define SHRT_MIN (-__SHRT_MAX__ - 1)
 #define SHRT_MAX __SHRT_MAX__
 #if __SHRT_MAX__ == __INT_MAX__
-# define USHRT_MAX (__SHRT_MAX__ * 2U + 1U)
+#define USHRT_MAX (__SHRT_MAX__ * 2U + 1U)
 #else
-# define USHRT_MAX (__SHRT_MAX__ * 2 + 1)
+#define USHRT_MAX (__SHRT_MAX__ * 2 + 1)
 #endif
 
 #define INT_MIN (-__INT_MAX__ - 1)
@@ -80,16 +80,16 @@
 #endif /* !defined(NGROUPS_MAX) */
 
 #if __INTPTR_MAX__ == __INT64_MAX__
-# define SSIZE_MAX LONG_MAX
+#define SSIZE_MAX LONG_MAX
 #elif __INTPTR_MAX__ == __INT32_MAX__
-# define SSIZE_MAX INT_MAX
+#define SSIZE_MAX INT_MAX
 #endif
 
 #if __LONG_MAX__ == __INT32_MAX__
-# define LONG_BIT 32
+#define LONG_BIT 32
 #else
 /* Safe assumption */
-# define LONG_BIT 64
+#define LONG_BIT 64
 #endif
 
 #define WORD_BIT 32

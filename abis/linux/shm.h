@@ -5,11 +5,11 @@
 extern "C" {
 #endif
 
-#include <bits/ansi/time_t.h>
 #include <abi-bits/pid_t.h>
+#include <bits/ansi/time_t.h>
 
-#include <unistd.h>
 #include <sys/ipc.h>
+#include <unistd.h>
 
 #define SHM_R 0400
 #define SHM_W 0200
@@ -61,7 +61,8 @@ struct shmid_ds {
 	unsigned long shm_nattch;
 	unsigned long __unused[2];
 };
-#elif defined(__x86_64__) || defined(__aarch64__) || (defined(__riscv) && __riscv_xlen == 64) || defined(__loongarch64)
+#elif defined(__x86_64__) || defined(__aarch64__) || (defined(__riscv) && __riscv_xlen == 64)      \
+    || defined(__loongarch64)
 struct shmid_ds {
 	struct ipc_perm shm_perm;
 	size_t shm_segsz;

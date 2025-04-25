@@ -1,21 +1,21 @@
 #ifndef _STDINT_H
 #define _STDINT_H
 
-#include <stdint.h>
 #include <bits/wchar_t.h>
+#include <stdint.h>
 
 /* Even though this is not strictly not-ABI, it is mlibc-printf specific therefore */
 /* gate behind !__MLIBC_ABI_ONLY */
 #ifndef __MLIBC_ABI_ONLY
 
 #if UINTPTR_MAX == UINT64_MAX
-#	define __PRIFAST "l"
-#	define __PRI64 "l"
-#	define __PRIPTR "l"
+#define __PRIFAST "l"
+#define __PRI64 "l"
+#define __PRIPTR "l"
 #else
-#	define __PRIFAST ""
-#	define __PRI64 "ll"
-#	define __PRIPTR ""
+#define __PRIFAST ""
+#define __PRI64 "ll"
+#define __PRIPTR ""
 #endif
 
 /* TODO: This is extremly unelegant and fragile. */

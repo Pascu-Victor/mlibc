@@ -28,7 +28,7 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- * imported and modified include for newlib 2010/10/03 
+ * imported and modified include for newlib 2010/10/03
  * Marco Atzeri <marco_atzeri@yahoo.it>
  */
 
@@ -74,7 +74,6 @@ QUICKREF
 
 */
 
-
 #include <complex.h>
 #include <math.h>
 
@@ -82,9 +81,7 @@ QUICKREF
 __weak_alias(casin, _casin)
 #endif
 
-double complex
-casin(double complex z)
-{
+    double complex casin(double complex z) {
 	double complex w;
 	double complex ca, ct, zz, z2;
 	double x, y;
@@ -106,46 +103,45 @@ casin(double complex z)
 	}
 #endif
 
-/* Power series expansion */
-/*
-b = cabs(z);
-if( b < 0.125 )
-{
-z2.r = (x - y) * (x + y);
-z2.i = 2.0 * x * y;
-
-cn = 1.0;
-n = 1.0;
-ca.r = x;
-ca.i = y;
-sum.r = x;
-sum.i = y;
-do
+	/* Power series expansion */
+	/*
+	b = cabs(z);
+	if( b < 0.125 )
 	{
-	ct.r = z2.r * ca.r  -  z2.i * ca.i;
-	ct.i = z2.r * ca.i  +  z2.i * ca.r;
-	ca.r = ct.r;
-	ca.i = ct.i;
+	z2.r = (x - y) * (x + y);
+	z2.i = 2.0 * x * y;
 
-	cn *= n;
-	n += 1.0;
-	cn /= n;
-	n += 1.0;
-	b = cn/n;
+	cn = 1.0;
+	n = 1.0;
+	ca.r = x;
+	ca.i = y;
+	sum.r = x;
+	sum.i = y;
+	do
+	    {
+	    ct.r = z2.r * ca.r  -  z2.i * ca.i;
+	    ct.i = z2.r * ca.i  +  z2.i * ca.r;
+	    ca.r = ct.r;
+	    ca.i = ct.i;
 
-	ct.r *= b;
-	ct.i *= b;
-	sum.r += ct.r;
-	sum.i += ct.i;
-	b = fabs(ct.r) + fabs(ct.i);
+	    cn *= n;
+	    n += 1.0;
+	    cn /= n;
+	    n += 1.0;
+	    b = cn/n;
+
+	    ct.r *= b;
+	    ct.i *= b;
+	    sum.r += ct.r;
+	    sum.i += ct.i;
+	    b = fabs(ct.r) + fabs(ct.i);
+	    }
+	while( b > MACHEP );
+	w->r = sum.r;
+	w->i = sum.i;
+	return;
 	}
-while( b > MACHEP );
-w->r = sum.r;
-w->i = sum.i;
-return;
-}
-*/
-
+	*/
 
 	ca = x + y * I;
 	ct = ca * I;

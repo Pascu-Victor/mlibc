@@ -1,9 +1,7 @@
 
-#include <errno.h>
 #include <dirent.h>
+#include <errno.h>
 #include <fcntl.h>
-#include <unistd.h>
-#include <sys/stat.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -11,8 +9,8 @@
 #include <frg/allocation.hpp>
 #include <mlibc-config.h>
 #include <mlibc/allocator.hpp>
-#include <mlibc/posix-sysdeps.hpp>
 #include <mlibc/debug.hpp>
+#include <mlibc/posix-sysdeps.hpp>
 
 // Code taken from musl
 int alphasort(const struct dirent **a, const struct dirent **b) {
@@ -24,21 +22,19 @@ int closedir(DIR *dir) {
 	close(dir->__handle);
 	return 0;
 }
-int dirfd(DIR *dir) {
-	return dir->__handle;
-}
+int dirfd(DIR *dir) { return dir->__handle; }
 DIR *fdopendir(int fd) {
 	struct stat st;
 
-	if(fstat(fd, &st) < 0) {
+	if (fstat(fd, &st) < 0) {
 		return nullptr;
 	}
 	// Musl implements this, but O_PATH is only declared on the linux abi
 	/*if(fcntl(fd, F_GETFL) & O_PATH) {
-		errno = EBADF;
-		return nullptr;
+	    errno = EBADF;
+	    return nullptr;
 	}*/
-	if(!S_ISDIR(st.st_mode)) {
+	if (!S_ISDIR(st.st_mode)) {
 		errno = ENOTDIR;
 		return nullptr;
 	}
@@ -58,23 +54,25 @@ DIR *opendir(const char *path) {
 	dir->__ent_limit = 0;
 
 	MLIBC_CHECK_OR_ENOSYS(mlibc::sys_open_dir, nullptr);
-	if(int e = mlibc::sys_open_dir(path, &dir->__handle); e) {
+	if (int e = mlibc::sys_open_dir(path, &dir->__handle); e) {
 		errno = e;
 		frg::destruct(getAllocator(), dir);
 		return nullptr;
-	}else{
+	} else {
 		return dir;
 	}
 }
 
 struct dirent *readdir(DIR *dir) {
 	__ensure(dir->__ent_next <= dir->__ent_limit);
-	if(dir->__ent_next == dir->__ent_limit) {
+	if (dir->__ent_next == dir->__ent_limit) {
 		MLIBC_CHECK_OR_ENOSYS(mlibc::sys_read_entries, nullptr);
-		if(int e = mlibc::sys_read_entries(dir->__handle, dir->__ent_buffer, 2048, &dir->__ent_limit); e)
+		if (int e =
+		        mlibc::sys_read_entries(dir->__handle, dir->__ent_buffer, 2048, &dir->__ent_limit);
+		    e)
 			__ensure(!"mlibc::sys_read_entries() failed");
 		dir->__ent_next = 0;
-		if(!dir->__ent_limit)
+		if (!dir->__ent_limit)
 			return nullptr;
 	}
 
@@ -90,17 +88,19 @@ struct dirent *readdir(DIR *dir) {
 #endif /* !__MLIBC_LINUX_OPTION */
 
 int readdir_r(DIR *dir, struct dirent *entry, struct dirent **result) {
-	if(!mlibc::sys_read_entries) {
+	if (!mlibc::sys_read_entries) {
 		MLIBC_MISSING_SYSDEP();
 		return ENOSYS;
 	}
 
 	__ensure(dir->__ent_next <= dir->__ent_limit);
-	if(dir->__ent_next == dir->__ent_limit) {
-		if(int e = mlibc::sys_read_entries(dir->__handle, dir->__ent_buffer, 2048, &dir->__ent_limit); e)
+	if (dir->__ent_next == dir->__ent_limit) {
+		if (int e =
+		        mlibc::sys_read_entries(dir->__handle, dir->__ent_buffer, 2048, &dir->__ent_limit);
+		    e)
 			__ensure(!"mlibc::sys_read_entries() failed");
 		dir->__ent_next = 0;
-		if(!dir->__ent_limit) {
+		if (!dir->__ent_limit) {
 			*result = nullptr;
 			return 0;
 		}
@@ -119,8 +119,12 @@ void rewinddir(DIR *dir) {
 	dir->__ent_next = 0;
 }
 
-int scandir(const char *path, struct dirent ***res, int (*select)(const struct dirent *),
-		int (*compare)(const struct dirent **, const struct dirent **)) {
+int scandir(
+    const char *path,
+    struct dirent ***res,
+    int (*select)(const struct dirent *),
+    int (*compare)(const struct dirent **, const struct dirent **)
+) {
 	DIR *dir = opendir(path);
 	if (!dir)
 		return -1; // errno will be set by opendir()
@@ -133,33 +137,32 @@ int scandir(const char *path, struct dirent ***res, int (*select)(const struct d
 	struct dirent **array = nullptr, **tmp = nullptr;
 	int length = 0;
 	int count = 0;
-	while((dir_ent = readdir(dir)) && !errno) {
-		if(select && !select(dir_ent))
+	while ((dir_ent = readdir(dir)) && !errno) {
+		if (select && !select(dir_ent))
 			continue;
 
-		if(count >= length) {
-			length = 2*length + 1;
-			tmp = static_cast<struct dirent**>(realloc(array,
-						length * sizeof(struct dirent*)));
+		if (count >= length) {
+			length = 2 * length + 1;
+			tmp = static_cast<struct dirent **>(realloc(array, length * sizeof(struct dirent *)));
 			// we need to check the call actually goes through
 			// before we overwrite array so that we can
 			// deallocate the already written entries should realloc()
 			// have failed
-			if(!tmp)
+			if (!tmp)
 				break;
 			array = tmp;
 		}
-		array[count] = static_cast<struct dirent*>(malloc(dir_ent->d_reclen));
-		if(!array[count])
+		array[count] = static_cast<struct dirent *>(malloc(dir_ent->d_reclen));
+		if (!array[count])
 			break;
 
 		memcpy(array[count], dir_ent, dir_ent->d_reclen);
 		count++;
 	}
 
-	if(errno) {
-		if(array)
-			while(count-- > 0)
+	if (errno) {
+		if (array)
+			while (count-- > 0)
 				free(array[count]);
 		free(array);
 		return -1;
@@ -168,9 +171,8 @@ int scandir(const char *path, struct dirent ***res, int (*select)(const struct d
 	// from here we can set the old errno back
 	errno = old_errno;
 
-	if(compare)
-		qsort(array, count, sizeof(struct dirent*),
-				(int (*)(const void *, const void *)) compare);
+	if (compare)
+		qsort(array, count, sizeof(struct dirent *), (int (*)(const void *, const void *))compare);
 	*res = array;
 	return count;
 }

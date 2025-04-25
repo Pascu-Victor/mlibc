@@ -1,6 +1,6 @@
 #include <errno.h>
-#include <stdlib.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #include <bits/ensure.h>
 #include <mlibc/allocator.hpp>
@@ -10,7 +10,7 @@
 #include <frg/vector.hpp>
 
 namespace {
-	char *empty_environment[] = { nullptr };
+char *empty_environment[] = {nullptr};
 } // namespace
 
 char **environ = empty_environment;
@@ -18,16 +18,16 @@ char **environ = empty_environment;
 namespace {
 
 size_t find_environ_index(frg::string_view name) {
-	for(size_t i = 0; environ[i]; i++) {
+	for (size_t i = 0; environ[i]; i++) {
 		frg::string_view view{environ[i]};
 		size_t s = view.find_first('=');
-		if(s == size_t(-1)) {
+		if (s == size_t(-1)) {
 			mlibc::infoLogger() << "mlibc: environment string \""
-					<< frg::escape_fmt{view.data(), view.size()}
-					<< "\" does not contain an equals sign (=)" << frg::endlog;
+			                    << frg::escape_fmt{view.data(), view.size()}
+			                    << "\" does not contain an equals sign (=)" << frg::endlog;
 			continue;
 		}
-		if(view.sub_string(0, s) == name)
+		if (view.sub_string(0, s) == name)
 			return i;
 	}
 
@@ -43,13 +43,13 @@ frg::vector<char *, MemoryAllocator> &get_vector() {
 
 void update_vector() {
 	auto &vector = get_vector();
-	if(environ == vector.data())
+	if (environ == vector.data())
 		return;
 
 	// If the environ variable was changed, we copy the environment.
 	// Note that we must only copy the pointers but not the strings themselves!
 	vector.clear();
-	for(size_t i = 0; environ[i]; i++)
+	for (size_t i = 0; environ[i]; i++)
 		vector.push(environ[i]);
 	vector.push(nullptr);
 
@@ -61,10 +61,10 @@ void assign_variable(frg::string_view name, const char *string, bool overwrite) 
 	__ensure(environ == vector.data());
 
 	auto k = find_environ_index(name);
-	if(k != size_t(-1)) {
-		if(overwrite)
+	if (k != size_t(-1)) {
+		if (overwrite)
 			vector[k] = const_cast<char *>(string);
-	}else{
+	} else {
 		// Last pointer of environ must always be a null delimiter.
 		__ensure(!vector.back());
 		vector.back() = const_cast<char *>(string);
@@ -80,7 +80,7 @@ void unassign_variable(frg::string_view name) {
 	__ensure(environ == vector.data());
 
 	auto k = find_environ_index(name);
-	if(k == size_t(-1))
+	if (k == size_t(-1))
 		return;
 
 	// Last pointer of environ must always be a null delimiter.
@@ -97,7 +97,7 @@ void unassign_variable(frg::string_view name) {
 
 char *getenv(const char *name) {
 	auto k = find_environ_index(name);
-	if(k == size_t(-1))
+	if (k == size_t(-1))
 		return nullptr;
 
 	frg::string_view view{environ[k]};
@@ -111,7 +111,7 @@ namespace mlibc {
 int putenv(char *string) {
 	frg::string_view view{string};
 	size_t s = view.find_first('=');
-	if(s == size_t(-1)) {
+	if (s == size_t(-1)) {
 		// GLIBC EXTENSION
 		update_vector();
 		unassign_variable(string);
@@ -127,17 +127,15 @@ int putenv(char *string) {
 
 #if __MLIBC_POSIX_OPTION
 
-int putenv(char *string) {
-	return mlibc::putenv(string);
-}
+int putenv(char *string) { return mlibc::putenv(string); }
 
 int setenv(const char *name, const char *value, int overwrite) {
 	frg::string_view view{name};
 	size_t s = view.find_first('=');
-	if(s != size_t(-1)) {
+	if (s != size_t(-1)) {
 		mlibc::infoLogger() << "mlibc: environment variable \""
-				<< frg::escape_fmt{view.data(), view.size()} << "\" contains an equals sign"
-				<< frg::endlog;
+		                    << frg::escape_fmt{view.data(), view.size()}
+		                    << "\" contains an equals sign" << frg::endlog;
 		errno = EINVAL;
 		return -1;
 	}

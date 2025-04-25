@@ -8,7 +8,7 @@
 int thrd_create(thrd_t *thr, thrd_start_t func, void *arg) {
 	int res = mlibc::thread_create(thr, nullptr, reinterpret_cast<void *>(func), arg, true);
 
-	if(!res) {
+	if (!res) {
 		return thrd_success;
 	}
 
@@ -16,15 +16,13 @@ int thrd_create(thrd_t *thr, thrd_start_t func, void *arg) {
 }
 
 int thrd_equal(thrd_t t1, thrd_t t2) {
-	if(t1 == t2) {
+	if (t1 == t2) {
 		return 1;
 	}
 	return 0;
 }
 
-thrd_t thrd_current(void) {
-	return reinterpret_cast<thrd_t>(mlibc::get_current_tcb());
-}
+thrd_t thrd_current(void) { return reinterpret_cast<thrd_t>(mlibc::get_current_tcb()); }
 
 int thrd_sleep(const struct timespec *, struct timespec *) {
 	__ensure(!"Not implemented");
@@ -42,7 +40,7 @@ int thrd_detach(thrd_t) {
 }
 
 int thrd_join(thrd_t thr, int *res) {
-	if(mlibc::thread_join(thr, res) != 0) {
+	if (mlibc::thread_join(thr, res) != 0) {
 		return thrd_error;
 	}
 
@@ -58,7 +56,7 @@ int mtx_init(mtx_t *mtx, int type) {
 	struct __mlibc_mutexattr attr;
 	mlibc::thread_mutexattr_init(&attr);
 
-	if(type & mtx_recursive) {
+	if (type & mtx_recursive) {
 		mlibc::thread_mutexattr_settype(&attr, __MLIBC_THREAD_MUTEX_RECURSIVE);
 	}
 
@@ -68,13 +66,9 @@ int mtx_init(mtx_t *mtx, int type) {
 	return res;
 }
 
-void mtx_destroy(mtx_t *mtx) {
-	mlibc::thread_mutex_destroy(mtx);
-}
+void mtx_destroy(mtx_t *mtx) { mlibc::thread_mutex_destroy(mtx); }
 
-int mtx_lock(mtx_t *mtx) {
-	return mlibc::thread_mutex_lock(mtx) == 0 ? thrd_success : thrd_error;
-}
+int mtx_lock(mtx_t *mtx) { return mlibc::thread_mutex_lock(mtx) == 0 ? thrd_success : thrd_error; }
 
 int mtx_unlock(mtx_t *mtx) {
 	return mlibc::thread_mutex_unlock(mtx) == 0 ? thrd_success : thrd_error;
@@ -84,9 +78,7 @@ int cnd_init(cnd_t *cond) {
 	return mlibc::thread_cond_init(cond, nullptr) == 0 ? thrd_success : thrd_error;
 }
 
-void cnd_destroy(cnd_t *cond) {
-	mlibc::thread_cond_destroy(cond);
-}
+void cnd_destroy(cnd_t *cond) { mlibc::thread_cond_destroy(cond); }
 
 int cnd_broadcast(cnd_t *cond) {
 	return mlibc::thread_cond_broadcast(cond) == 0 ? thrd_success : thrd_error;

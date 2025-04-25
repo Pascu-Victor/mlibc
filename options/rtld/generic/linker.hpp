@@ -1,11 +1,11 @@
 
+#include <frg/expected.hpp>
 #include <frg/hash_map.hpp>
+#include <frg/manual_box.hpp>
 #include <frg/optional.hpp>
+#include <frg/stack.hpp>
 #include <frg/string.hpp>
 #include <frg/vector.hpp>
-#include <frg/stack.hpp>
-#include <frg/expected.hpp>
-#include <frg/manual_box.hpp>
 #include <mlibc/allocator.hpp>
 #include <mlibc/tcb.hpp>
 
@@ -20,11 +20,7 @@ struct SymbolVersion;
 
 extern uint64_t rtsCounter;
 
-enum class TlsModel {
-	null,
-	initial,
-	dynamic
-};
+enum class TlsModel { null, initial, dynamic };
 
 enum class LinkerError {
 	success,
@@ -47,29 +43,48 @@ struct ObjectRepository {
 
 	ObjectRepository(const ObjectRepository &) = delete;
 
-	ObjectRepository &operator= (const ObjectRepository &) = delete;
+	ObjectRepository &operator=(const ObjectRepository &) = delete;
 
 	// This is primarily used to create a SharedObject for the RTLD itself.
-	SharedObject *injectObjectFromDts(frg::string_view name,
-			frg::string<MemoryAllocator> path,
-			uintptr_t base_address, elf_dyn *dynamic, uint64_t rts);
+	SharedObject *injectObjectFromDts(
+	    frg::string_view name,
+	    frg::string<MemoryAllocator> path,
+	    uintptr_t base_address,
+	    elf_dyn *dynamic,
+	    uint64_t rts
+	);
 
 	// This is used to create a SharedObject for the executable that we want to link.
-	SharedObject *injectObjectFromPhdrs(frg::string_view name,
-			frg::string<MemoryAllocator> path, void *phdr_pointer,
-			size_t phdr_entry_size, size_t num_phdrs, void *entry_pointer,
-			uint64_t rts);
+	SharedObject *injectObjectFromPhdrs(
+	    frg::string_view name,
+	    frg::string<MemoryAllocator> path,
+	    void *phdr_pointer,
+	    size_t phdr_entry_size,
+	    size_t num_phdrs,
+	    void *entry_pointer,
+	    uint64_t rts
+	);
 
-	SharedObject *injectStaticObject(frg::string_view name,
-			frg::string<MemoryAllocator> path, void *phdr_pointer,
-			size_t phdr_entry_size, size_t num_phdrs, void *entry_pointer,
-			uint64_t rts);
+	SharedObject *injectStaticObject(
+	    frg::string_view name,
+	    frg::string<MemoryAllocator> path,
+	    void *phdr_pointer,
+	    size_t phdr_entry_size,
+	    size_t num_phdrs,
+	    void *entry_pointer,
+	    uint64_t rts
+	);
 
-	frg::expected<LinkerError, SharedObject *> requestObjectWithName(frg::string_view name,
-			SharedObject *origin, Scope *localScope, bool createScope, uint64_t rts);
+	frg::expected<LinkerError, SharedObject *> requestObjectWithName(
+	    frg::string_view name,
+	    SharedObject *origin,
+	    Scope *localScope,
+	    bool createScope,
+	    uint64_t rts
+	);
 
-	frg::expected<LinkerError, SharedObject *> requestObjectAtPath(frg::string_view path,
-			Scope *localScope, bool createScope, uint64_t rts);
+	frg::expected<LinkerError, SharedObject *>
+	requestObjectAtPath(frg::string_view path, Scope *localScope, bool createScope, uint64_t rts);
 
 	void discoverDependenciesFromLoadedObject(SharedObject *object);
 
@@ -87,8 +102,13 @@ struct ObjectRepository {
 	frg::vector<SharedObject *, MemoryAllocator> dependencyQueue;
 
 private:
-	void _fetchFromPhdrs(SharedObject *object, void *phdr_pointer,
-			size_t phdr_entry_size, size_t num_phdrs, void *entry_pointer);
+	void _fetchFromPhdrs(
+	    SharedObject *object,
+	    void *phdr_pointer,
+	    size_t phdr_entry_size,
+	    size_t num_phdrs,
+	    void *entry_pointer
+	);
 
 	frg::expected<LinkerError, void> _fetchFromFile(SharedObject *object, int fd);
 
@@ -101,8 +121,8 @@ private:
 
 	void _addLoadedObject(SharedObject *object);
 
-	frg::hash_map<frg::string_view, SharedObject *,
-			frg::hash<frg::string_view>, MemoryAllocator> _nameMap;
+	frg::hash_map<frg::string_view, SharedObject *, frg::hash<frg::string_view>, MemoryAllocator>
+	    _nameMap;
 
 	// Used for destructing the objects, stores all the objects in the order they are initialized.
 	frg::stack<SharedObject *, MemoryAllocator> _destructQueue;
@@ -112,11 +132,7 @@ private:
 // SharedObject
 // --------------------------------------------------------
 
-enum class HashStyle {
-	none,
-	systemV,
-	gnu
-};
+enum class HashStyle { none, systemV, gnu };
 
 struct GnuHashTableHeader {
 	uint32_t nBuckets;
@@ -146,11 +162,21 @@ struct LinkMap {
 
 struct SharedObject {
 	// path is copied
-	SharedObject(const char *name, frg::string<MemoryAllocator> path,
-		bool is_main_object, Scope *localScope, uint64_t object_rts);
+	SharedObject(
+	    const char *name,
+	    frg::string<MemoryAllocator> path,
+	    bool is_main_object,
+	    Scope *localScope,
+	    uint64_t object_rts
+	);
 
-	SharedObject(const char *name, const char *path, bool is_main_object,
-		Scope *localScope, uint64_t object_rts);
+	SharedObject(
+	    const char *name,
+	    const char *path,
+	    bool is_main_object,
+	    Scope *localScope,
+	    uint64_t object_rts
+	);
 
 	frg::string<MemoryAllocator> name;
 	frg::string<MemoryAllocator> path;
@@ -183,7 +209,6 @@ struct SharedObject {
 	size_t finiArraySize = 0;
 	size_t preInitArraySize = 0;
 
-
 	// TODO: read this from the PHDR
 	size_t tlsSegmentSize, tlsAlignment, tlsImageSize;
 	void *tlsImagePtr;
@@ -203,12 +228,8 @@ struct SharedObject {
 	size_t versionRequirementCount = 0;
 
 	// Versions we know about for this object's VERSYM.
-	frg::hash_map<
-		elf_version,
-		SymbolVersion,
-		frg::hash<unsigned int>,
-		MemoryAllocator
-	> knownVersions;
+	frg::hash_map<elf_version, SymbolVersion, frg::hash<unsigned int>, MemoryAllocator>
+	    knownVersions;
 	// Versions that this object defines.
 	frg::vector<SymbolVersion, MemoryAllocator> definedVersions;
 
@@ -252,33 +273,25 @@ struct SharedObject {
 };
 
 struct Relocation {
-	Relocation(SharedObject *object, elf_rela *r)
-	: object_{object}, type_{Addend::Explicit} {
+	Relocation(SharedObject *object, elf_rela *r) : object_{object}, type_{Addend::Explicit} {
 		offset_ = r->r_offset;
 		info_ = r->r_info;
 		addend_ = r->r_addend;
 	}
 
-	Relocation(SharedObject *object, elf_rel *r)
-	: object_{object}, type_{Addend::Implicit} {
+	Relocation(SharedObject *object, elf_rel *r) : object_{object}, type_{Addend::Implicit} {
 		offset_ = r->r_offset;
 		info_ = r->r_info;
 	}
 
-	SharedObject *object() {
-		return object_;
-	}
+	SharedObject *object() { return object_; }
 
-	elf_info type() const {
-		return ELF_R_TYPE(info_);
-	}
+	elf_info type() const { return ELF_R_TYPE(info_); }
 
-	elf_info symbol_index() const {
-		return ELF_R_SYM(info_);
-	}
+	elf_info symbol_index() const { return ELF_R_SYM(info_); }
 
 	elf_addr addend_rel() {
-		switch(type_) {
+		switch (type_) {
 			case Addend::Explicit:
 				return addend_;
 			case Addend::Implicit: {
@@ -290,7 +303,7 @@ struct Relocation {
 	}
 
 	elf_addr addend_norel() {
-		switch(type_) {
+		switch (type_) {
 			case Addend::Explicit:
 				return addend_;
 			case Addend::Implicit:
@@ -299,9 +312,7 @@ struct Relocation {
 		__builtin_unreachable();
 	}
 
-	void *destination() {
-		return reinterpret_cast<void *>(object_->baseAddress + offset_);
-	}
+	void *destination() { return reinterpret_cast<void *>(object_->baseAddress + offset_); }
 
 	void relocate(elf_addr addr) {
 		auto ptr = destination();
@@ -309,10 +320,7 @@ struct Relocation {
 	}
 
 private:
-	enum class Addend {
-		Implicit,
-		Explicit
-	};
+	enum class Addend { Implicit, Explicit };
 
 	SharedObject *object_;
 	Addend type_;
@@ -344,7 +352,9 @@ struct RuntimeTlsMap {
 extern frg::manual_box<RuntimeTlsMap> runtimeTlsMap;
 
 Tcb *allocateTcb();
-void initTlsObjects(Tcb *tcb, const frg::vector<SharedObject *, MemoryAllocator> &objects, bool checkInitialized);
+void initTlsObjects(
+    Tcb *tcb, const frg::vector<SharedObject *, MemoryAllocator> &objects, bool checkInitialized
+);
 void *accessDtv(SharedObject *object);
 // Tries to access the DTV, if not allocated, or object doesn't have
 // PT_TLS, return nullptr.
@@ -357,13 +367,9 @@ void *tryAccessDtv(SharedObject *object);
 struct ObjectSymbol {
 	ObjectSymbol(SharedObject *object, const elf_sym *symbol);
 
-	SharedObject *object() {
-		return _object;
-	}
+	SharedObject *object() { return _object; }
 
-	const elf_sym *symbol() {
-		return _symbol;
-	}
+	const elf_sym *symbol() { return _symbol; }
 
 	const char *getString();
 
@@ -378,8 +384,9 @@ private:
 	const elf_sym *_symbol;
 };
 
-frg::optional<ObjectSymbol> resolveInObject(SharedObject *object, frg::string_view string,
-		frg::optional<SymbolVersion> version);
+frg::optional<ObjectSymbol> resolveInObject(
+    SharedObject *object, frg::string_view string, frg::optional<SymbolVersion> version
+);
 
 // --------------------------------------------------------
 // SymbolVersion
@@ -387,43 +394,49 @@ frg::optional<ObjectSymbol> resolveInObject(SharedObject *object, frg::string_vi
 
 struct SymbolVersion {
 	SymbolVersion(const char *name, uint32_t hash)
-	: _local{false}, _global{false}, _default{false}
-	, _name{name}, _hash{hash} { }
+	: _local{false},
+	  _global{false},
+	  _default{false},
+	  _name{name},
+	  _hash{hash} {}
 
 	SymbolVersion(int idx)
-	: _local{idx == 0}, _global{idx == 1}, _default{false}
-	, _name{""}, _hash{0} { }
+	: _local{idx == 0},
+	  _global{idx == 1},
+	  _default{false},
+	  _name{""},
+	  _hash{0} {}
 
 	SymbolVersion(const char *name)
-	: _local{false}, _global{false}, _default{false}
-	, _name{name}, _hash{elf64Hash(name)} { }
+	: _local{false},
+	  _global{false},
+	  _default{false},
+	  _name{name},
+	  _hash{elf64Hash(name)} {}
 
-	bool isLocal() const {
-		return _local;
-	}
+	bool isLocal() const { return _local; }
 
-	bool isGlobal() const {
-		return _global;
-	}
+	bool isGlobal() const { return _global; }
 
-	bool isDefault() const {
-		return _default;
-	}
+	bool isDefault() const { return _default; }
 
 	frg::string_view name() const {
-		if(_local) return "(*local*)";
-		if(_global) return "(*global*)";
+		if (_local)
+			return "(*local*)";
+		if (_global)
+			return "(*global*)";
 		return _name;
 	}
 
-	uint32_t hash() const {
-		return _hash;
-	}
+	uint32_t hash() const { return _hash; }
 
 	bool operator==(const SymbolVersion &other) const {
-		if(_local || other._local) return _local && other._local;
-		if(_global || other._global) return _global && other._global;
-		if(_hash != other._hash) return false;
+		if (_local || other._local)
+			return _local && other._local;
+		if (_global || other._global)
+			return _global && other._global;
+		if (_hash != other._hash)
+			return false;
 		return _name == other._name;
 	}
 
@@ -442,7 +455,6 @@ private:
 	uint32_t _hash;
 };
 
-
 // --------------------------------------------------------
 // Scope
 // --------------------------------------------------------
@@ -452,25 +464,40 @@ struct Scope {
 	static inline constexpr ResolveFlags resolveCopy = 1;
 	static inline constexpr ResolveFlags skipGlobalAfterRts = 1 << 1;
 
-	static frg::optional<ObjectSymbol> resolveGlobalOrLocal(Scope &globalScope,
-			Scope *localScope, frg::string_view string, uint64_t skipRts, ResolveFlags flags,
-			frg::optional<SymbolVersion> version);
-	static frg::optional<ObjectSymbol> resolveGlobalOrLocalNext(Scope &globalScope,
-			Scope *localScope, frg::string_view string, SharedObject *origin,
-			frg::optional<SymbolVersion> version);
+	static frg::optional<ObjectSymbol> resolveGlobalOrLocal(
+	    Scope &globalScope,
+	    Scope *localScope,
+	    frg::string_view string,
+	    uint64_t skipRts,
+	    ResolveFlags flags,
+	    frg::optional<SymbolVersion> version
+	);
+	static frg::optional<ObjectSymbol> resolveGlobalOrLocalNext(
+	    Scope &globalScope,
+	    Scope *localScope,
+	    frg::string_view string,
+	    SharedObject *origin,
+	    frg::optional<SymbolVersion> version
+	);
 
 	Scope(bool isGlobal = false);
 
 	void appendObject(SharedObject *object);
 
-	frg::optional<ObjectSymbol> resolveSymbol(frg::string_view string, uint64_t skipRts, ResolveFlags flags,
-			frg::optional<SymbolVersion> version);
+	frg::optional<ObjectSymbol> resolveSymbol(
+	    frg::string_view string,
+	    uint64_t skipRts,
+	    ResolveFlags flags,
+	    frg::optional<SymbolVersion> version
+	);
 
 	bool isGlobal;
 
 private:
-	frg::optional<ObjectSymbol> _resolveNext(frg::string_view string, SharedObject *target,
-			frg::optional<SymbolVersion> version);
+	frg::optional<ObjectSymbol> _resolveNext(
+	    frg::string_view string, SharedObject *target, frg::optional<SymbolVersion> version
+	);
+
 public: // TODO: Make this private again. (Was made public for __dlapi_reverse()).
 	frg::vector<SharedObject *, MemoryAllocator> _objects;
 };
@@ -525,4 +552,3 @@ extern "C" void pltRelocateStub() __attribute__((__visibility__("hidden")));
 // --------------------------------------------------------
 
 uintptr_t *rtld_auxvector();
-

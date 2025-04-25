@@ -13,7 +13,7 @@ int main() {
 	errno = 0;
 	ptr = calloc(10, sizeof(size_t));
 	assert(ptr);
-	for(size_t i = 0; i < 10; i++) {
+	for (size_t i = 0; i < 10; i++) {
 		size_t *p = ptr;
 		assert(!p[i]);
 	}

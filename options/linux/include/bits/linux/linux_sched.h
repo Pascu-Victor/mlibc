@@ -7,12 +7,12 @@ extern "C" {
 #endif
 
 #include <abi-bits/pid_t.h>
-#include <bits/size_t.h>
 #include <bits/linux/cpu_set.h>
+#include <bits/size_t.h>
 
 #define CLONE_VM 0x00000100
 #define CLONE_FS 0x00000200
-#define CLONE_FILES	0x00000400
+#define CLONE_FILES 0x00000400
 #define CLONE_SIGHAND 0x00000800
 #define CLONE_PIDFD 0x00001000
 #define CLONE_PTRACE 0x00002000

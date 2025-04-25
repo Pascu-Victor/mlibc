@@ -7,46 +7,46 @@
 #include <string.h>
 #include <unistd.h>
 
-#define COUNT_OF(x) ((sizeof(x)/sizeof(0[x])) / ((size_t)(!(sizeof(x) % sizeof(0[x])))))
-#define dump(x) fprintf(stderr, "getopt c '%c' (%d), optind %d ('%s'), optarg '%s', optopt '%c' (%d)\n", \
-		(x), (x), optind, (size_t)optind >= COUNT_OF(test_argv) ? "out of range" : test_argv[optind], optarg, optopt, optopt);
+#define COUNT_OF(x) ((sizeof(x) / sizeof(0 [x])) / ((size_t)(!(sizeof(x) % sizeof(0 [x])))))
+#define dump(x)                                                                                    \
+	fprintf(                                                                                       \
+	    stderr,                                                                                    \
+	    "getopt c '%c' (%d), optind %d ('%s'), optarg '%s', optopt '%c' (%d)\n",                   \
+	    (x),                                                                                       \
+	    (x),                                                                                       \
+	    optind,                                                                                    \
+	    (size_t)optind >= COUNT_OF(test_argv) ? "out of range" : test_argv[optind],                \
+	    optarg,                                                                                    \
+	    optopt,                                                                                    \
+	    optopt                                                                                     \
+	);
 
-#define dumpargv(argv) do { \
-	fprintf(stderr, "args(%zu) {\n", COUNT_OF(argv)); \
-	for (size_t i = 0; i < COUNT_OF(argv); i++) { \
-		fprintf(stderr, "\targv[%zu] = '%s'\n", i, argv[i]); \
-	} \
-	fprintf(stderr, "}\n"); \
-} while (0)
+#define dumpargv(argv)                                                                             \
+	do {                                                                                           \
+		fprintf(stderr, "args(%zu) {\n", COUNT_OF(argv));                                          \
+		for (size_t i = 0; i < COUNT_OF(argv); i++) {                                              \
+			fprintf(stderr, "\targv[%zu] = '%s'\n", i, argv[i]);                                   \
+		}                                                                                          \
+		fprintf(stderr, "}\n");                                                                    \
+	} while (0)
 
 void test1() {
 	const char *shortopts = "b:cdef";
 
 	const struct option longopts[] = {
-		{"foo", required_argument, NULL, 'f'},
-		{NULL, no_argument, NULL, 0}
+	    {"foo", required_argument, NULL, 'f'}, {NULL, no_argument, NULL, 0}
 	};
 
 	int test_argc = 7;
 
-	char *test_argv[] = {
-		"dummy",
-		"--foo",
-		"abc",
-		"-b",
-		"abc",
-		"abc",
-		"abc"
-	};
+	char *test_argv[] = {"dummy", "--foo", "abc", "-b", "abc", "abc", "abc"};
 
 	optind = 0;
 	int c = getopt_long(test_argc, test_argv, shortopts, longopts, NULL);
-	dump(c)
-	assert(c == 'f');
+	dump(c) assert(c == 'f');
 
 	c = getopt_long(test_argc, test_argv, shortopts, longopts, NULL);
-	dump(c)
-	assert(optarg && !strcmp(optarg, "abc"));
+	dump(c) assert(optarg && !strcmp(optarg, "abc"));
 	assert(c == 'b');
 
 	c = getopt_long(test_argc, test_argv, shortopts, longopts, NULL);
@@ -60,13 +60,12 @@ void test1() {
 
 void test2() {
 	const struct option longopts[] = {
-		{"foo", required_argument, NULL, 'f'},
-		{NULL, no_argument, NULL, 0}
+	    {"foo", required_argument, NULL, 'f'}, {NULL, no_argument, NULL, 0}
 	};
 
 	char *test_argv[] = {
-		"dummy",
-		"-c",
+	    "dummy",
+	    "-c",
 	};
 
 	fputs("Situation: we pass a non-existant short option in argv\n", stderr);
@@ -78,7 +77,11 @@ void test2() {
 	assert(c == '?');
 	assert(optopt == 'c');
 
-	fputs("Situation: we pass a non-existant short option in argv, while passing a leading colon in optstring\n", stderr);
+	fputs(
+	    "Situation: we pass a non-existant short option in argv, while passing a leading colon in "
+	    "optstring\n",
+	    stderr
+	);
 	optind = 0;
 
 	c = getopt_long(COUNT_OF(test_argv), test_argv, ":ab:", longopts, NULL);
@@ -94,7 +97,11 @@ void test2() {
 	assert(c == '?');
 	assert(optopt == 'c');
 
-	fputs("Situation: we omit the required arg to a short option, while passing a leading colon in optstring\n", stderr);
+	fputs(
+	    "Situation: we omit the required arg to a short option, while passing a leading colon in "
+	    "optstring\n",
+	    stderr
+	);
 	optind = 0;
 
 	c = getopt_long(COUNT_OF(test_argv), test_argv, ":ab:c:", longopts, NULL);
@@ -105,13 +112,12 @@ void test2() {
 
 void test3() {
 	const struct option longopts[] = {
-		{"foo", required_argument, NULL, 'f'},
-		{NULL, no_argument, NULL, 0}
+	    {"foo", required_argument, NULL, 'f'}, {NULL, no_argument, NULL, 0}
 	};
 
 	char *test_argv[] = {
-		"dummy",
-		"-cmanagarm",
+	    "dummy",
+	    "-cmanagarm",
 	};
 
 	fputs("Situation: we pass a concatenated argument to a short option\n", stderr);
@@ -126,13 +132,12 @@ void test3() {
 
 void test4() {
 	const struct option longopts[] = {
-		{"foo", required_argument, NULL, 'f'},
-		{NULL, no_argument, NULL, 0}
+	    {"foo", required_argument, NULL, 'f'}, {NULL, no_argument, NULL, 0}
 	};
 
 	char *test_argv[] = {
-		"dummy",
-		"-acmanagarm",
+	    "dummy",
+	    "-acmanagarm",
 	};
 
 	fputs("Situation: we pass concatenated short options to getopt\n", stderr);
@@ -149,16 +154,10 @@ void test4() {
 
 void test5() {
 	const struct option longopts[] = {
-		{"foo", required_argument, NULL, 'f'},
-		{NULL, no_argument, NULL, 0}
+	    {"foo", required_argument, NULL, 'f'}, {NULL, no_argument, NULL, 0}
 	};
 
-	char *test_argv[] = {
-		"su",
-		"-",
-		"managarm",
-		0
-	};
+	char *test_argv[] = {"su", "-", "managarm", 0};
 
 	int test_argc = 3;
 
@@ -179,23 +178,18 @@ void test5() {
 }
 
 void test6() {
-	char *test_argv[] = {
-		"telescope",
-		"gemini://electrode.codes",
-		"-S",
-		0
-	};
+	char *test_argv[] = {"telescope", "gemini://electrode.codes", "-S", 0};
 
 	int test_argc = 3;
 	optind = 0;
 
 	const struct option longopts[] = {
-		{"colors",      no_argument,    NULL,   'C'},
-		{"colours",	no_argument,    NULL,   'C'},
-		{"help",	no_argument,	NULL,	'h'},
-		{"safe",	no_argument,	NULL,	'S'},
-		{"version",	no_argument,	NULL,	'v'},
-		{NULL,		0,		NULL,	0},
+	    {"colors", no_argument, NULL, 'C'},
+	    {"colours", no_argument, NULL, 'C'},
+	    {"help", no_argument, NULL, 'h'},
+	    {"safe", no_argument, NULL, 'S'},
+	    {"version", no_argument, NULL, 'v'},
+	    {NULL, 0, NULL, 0},
 	};
 
 	int c = getopt_long(test_argc, test_argv, "Cc:hnST:v", longopts, NULL);
@@ -213,19 +207,14 @@ void test7() {
 	int c;
 
 	static const struct option options[] = {
-		{ "debug", no_argument, NULL, 'd' },
-		{ "help", no_argument, NULL, 'h' },
-		{ "version", no_argument, NULL, 'V' },
-		{}
+	    {"debug", no_argument, NULL, 'd'},
+	    {"help", no_argument, NULL, 'h'},
+	    {"version", no_argument, NULL, 'V'},
+	    {}
 	};
 	const char *command;
 
-	char *test_argv[] = {
-		"udevadm",
-		"hwdb",
-		"--update",
-		0
-	};
+	char *test_argv[] = {"udevadm", "hwdb", "--update", 0};
 
 	int test_argc = 3;
 	setenv("POSIXLY_CORRECT", "1", 1);
@@ -258,27 +247,20 @@ void test8() {
 	int bar = false;
 
 	const struct option longopts[] = {
-		{"foo", required_argument, &foo, 'x'},
-		{"bar", required_argument, &bar, 'y'},
-		{NULL, no_argument, NULL, 0}
+	    {"foo", required_argument, &foo, 'x'},
+	    {"bar", required_argument, &bar, 'y'},
+	    {NULL, no_argument, NULL, 0}
 	};
 
 	int test_argc = 6;
 
-	char *test_argv[] = {
-		"dummy",
-		"-foo",
-		"abc",
-		"-bar=def",
-		"ghi",
-		"jkl"
-	};
+	char *test_argv[] = {"dummy", "-foo", "abc", "-bar=def", "ghi", "jkl"};
 
-	#ifdef __GLIBC__
-		optind = 0;
-	#else
-		optreset = 1;
-	#endif
+#ifdef __GLIBC__
+	optind = 0;
+#else
+	optreset = 1;
+#endif
 	optopt = 0;
 	int c = getopt_long_only(test_argc, test_argv, shortopts, longopts, NULL);
 	dump(c);
@@ -293,9 +275,9 @@ void test8() {
 
 void test9() {
 	char *test_argv[] = {
-		"foo",
+	    "foo",
 	};
-	struct option opts[] = { {0} };
+	struct option opts[] = {{0}};
 	optind = 0;
 	int c = getopt_long(1, test_argv, "abc", opts, NULL);
 	dump(c);
@@ -304,15 +286,15 @@ void test9() {
 
 void test10() {
 	char *test_argv[] = {
-		"foo",
-		"nonoption",
-		"-a",
-		"nonoption2",
-		"nonoption3",
-		"-b",
-		"-c",
+	    "foo",
+	    "nonoption",
+	    "-a",
+	    "nonoption2",
+	    "nonoption3",
+	    "-b",
+	    "-c",
 	};
-	struct option opts[] = { {0} };
+	struct option opts[] = {{0}};
 	optind = 2;
 	dump(0);
 	int c = getopt_long(COUNT_OF(test_argv), test_argv, "abc", opts, NULL);
@@ -342,18 +324,9 @@ void test10() {
 }
 
 void test11() {
-	const struct option longopts[] = {
-		{"op", optional_argument, NULL, 'o'},
-		{NULL, 0, NULL, 0}
-	};
+	const struct option longopts[] = {{"op", optional_argument, NULL, 'o'}, {NULL, 0, NULL, 0}};
 
-	char *test_argv[] = {
-		"dummy",
-		"--op",
-		"--op=arg",
-		"non-option",
-		"--op"
-	};
+	char *test_argv[] = {"dummy", "--op", "--op=arg", "non-option", "--op"};
 
 	fputs("Situation: optional argument to long option\n", stderr);
 
@@ -373,12 +346,12 @@ void test11() {
 
 void test12() {
 	char *test_argv[] = {
-		"dummy",
-		"-a",
-		"-b",
-		"arg",
-		"-carg",
-		"arg",
+	    "dummy",
+	    "-a",
+	    "-b",
+	    "arg",
+	    "-carg",
+	    "arg",
 	};
 
 	fputs("Situation: optional argument to short option\n", stderr);
@@ -404,15 +377,12 @@ void test12() {
 
 void test13() {
 	const struct option longopts[] = {
-		{"ambiguous-opt", no_argument, NULL, 0},
-		{"ambiguous-option", no_argument, NULL, 1},
-		{NULL, 0, NULL, 0}
+	    {"ambiguous-opt", no_argument, NULL, 0},
+	    {"ambiguous-option", no_argument, NULL, 1},
+	    {NULL, 0, NULL, 0}
 	};
 
-	char *test_argv[] = {
-		"dummy",
-		"--ambiguous-o"
-	};
+	char *test_argv[] = {"dummy", "--ambiguous-o"};
 
 	fputs("Situation: ambiguous long option\n", stderr);
 
@@ -423,14 +393,11 @@ void test13() {
 }
 
 void test14() {
-	const struct option longopts[] = {
-		{"foo", required_argument, NULL, 'f'},
-		{NULL, 0, NULL, 0}
-	};
+	const struct option longopts[] = {{"foo", required_argument, NULL, 'f'}, {NULL, 0, NULL, 0}};
 
 	char *test_argv[] = {
-		"dummy",
-		"-Wfoo=bar",
+	    "dummy",
+	    "-Wfoo=bar",
 	};
 
 	fputs("Situation: -W for long options\n", stderr);
@@ -442,13 +409,7 @@ void test14() {
 }
 
 void test15() {
-	char *test_argv[] = {
-		"dummy",
-		"-c",
-		"-a",
-		"--",
-		"-b"
-	};
+	char *test_argv[] = {"dummy", "-c", "-a", "--", "-b"};
 
 	fputs("Situation: -- to stop option processing\n", stderr);
 
@@ -469,16 +430,12 @@ void test15() {
 
 void test16() {
 	const struct option longopts[] = {
-		{"add", required_argument, NULL, 'a'},
-		{"append", no_argument, NULL, 'p'},
-		{NULL, 0, NULL, 0}
+	    {"add", required_argument, NULL, 'a'},
+	    {"append", no_argument, NULL, 'p'},
+	    {NULL, 0, NULL, 0}
 	};
 
-	char *test_argv[] = {
-		"dummy",
-		"--ad=foo",
-		"--appe"
-	};
+	char *test_argv[] = {"dummy", "--ad=foo", "--appe"};
 
 	fputs("Situation: non-ambiguous long option prefix\n", stderr);
 
@@ -493,15 +450,9 @@ void test16() {
 }
 
 void test17() {
-	const struct option longopts[] = {
-		{"foo", no_argument, NULL, 'l'},
-		{NULL, 0, NULL, 0}
-	};
+	const struct option longopts[] = {{"foo", no_argument, NULL, 'l'}, {NULL, 0, NULL, 0}};
 
-	char *test_argv[] = {
-		"dummy",
-		"-foo"
-	};
+	char *test_argv[] = {"dummy", "-foo"};
 
 	fputs("Situation: getopt_long_only with what could be short opts or a long opt\n", stderr);
 
@@ -511,10 +462,7 @@ void test17() {
 	assert(c == 'l');
 
 	// Case 2: long option "foo" does not exist.
-	const struct option longopts2[] = {
-		{"bar", no_argument, NULL, 'b'},
-		{NULL, 0, NULL, 0}
-	};
+	const struct option longopts2[] = {{"bar", no_argument, NULL, 'b'}, {NULL, 0, NULL, 0}};
 	optind = 0;
 	c = getopt_long_only(COUNT_OF(test_argv), test_argv, "f:o", longopts2, NULL);
 	assert(c == 'f');
@@ -522,14 +470,11 @@ void test17() {
 }
 
 void test18() {
-	const struct option longopts[] = {
-		{"op", optional_argument, NULL, 'o'},
-		{NULL, 0, NULL, 0}
-	};
+	const struct option longopts[] = {{"op", optional_argument, NULL, 'o'}, {NULL, 0, NULL, 0}};
 
 	char *test_argv[] = {
-		"dummy",
-		"-Wop=val",
+	    "dummy",
+	    "-Wop=val",
 	};
 
 	fputs("Situation: -W with a long option with an optional argument (with value)\n", stderr);
@@ -540,8 +485,8 @@ void test18() {
 	assert(!strcmp(optarg, "val"));
 
 	char *test_argv2[] = {
-		"dummy",
-		"-Wop",
+	    "dummy",
+	    "-Wop",
 	};
 
 	fputs("Situation: -W with a long option with an optional argument (no value)\n", stderr);
@@ -554,10 +499,10 @@ void test18() {
 
 void test19() {
 	char *test_argv[] = {
-		"dummy",
-		"-a",
-		"non-option",
-		"-b",
+	    "dummy",
+	    "-a",
+	    "non-option",
+	    "-b",
 	};
 
 	fputs("Situation: POSIXLY_CORRECT behavior with '+'\n", stderr);
@@ -573,15 +518,12 @@ void test19() {
 }
 
 void test20() {
-	const struct option longopts[] = {
-		{"option", required_argument, NULL, 'o'},
-		{NULL, 0, NULL, 0}
-	};
+	const struct option longopts[] = {{"option", required_argument, NULL, 'o'}, {NULL, 0, NULL, 0}};
 
 	char *test_argv[] = {
-		"dummy",
-		"--option",
-		"-x",
+	    "dummy",
+	    "--option",
+	    "-x",
 	};
 
 	fputs("Situation: long option with argument that looks like an option\n", stderr);
@@ -595,14 +537,14 @@ void test20() {
 
 void test21() {
 	const struct option longopts[] = {
-		{"ambig-one", no_argument, NULL, '1'},
-		{"ambig-two", no_argument, NULL, '2'},
-		{NULL, 0, NULL, 0}
+	    {"ambig-one", no_argument, NULL, '1'},
+	    {"ambig-two", no_argument, NULL, '2'},
+	    {NULL, 0, NULL, 0}
 	};
 
 	char *test_argv[] = {
-		"dummy",
-		"-ambig",
+	    "dummy",
+	    "-ambig",
 	};
 
 	fputs("Situation: ambiguous long option with getopt_long_only\n", stderr);
@@ -614,14 +556,11 @@ void test21() {
 }
 
 void test22() {
-	const struct option longopts[] = {
-		{"foo", no_argument, NULL, 'f'},
-		{NULL, 0, NULL, 0}
-	};
+	const struct option longopts[] = {{"foo", no_argument, NULL, 'f'}, {NULL, 0, NULL, 0}};
 
 	char *test_argv[] = {
-		"dummy",
-		"-Wbar",
+	    "dummy",
+	    "-Wbar",
 	};
 
 	fputs("Situation: -W with non-existent long option\n", stderr);
@@ -634,16 +573,13 @@ void test22() {
 }
 
 void test23() {
-	const struct option longopts[] = {
-		{"foo", required_argument, NULL, 'f'},
-		{NULL, 0, NULL, 0}
-	};
+	const struct option longopts[] = {{"foo", required_argument, NULL, 'f'}, {NULL, 0, NULL, 0}};
 
 	char *test_argv[] = {
-		"dummy",
-		"-foo",
-		"val1",
-		"-foo=val2",
+	    "dummy",
+	    "-foo",
+	    "val1",
+	    "-foo=val2",
 	};
 
 	fputs("Situation: getopt_long_only with required argument\n", stderr);
@@ -662,8 +598,8 @@ void test23() {
 
 void test24() {
 	char *test_argv[] = {
-		"dummy",
-		"-W",
+	    "dummy",
+	    "-W",
 	};
 
 	fputs("Situation: -W as a short option, not for passing long options\n", stderr);
@@ -675,14 +611,11 @@ void test24() {
 }
 
 void test25() {
-	const struct option longopts[] = {
-		{"foo", required_argument, NULL, 'f'},
-		{NULL, 0, NULL, 0}
-	};
+	const struct option longopts[] = {{"foo", required_argument, NULL, 'f'}, {NULL, 0, NULL, 0}};
 
 	char *test_argv[] = {
-		"dummy",
-		"-Wfoo",
+	    "dummy",
+	    "-Wfoo",
 	};
 
 	fputs("Situation: -W with missing argument for a long option, with ':' in optstring\n", stderr);
@@ -697,15 +630,15 @@ void test25() {
 
 void test26() {
 	const struct option longopts[] = {
-		{"foo", no_argument, NULL, 0},
-		{"ambig-one", no_argument, NULL, 1},
-		{"ambig-two", no_argument, NULL, 2},
-		{NULL, 0, NULL, 0}
+	    {"foo", no_argument, NULL, 0},
+	    {"ambig-one", no_argument, NULL, 1},
+	    {"ambig-two", no_argument, NULL, 2},
+	    {NULL, 0, NULL, 0}
 	};
 
 	char *test_argv[] = {
-		"dummy",
-		"-W",
+	    "dummy",
+	    "-W",
 	};
 
 	fputs("Situation: -W without an argument\n", stderr);
@@ -720,15 +653,15 @@ void test26() {
 
 void test27() {
 	char *test_argv[] = {
-		"dummy",
-		"-Wambig",
+	    "dummy",
+	    "-Wambig",
 	};
 
 	const struct option longopts[] = {
-		{"foo", no_argument, NULL, 0},
-		{"ambig-one", no_argument, NULL, 1},
-		{"ambig-two", no_argument, NULL, 2},
-		{NULL, 0, NULL, 0}
+	    {"foo", no_argument, NULL, 0},
+	    {"ambig-one", no_argument, NULL, 1},
+	    {"ambig-two", no_argument, NULL, 2},
+	    {NULL, 0, NULL, 0}
 	};
 
 	fputs("Situation: -W with an ambiguous long option\n", stderr);
@@ -742,16 +675,16 @@ void test27() {
 
 void test28() {
 	char *test_argv[] = {
-		"dummy",
-		"-Wfoo=bar",
-		"-Wfoo=",
+	    "dummy",
+	    "-Wfoo=bar",
+	    "-Wfoo=",
 	};
 
 	const struct option longopts[] = {
-		{"foo", no_argument, NULL, 0},
-		{"ambig-one", no_argument, NULL, 1},
-		{"ambig-two", no_argument, NULL, 2},
-		{NULL, 0, NULL, 0}
+	    {"foo", no_argument, NULL, 0},
+	    {"ambig-one", no_argument, NULL, 1},
+	    {"ambig-two", no_argument, NULL, 2},
+	    {NULL, 0, NULL, 0}
 	};
 
 	fputs("Situation: -W with an argument to a long option that does not take one\n", stderr);
@@ -772,13 +705,13 @@ void test28() {
 
 void test29() {
 	char *test_argv[] = {
-		"dummy",
-		"--a",
+	    "dummy",
+	    "--a",
 	};
 
 	const struct option longopts[] = {
-		{"load-credentials", no_argument, NULL, 0x103},
-		{NULL, 0, NULL, 0},
+	    {"load-credentials", no_argument, NULL, 0x103},
+	    {NULL, 0, NULL, 0},
 	};
 
 	optind = 0;
@@ -791,17 +724,10 @@ void test29() {
 
 void test30() {
 	const struct option longopts[] = {
-		{"long-opt", required_argument, NULL, 'l'},
-		{NULL, 0, NULL, 0}
+	    {"long-opt", required_argument, NULL, 'l'}, {NULL, 0, NULL, 0}
 	};
 
-	char *test_argv[] = {
-		"getopt_test",
-		"non-arg1",
-		"--long-opt",
-		"val",
-		"non-arg2"
-	};
+	char *test_argv[] = {"getopt_test", "non-arg1", "--long-opt", "val", "non-arg2"};
 
 	fputs("Situation: non-arguments before valid long arguments\n", stderr);
 

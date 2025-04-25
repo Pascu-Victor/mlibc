@@ -8,8 +8,8 @@
 #include <frg/mutex.hpp>
 #include <frg/spinlock.hpp>
 #include <mlibc/debug.hpp>
-#include <mlibc/utmp.hpp>
 #include <mlibc/posix-sysdeps.hpp>
+#include <mlibc/utmp.hpp>
 
 namespace {
 
@@ -27,10 +27,10 @@ utmp returned;
 void setutent(void) {
 	frg::unique_lock lock{utmpMutex};
 
-	if(!utmpFd) {
+	if (!utmpFd) {
 		int fd;
 		int err = mlibc::sys_open(utmpPath, O_RDWR | O_CREAT | O_CLOEXEC, 0644, &fd);
-		if(err) {
+		if (err) {
 			mlibc::infoLogger() << "\e[31mmlibc: setutent() failed to open " << utmpPath << ": "
 			                    << strerror(err) << "\e[39m" << frg::endlog;
 			utmpFd = frg::null_opt;
@@ -46,14 +46,14 @@ void setutent(void) {
 struct utmp *getutent(void) {
 	frg::unique_lock lock{utmpMutex};
 
-	if(!utmpFd)
+	if (!utmpFd)
 		setutent();
-	if(!utmpFd) {
+	if (!utmpFd) {
 		errno = ENOENT;
 		return nullptr;
 	}
 
-	if(int e = mlibc::getUtmpEntry(*utmpFd, &returned); e) {
+	if (int e = mlibc::getUtmpEntry(*utmpFd, &returned); e) {
 		errno = e;
 		return nullptr;
 	}
@@ -64,15 +64,15 @@ struct utmp *getutent(void) {
 int getutent_r(struct utmp *buf, struct utmp **res) {
 	frg::unique_lock lock{utmpMutex};
 
-	if(!utmpFd)
+	if (!utmpFd)
 		setutent();
-	if(!utmpFd) {
+	if (!utmpFd) {
 		*res = nullptr;
 		errno = ENOENT;
 		return -1;
 	}
 
-	if(int e = mlibc::getUtmpEntry(*utmpFd, buf); e) {
+	if (int e = mlibc::getUtmpEntry(*utmpFd, buf); e) {
 		*res = nullptr;
 		errno = e;
 		return -1;
@@ -85,7 +85,7 @@ int getutent_r(struct utmp *buf, struct utmp **res) {
 void endutent(void) {
 	frg::unique_lock lock{utmpMutex};
 
-	if(utmpFd) {
+	if (utmpFd) {
 		mlibc::sys_close(utmpFd.value());
 		utmpFd = frg::null_opt;
 	}
@@ -94,32 +94,32 @@ void endutent(void) {
 struct utmp *pututline(const struct utmp *ut) {
 	frg::unique_lock lock{utmpMutex};
 
-	if(!utmpFd)
+	if (!utmpFd)
 		setutent();
-	if(!utmpFd) {
+	if (!utmpFd) {
 		errno = ENOENT;
 		return nullptr;
 	}
 
-	if(int e = mlibc::putUtmpEntry(*utmpFd, ut); e) {
+	if (int e = mlibc::putUtmpEntry(*utmpFd, ut); e) {
 		errno = e;
 		return nullptr;
 	}
 
-	return (utmp *) ut;
+	return (utmp *)ut;
 }
 
 struct utmp *getutline(const struct utmp *ut) {
 	frg::unique_lock lock{utmpMutex};
 
-	if(!utmpFd)
+	if (!utmpFd)
 		setutent();
-	if(!utmpFd) {
+	if (!utmpFd) {
 		errno = ENOENT;
 		return nullptr;
 	}
 
-	if(int e = mlibc::getUtmpEntryByType(*utmpFd, ut, &returned); e) {
+	if (int e = mlibc::getUtmpEntryByType(*utmpFd, ut, &returned); e) {
 		errno = e;
 		return nullptr;
 	}
@@ -130,17 +130,17 @@ struct utmp *getutline(const struct utmp *ut) {
 int utmpname(const char *file) {
 	frg::unique_lock lock{utmpMutex};
 
-	if(strcmp(file, utmpPath)) {
-		if(!strcmp(file, defaultUtmpPath)) {
-			free((void *) utmpPath);
+	if (strcmp(file, utmpPath)) {
+		if (!strcmp(file, defaultUtmpPath)) {
+			free((void *)utmpPath);
 			utmpPath = defaultUtmpPath;
 		} else {
 			char *name = strdup(file);
-			if(!name)
+			if (!name)
 				return -1;
 
-			if(utmpPath != defaultUtmpPath)
-				free((void *) utmpPath);
+			if (utmpPath != defaultUtmpPath)
+				free((void *)utmpPath);
 
 			utmpPath = name;
 		}
@@ -152,14 +152,14 @@ int utmpname(const char *file) {
 struct utmp *getutid(const struct utmp *ut) {
 	frg::unique_lock lock{utmpMutex};
 
-	if(!utmpFd)
+	if (!utmpFd)
 		setutent();
-	if(!utmpFd) {
+	if (!utmpFd) {
 		errno = ENOENT;
 		return nullptr;
 	}
 
-	if(int e = mlibc::getUtmpEntryById(*utmpFd, ut, &returned); e) {
+	if (int e = mlibc::getUtmpEntryById(*utmpFd, ut, &returned); e) {
 		errno = e;
 		return nullptr;
 	}
@@ -170,9 +170,9 @@ struct utmp *getutid(const struct utmp *ut) {
 void updwtmp(const char *file, const struct utmp *ut) {
 	int fd;
 	int err = mlibc::sys_open(file, O_RDWR | O_CREAT | O_CLOEXEC | O_APPEND, 0644, &fd);
-	if(err) {
+	if (err) {
 		mlibc::infoLogger() << "\e[31mmlibc: updwtmp() failed to open " << file << ": "
-							<< strerror(err) << "\e[39m" << frg::endlog;
+		                    << strerror(err) << "\e[39m" << frg::endlog;
 		return;
 	}
 

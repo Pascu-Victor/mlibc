@@ -8,9 +8,7 @@
 
 static const char *__mlibc_digits = "0123456789abcdefghijklmnopqrstuvwxyz";
 
-intmax_t imaxabs(intmax_t num) {
-	return num < 0 ? -num : num;
-}
+intmax_t imaxabs(intmax_t num) { return num < 0 ? -num : num; }
 imaxdiv_t imaxdiv(intmax_t number, intmax_t denom) {
 	imaxdiv_t r;
 	r.quot = number / denom;
@@ -18,16 +16,17 @@ imaxdiv_t imaxdiv(intmax_t number, intmax_t denom) {
 	return r;
 }
 
-template <class T> T strtoxmax(const char *it, char **out, int base) {
+template <class T>
+T strtoxmax(const char *it, char **out, int base) {
 	T v = 0;
 	bool negate = false;
 	const unsigned char *s = (const unsigned char *)it;
 	int c;
 
-	if(std::is_signed_v<T>) {
-		if(*s == '+') {
+	if (std::is_signed_v<T>) {
+		if (*s == '+') {
 			s++;
-		}else if(*s == '-') {
+		} else if (*s == '-') {
 			negate = true;
 			s++;
 		}
@@ -44,41 +43,41 @@ template <class T> T strtoxmax(const char *it, char **out, int base) {
 	if (base == 0)
 		base = c == '0' ? 8 : 10;
 
-	if(base == 8) {
-		if(*it != 0)
+	if (base == 8) {
+		if (*it != 0)
 			goto parse_digits;
 		it++;
-	}else if(base == 16) {
-		if(*it != 0)
+	} else if (base == 16) {
+		if (*it != 0)
 			goto parse_digits;
 		it++;
-		if(*it != 'x' && *it != 'X')
+		if (*it != 'x' && *it != 'X')
 			goto parse_digits;
 		it++;
 	}
 
 parse_digits:
-	while(*it) {
-		if(isspace(*it)) {
+	while (*it) {
+		if (isspace(*it)) {
 			it++;
 			continue;
 		}
 
 		__ensure(base <= 10); // TODO: For base > 10 we need to implement tolower().
-		//auto c = strchr(__mlibc_digits, tolower(*it));
+		// auto c = strchr(__mlibc_digits, tolower(*it));
 		auto c = strchr(__mlibc_digits, *it);
-		if(!c || (c - __mlibc_digits) >= base)
+		if (!c || (c - __mlibc_digits) >= base)
 			break;
 		v = v * base + (c - __mlibc_digits);
 		it++;
 	}
 
-	if(std::is_signed_v<T>) {
-		if(negate)
+	if (std::is_signed_v<T>) {
+		if (negate)
 			v = -v;
 	}
 
-	if(out)
+	if (out)
 		*out = const_cast<char *>(it);
 	return v;
 }

@@ -28,7 +28,7 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- * imported and modified include for newlib 2010/10/03 
+ * imported and modified include for newlib 2010/10/03
  * Marco Atzeri <marco_atzeri@yahoo.it>
  */
 
@@ -50,12 +50,12 @@ SYNOPSIS
 DESCRIPTION
         @ifnottex
         These functions compute the complex arc tangent of <[z]>,
-        with branch cuts outside the interval [-i, +i] along the 
+        with branch cuts outside the interval [-i, +i] along the
         imaginary axis.
         @end ifnottex
         @tex
         These functions compute the complex arc tangent of <[z]>,
-        with branch cuts outside the interval [$-i$, $+i$] along the 
+        with branch cuts outside the interval [$-i$, $+i$] along the
         imaginary axis.
         @end tex
 
@@ -82,18 +82,15 @@ QUICKREF
 
 */
 
-
+#include "cephes_subr.h"
 #include <complex.h>
 #include <math.h>
-#include "cephes_subr.h"
 
 #ifdef __weak_alias
 __weak_alias(catan, _catan)
 #endif
 
-double complex
-catan(double complex z)
-{
+    double complex catan(double complex z) {
 	double complex w;
 	double a, t, x, x2, y;
 
@@ -115,7 +112,7 @@ catan(double complex z)
 		goto ovrf;
 
 	t = y + 1.0;
-	a = (x2 + (t * t))/a;
+	a = (x2 + (t * t)) / a;
 	w = w + (0.25 * log(a)) * I;
 	return w;
 

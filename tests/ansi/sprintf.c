@@ -1,7 +1,7 @@
-#include <fenv.h>
-#include <stdio.h>
 #include <assert.h>
+#include <fenv.h>
 #include <math.h>
+#include <stdio.h>
 #include <string.h>
 
 #define test_roundtrip(val, print_format, scanf_format, expected_string, expected_scanf_ret) { \
@@ -13,7 +13,7 @@
 }
 
 int main() {
-	char buf[64] = { 0 };
+	char buf[64] = {0};
 	sprintf(buf, "%d", 12);
 	assert(!strcmp(buf, "12"));
 
@@ -180,9 +180,9 @@ int main() {
 	assert(!strcmp(buf, "12"));
 	sprintf(buf, "%zd", (size_t)12);
 	assert(!strcmp(buf, "12"));
-	sprintf(buf, "%hd", (short) 12);
+	sprintf(buf, "%hd", (short)12);
 	assert(!strcmp(buf, "12"));
-	sprintf(buf, "%hhd", (char) 12);
+	sprintf(buf, "%hhd", (char)12);
 	assert(!strcmp(buf, "12"));
 
 	// Test 'x' with different size mods to see
@@ -195,9 +195,9 @@ int main() {
 	assert(!strcmp(buf, "c"));
 	sprintf(buf, "%zx", (size_t)12);
 	assert(!strcmp(buf, "c"));
-	sprintf(buf, "%hx", (unsigned short) 12);
+	sprintf(buf, "%hx", (unsigned short)12);
 	assert(!strcmp(buf, "c"));
-	sprintf(buf, "%hhx", (unsigned char) 12);
+	sprintf(buf, "%hhx", (unsigned char)12);
 	assert(!strcmp(buf, "c"));
 
 	// Test 'X' with different size mods to see
@@ -210,9 +210,9 @@ int main() {
 	assert(!strcmp(buf, "C"));
 	sprintf(buf, "%zX", (size_t)12);
 	assert(!strcmp(buf, "C"));
-	sprintf(buf, "%hX", (unsigned short) 12);
+	sprintf(buf, "%hX", (unsigned short)12);
 	assert(!strcmp(buf, "C"));
-	sprintf(buf, "%hhX", (unsigned char) 12);
+	sprintf(buf, "%hhX", (unsigned char)12);
 	assert(!strcmp(buf, "C"));
 
 	// Test 'o' with different size mods to see
@@ -225,9 +225,9 @@ int main() {
 	assert(!strcmp(buf, "14"));
 	sprintf(buf, "%zo", (size_t)12);
 	assert(!strcmp(buf, "14"));
-	sprintf(buf, "%ho", (unsigned short) 12);
+	sprintf(buf, "%ho", (unsigned short)12);
 	assert(!strcmp(buf, "14"));
-	sprintf(buf, "%hho", (unsigned char) 12);
+	sprintf(buf, "%hho", (unsigned char)12);
 	assert(!strcmp(buf, "14"));
 
 	// Disable -Wformat here because the compiler might not know about the b specifier.
@@ -243,9 +243,9 @@ int main() {
 	assert(!strcmp(buf, "1100"));
 	sprintf(buf, "%zb", (size_t)12);
 	assert(!strcmp(buf, "1100"));
-	sprintf(buf, "%hb", (unsigned short) 12);
+	sprintf(buf, "%hb", (unsigned short)12);
 	assert(!strcmp(buf, "1100"));
-	sprintf(buf, "%hhb", (unsigned char) 12);
+	sprintf(buf, "%hhb", (unsigned char)12);
 	assert(!strcmp(buf, "1100"));
 #pragma GCC diagnostic pop
 

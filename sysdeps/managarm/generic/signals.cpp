@@ -35,7 +35,8 @@ int sys_sigprocmask(int how, const sigset_t *set, sigset_t *retrieve) {
 		    &unused
 		));
 	} else {
-		HEL_CHECK(helSyscall2_2(kHelObserveSuperCall + posix::superSigMask, 0, 0, &former, &unused)
+		HEL_CHECK(
+		    helSyscall2_2(kHelObserveSuperCall + posix::superSigMask, 0, 0, &former, &unused)
 		);
 	}
 	if (retrieve)

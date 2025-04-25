@@ -1,16 +1,16 @@
 
-#include <sys/uio.h>
-#include <unistd.h>
 #include <errno.h>
+#include <limits.h>
 #include <stdlib.h>
 #include <string.h>
-#include <limits.h>
+#include <sys/uio.h>
+#include <unistd.h>
 
+#include <bits/ensure.h>
 #include <frg/vector.hpp>
 #include <mlibc/allocator.hpp>
 #include <mlibc/debug.hpp>
 #include <mlibc/posix-sysdeps.hpp>
-#include <bits/ensure.h>
 
 ssize_t readv(int fd, const struct iovec *iovs, int iovc) {
 	ssize_t read_bytes = 0;
@@ -31,9 +31,9 @@ ssize_t writev(int fd, const struct iovec *iovs, int iovc) {
 	ssize_t written = 0;
 
 	auto sysdep = mlibc::sys_writev;
-	if(sysdep) {
+	if (sysdep) {
 		int e = sysdep(fd, iovs, iovc, &written);
-		if(e) {
+		if (e) {
 			errno = e;
 			return -1;
 		}
@@ -41,10 +41,11 @@ ssize_t writev(int fd, const struct iovec *iovs, int iovc) {
 	}
 
 	// TODO: this implementation is not safe to use in signal contexts
-	mlibc::infoLogger() << "mlibc: falling back to signal-unsafe writev implementation!" << frg::endlog;
+	mlibc::infoLogger() << "mlibc: falling back to signal-unsafe writev implementation!"
+	                    << frg::endlog;
 	size_t bytes = 0;
-	for(int i = 0; i < iovc; i++) {
-		if(SSIZE_MAX - bytes < iovs[i].iov_len) {
+	for (int i = 0; i < iovc; i++) {
+		if (SSIZE_MAX - bytes < iovs[i].iov_len) {
 			errno = EINVAL;
 			return -1;
 		}
@@ -55,13 +56,13 @@ ssize_t writev(int fd, const struct iovec *iovs, int iovc) {
 
 	size_t to_copy = bytes;
 	char *bp = buffer.data();
-	for(int i = 0; i < iovc; i++) {
+	for (int i = 0; i < iovc; i++) {
 		size_t copy = frg::min(iovs[i].iov_len, to_copy);
 
 		bp = (char *)memcpy((void *)bp, (void *)iovs[i].iov_base, copy) + copy;
 
 		to_copy -= copy;
-		if(to_copy == 0)
+		if (to_copy == 0)
 			break;
 	}
 

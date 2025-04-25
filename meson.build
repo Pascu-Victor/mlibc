@@ -278,7 +278,10 @@ elif host_machine.system() == 'nyaux'
 	rtld_include_dirs += include_directories('sysdeps/nyaux/include')
 	libc_include_dirs += include_directories('sysdeps/nyaux/include')
 	subdir('sysdeps/nyaux')
-# ANCHOR: demo-sysdeps
+elif host_machine.system() == 'wos'
+	rtld_include_dirs += include_directories('sysdeps/wos/include')
+	libc_include_dirs += include_directories('sysdeps/wos/include')
+	subdir('sysdeps/wos')
 elif host_machine.system() == 'demo'
 	subdir('sysdeps/demo')
 # ANCHOR_END: demo-sysdeps
@@ -527,6 +530,13 @@ if not headers_only
 	ld_library_name = get_option('ld_library_name')
 
 	# Our libraries have different behaviour when built as static and shared libraries.
+	# Place this directory as the first include
+	# custom_include = include_directories('/home/womywomwoo/git/wos/toolchain/target1/include/c++/v1')
+	# libc_include_dirs = [custom_include] + libc_include_dirs
+	# rtld_include_dirs = [custom_include] + rtld_include_dirs
+
+
+	# Our library have different behaviour when built as static and shared libraries.
 	# Hence we need to rebuild the object files with a different define for each mode.
 	if library_type in ['static', 'both']
 		static_cpp_args = [

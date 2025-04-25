@@ -285,10 +285,10 @@ sys_getsockopt(int fd, int layer, int number, void *__restrict buffer, socklen_t
 		                    << frg::endlog;
 		return 0;
 	} else if (layer == IPPROTO_TCP && number == TCP_CONGESTION) {
-		mlibc::infoLogger(
-		) << "\e[31mmlibc: getsockopt() call with IPPROTO_TCP and TCP_CONGESTION is "
-		     "unimplemented\e[39m"
-		  << frg::endlog;
+		mlibc::infoLogger()
+		    << "\e[31mmlibc: getsockopt() call with IPPROTO_TCP and TCP_CONGESTION is "
+		       "unimplemented\e[39m"
+		    << frg::endlog;
 		return 0;
 	} else if (std::find(
 	               getsockopt_passthrough.begin(),
@@ -495,9 +495,9 @@ int sys_setsockopt(int fd, int layer, int number, const void *buffer, socklen_t 
 		                    << frg::endlog;
 		return 0;
 	} else if (layer == SOL_SOCKET && number == SO_RCVBUF) {
-		mlibc::infoLogger(
-		) << "\e[31mmlibc: setsockopt() call with SOL_SOCKET and SO_RCVBUF is unimplemented\e[39m"
-		  << frg::endlog;
+		mlibc::infoLogger()
+		    << "\e[31mmlibc: setsockopt() call with SOL_SOCKET and SO_RCVBUF is unimplemented\e[39m"
+		    << frg::endlog;
 		return 0;
 	} else if (layer == IPPROTO_TCP && number == TCP_NODELAY) {
 		mlibc::infoLogger() << "\e[31mmlibc: setsockopt() call with IPPROTO_TCP and TCP_NODELAY is "
@@ -545,19 +545,19 @@ int sys_setsockopt(int fd, int layer, int number, const void *buffer, socklen_t 
 		                    << frg::endlog;
 		return 0;
 	} else if (layer == SOL_SOCKET && number == SO_PRIORITY) {
-		mlibc::infoLogger(
-		) << "\e[31mmlibc: setsockopt() call with SOL_SOCKET and SO_PRIORITY is unimplemented\e[39m"
-		  << frg::endlog;
+		mlibc::infoLogger() << "\e[31mmlibc: setsockopt() call with SOL_SOCKET and SO_PRIORITY is "
+		                       "unimplemented\e[39m"
+		                    << frg::endlog;
 		return 0;
 	} else if (layer == SOL_IP && number == IP_RECVERR) {
-		mlibc::infoLogger(
-		) << "\e[31mmlibc: setsockopt() call with SOL_IP and IP_RECVERR is unimplemented\e[39m"
-		  << frg::endlog;
+		mlibc::infoLogger()
+		    << "\e[31mmlibc: setsockopt() call with SOL_IP and IP_RECVERR is unimplemented\e[39m"
+		    << frg::endlog;
 		return 0;
 	} else if (layer == SOL_SOCKET && number == SO_PASSSEC) {
-		mlibc::infoLogger(
-		) << "\e[31mmlibc: setsockopt() call with SOL_SOCKET and SO_PASSSEC is unimplemented\e[39m"
-		  << frg::endlog;
+		mlibc::infoLogger() << "\e[31mmlibc: setsockopt() call with SOL_SOCKET and SO_PASSSEC is "
+		                       "unimplemented\e[39m"
+		                    << frg::endlog;
 		return ENOSYS;
 	} else {
 		mlibc::infoLogger() << "\e[31mmlibc: Unexpected setsockopt() call, layer: " << layer

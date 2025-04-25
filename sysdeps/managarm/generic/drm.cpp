@@ -140,31 +140,31 @@ int ioctl_drm(int fd, unsigned long request, void *arg, int *result, HelHandle h
 		}
 		case DRM_IOCTL_GET_MAGIC: {
 			auto param = reinterpret_cast<drm_auth *>(arg);
-			mlibc::infoLogger(
-			) << "\e[31mmlibc: DRM_IOCTL_GET_MAGIC is not implemented correctly\e[39m"
-			  << frg::endlog;
+			mlibc::infoLogger()
+			    << "\e[31mmlibc: DRM_IOCTL_GET_MAGIC is not implemented correctly\e[39m"
+			    << frg::endlog;
 			param->magic = 1;
 			*result = 0;
 			return 0;
 		}
 		case DRM_IOCTL_AUTH_MAGIC: {
-			mlibc::infoLogger(
-			) << "\e[31mmlibc: DRM_IOCTL_AUTH_MAGIC is not implemented correctly\e[39m"
-			  << frg::endlog;
+			mlibc::infoLogger()
+			    << "\e[31mmlibc: DRM_IOCTL_AUTH_MAGIC is not implemented correctly\e[39m"
+			    << frg::endlog;
 			*result = 0;
 			return 0;
 		}
 		case DRM_IOCTL_SET_MASTER: {
-			mlibc::infoLogger(
-			) << "\e[31mmlibc: DRM_IOCTL_SET_MASTER is not implemented correctly\e[39m"
-			  << frg::endlog;
+			mlibc::infoLogger()
+			    << "\e[31mmlibc: DRM_IOCTL_SET_MASTER is not implemented correctly\e[39m"
+			    << frg::endlog;
 			*result = 0;
 			return 0;
 		}
 		case DRM_IOCTL_DROP_MASTER: {
-			mlibc::infoLogger(
-			) << "\e[31mmlibc: DRM_IOCTL_DROP_MASTER is not implemented correctly\e[39m"
-			  << frg::endlog;
+			mlibc::infoLogger()
+			    << "\e[31mmlibc: DRM_IOCTL_DROP_MASTER is not implemented correctly\e[39m"
+			    << frg::endlog;
 			*result = 0;
 			return 0;
 		}

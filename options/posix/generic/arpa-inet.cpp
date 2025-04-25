@@ -1,14 +1,14 @@
 
 #include <arpa/inet.h>
 #include <bits/ensure.h>
-#include <stdlib.h>
 #include <ctype.h>
-#include <stdio.h>
 #include <errno.h>
-#include <string.h>
-#include <sys/socket.h>
 #include <mlibc/bitutil.hpp>
 #include <mlibc/debug.hpp>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/socket.h>
 
 const struct in6_addr in6addr_any = IN6ADDR_ANY_INIT;
 const struct in6_addr in6addr_loopback = IN6ADDR_LOOPBACK_INIT;
@@ -47,7 +47,7 @@ uint16_t ntohs(uint16_t x) {
 // ----------------------------------------------------------------------------
 in_addr_t inet_addr(const char *p) {
 	struct in_addr a;
-	if(!inet_aton(p, &a))
+	if (!inet_aton(p, &a))
 		return -1;
 	return a.s_addr;
 }
@@ -62,9 +62,15 @@ char *inet_ntoa(struct in_addr addr) {
 	// 4 * 3 + 3 + 1 = 12 + 4 = 16
 	thread_local static char buffer[16];
 	uint32_t proper = htonl(addr.s_addr);
-	snprintf(buffer, sizeof(buffer), "%d.%d.%d.%d",
-		(proper >> 24) & 0xff, ((proper >> 16) & 0xff),
-		(proper >> 8) & 0xff, proper & 0xff);
+	snprintf(
+	    buffer,
+	    sizeof(buffer),
+	    "%d.%d.%d.%d",
+	    (proper >> 24) & 0xff,
+	    ((proper >> 16) & 0xff),
+	    (proper >> 8) & 0xff,
+	    proper & 0xff
+	);
 	return buffer;
 }
 int inet_aton(const char *string, struct in_addr *dest) {
@@ -91,18 +97,14 @@ int inet_aton(const char *string, struct in_addr *dest) {
 			dest->s_addr = htonl((array[0] << 24) | array[1]);
 			break;
 		case 2:
-			if (array[0] > 255 || array[1] > 255 ||
-					array[2] > 0xffff)
+			if (array[0] > 255 || array[1] > 255 || array[2] > 0xffff)
 				return 0;
-			dest->s_addr = htonl((array[0] << 24) | (array[1] << 16) |
-				array[2]);
+			dest->s_addr = htonl((array[0] << 24) | (array[1] << 16) | array[2]);
 			break;
 		case 3:
-			if (array[0] > 255 || array[1] > 255 ||
-					array[2] > 255 || array[3] > 255)
+			if (array[0] > 255 || array[1] > 255 || array[2] > 255 || array[3] > 255)
 				return 0;
-			dest->s_addr = htonl((array[0] << 24) | (array[1] << 16) |
-				(array[2] << 8) | array[3]);
+			dest->s_addr = htonl((array[0] << 24) | (array[1] << 16) | (array[2] << 8) | array[3]);
 			break;
 	}
 
@@ -112,33 +114,37 @@ int inet_aton(const char *string, struct in_addr *dest) {
 // ----------------------------------------------------------------------------
 // Generic IP address manipulation.
 // ----------------------------------------------------------------------------
-const char *inet_ntop(int af, const void *__restrict src, char *__restrict dst,
-		socklen_t size) {
+const char *inet_ntop(int af, const void *__restrict src, char *__restrict dst, socklen_t size) {
 	switch (af) {
 		case AF_INET: {
-			auto source = reinterpret_cast<const struct in_addr*>(src);
+			auto source = reinterpret_cast<const struct in_addr *>(src);
 			uint32_t addr = ntohl(source->s_addr);
-			if (snprintf(dst, size, "%d.%d.%d.%d",
-					(addr >> 24) & 0xff,
-					(addr >> 16) & 0xff,
-					(addr >> 8) & 0xff,
-					addr & 0xff) < (int)size)
+			if (snprintf(
+			        dst,
+			        size,
+			        "%d.%d.%d.%d",
+			        (addr >> 24) & 0xff,
+			        (addr >> 16) & 0xff,
+			        (addr >> 8) & 0xff,
+			        addr & 0xff
+			    )
+			    < (int)size)
 				return dst;
 			break;
 		}
 		case AF_INET6: {
-			auto source = reinterpret_cast<const struct in6_addr*>(src);
+			auto source = reinterpret_cast<const struct in6_addr *>(src);
 			size_t cur_zeroes_off = 0;
 			size_t cur_zeroes_len = 0;
 			size_t max_zeroes_off = 0;
 			size_t max_zeroes_len = 0;
 
 			/* we look for the largest block of zeroed quartet(s) */
-			for(size_t i = 0; i < 8; i++) {
+			for (size_t i = 0; i < 8; i++) {
 				auto ptr = source->s6_addr + (i * 2);
-				if(!ptr[0] && !ptr[1]) {
+				if (!ptr[0] && !ptr[1]) {
 					cur_zeroes_len++;
-					if(max_zeroes_len < cur_zeroes_len) {
+					if (max_zeroes_len < cur_zeroes_len) {
 						max_zeroes_len = cur_zeroes_len;
 						max_zeroes_off = cur_zeroes_off;
 					}
@@ -150,15 +156,15 @@ const char *inet_ntop(int af, const void *__restrict src, char *__restrict dst,
 			}
 
 			size_t off = 0;
-			for(size_t i = 0; i < 8; i++) {
+			for (size_t i = 0; i < 8; i++) {
 				auto ptr = source->s6_addr + (i * 2);
 
 				/* if we are at the beginning of the largest block of zeroed quartets, place "::" */
-				if(i == max_zeroes_off && max_zeroes_len >= 2) {
-					if(off < size) {
+				if (i == max_zeroes_off && max_zeroes_len >= 2) {
+					if (off < size) {
 						dst[off++] = ':';
 					}
-					if(off < size) {
+					if (off < size) {
 						dst[off++] = ':';
 					}
 					i += max_zeroes_len - 1;
@@ -166,9 +172,10 @@ const char *inet_ntop(int af, const void *__restrict src, char *__restrict dst,
 					continue;
 				}
 
-				/* place a colon if we're not at the beginning of the string and it is not already there */
-				if(off && dst[off - 1] != ':') {
-					if(off < size) {
+				/* place a colon if we're not at the beginning of the string and it is not already
+				 * there */
+				if (off && dst[off - 1] != ':') {
+					if (off < size) {
 						dst[off++] = ':';
 					}
 				}
@@ -203,7 +210,7 @@ int inet_pton(int af, const char *__restrict src, void *__restrict dst) {
 				src = end + 1;
 				array[i] = value;
 			}
-			auto addr = reinterpret_cast<struct in_addr*>(dst);
+			auto addr = reinterpret_cast<struct in_addr *>(dst);
 			uint32_t ip = (array[0] << 24) | (array[1] << 16) | (array[2] << 8) | array[3];
 			addr->s_addr = htonl(ip);
 			break;
@@ -214,49 +221,49 @@ int inet_pton(int af, const char *__restrict src, void *__restrict dst) {
 			frg::optional<size_t> doubleColonOffset = frg::null_opt;
 
 			auto reservedRange = [&]() -> bool {
-				if(i && ((doubleColonOffset && doubleColonOffset.value()) || !doubleColonOffset)) {
+				if (i && ((doubleColonOffset && doubleColonOffset.value()) || !doubleColonOffset)) {
 					return (ntohs(array[0]) >> 8) == 0;
 				}
 
 				return false;
 			};
 
-			for(; i < 8; i++) {
+			for (; i < 8; i++) {
 				char *end = nullptr;
 				auto value = strtol(src, &end, 16);
 
 				if (value > UINT16_MAX)
 					return 0;
-				if(end[0] != '\0' && end[0] != ':' && end[0] != '.')
+				if (end[0] != '\0' && end[0] != ':' && end[0] != '.')
 					return 0;
 
-				if(end[0] == '.' && reservedRange() && i < 7) {
+				if (end[0] == '.' && reservedRange() && i < 7) {
 					char *ipv4end = nullptr;
 					auto value0 = strtol(src, &ipv4end, 10);
-					if(ipv4end[0] != '.' || value0 > UINT8_MAX || src == ipv4end)
+					if (ipv4end[0] != '.' || value0 > UINT8_MAX || src == ipv4end)
 						return 0;
 					src = ipv4end + 1;
 					auto value1 = strtol(src, &ipv4end, 10);
-					if(ipv4end[0] != '.' || value1 > UINT8_MAX || src == ipv4end)
+					if (ipv4end[0] != '.' || value1 > UINT8_MAX || src == ipv4end)
 						return 0;
 					array[i++] = htons((value0 << 8) | value1);
 					src = ipv4end + 1;
 
 					auto value2 = strtol(src, &ipv4end, 10);
-					if(ipv4end[0] != '.' || value2 > UINT8_MAX || src == ipv4end)
+					if (ipv4end[0] != '.' || value2 > UINT8_MAX || src == ipv4end)
 						return 0;
 					src = ipv4end + 1;
 					auto value3 = strtol(src, &ipv4end, 10);
-					if(value3 > UINT8_MAX || src == ipv4end)
+					if (value3 > UINT8_MAX || src == ipv4end)
 						return 0;
 					array[i] = htons((value2 << 8) | value3);
 					break;
-				} else if(end[0] == ':' && end[1] == ':') {
-					if(doubleColonOffset)
+				} else if (end[0] == ':' && end[1] == ':') {
+					if (doubleColonOffset)
 						return 0;
 					doubleColonOffset = i + 1;
 					src = end + 2;
-				} else if(end[0] == ':' || end[0] == '\0') {
+				} else if (end[0] == ':' || end[0] == '\0') {
 					src = end + 1;
 				} else {
 					return 0;
@@ -264,25 +271,25 @@ int inet_pton(int af, const char *__restrict src, void *__restrict dst) {
 
 				array[i] = htons(value);
 
-				if(end[0] == '\0')
+				if (end[0] == '\0')
 					break;
 			}
 
 			auto addr = reinterpret_cast<struct in6_addr *>(dst);
 
-			if(doubleColonOffset) {
+			if (doubleColonOffset) {
 				size_t suffix = i - doubleColonOffset.value() + 1;
 				memset(addr->s6_addr, 0, 16);
 
-				for(size_t j = 0; j < doubleColonOffset.value(); j++) {
+				for (size_t j = 0; j < doubleColonOffset.value(); j++) {
 					addr->s6_addr16[j] = array[j];
 				}
 
-				for(size_t j = 0; j < suffix; j++) {
+				for (size_t j = 0; j < suffix; j++) {
 					addr->s6_addr16[8 - suffix + j] = array[doubleColonOffset.value() + j];
 				}
 			} else {
-				for(size_t j = 0; j < 8; j++) {
+				for (size_t j = 0; j < 8; j++) {
 					addr->s6_addr16[j] = array[j];
 				}
 			}

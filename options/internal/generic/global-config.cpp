@@ -1,6 +1,6 @@
+#include <mlibc/global-config.hpp>
 #include <stdlib.h>
 #include <string.h>
-#include <mlibc/global-config.hpp>
 
 namespace mlibc {
 
@@ -20,8 +20,6 @@ static bool envEnabled(const char *env) {
 	return value && *value && *value != '0';
 }
 
-GlobalConfig::GlobalConfig() {
-	debugMalloc = envEnabled("MLIBC_DEBUG_MALLOC");
-}
+GlobalConfig::GlobalConfig() { debugMalloc = envEnabled("MLIBC_DEBUG_MALLOC"); }
 
 } // namespace mlibc

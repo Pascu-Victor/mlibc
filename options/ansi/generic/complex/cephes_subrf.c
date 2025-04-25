@@ -28,19 +28,17 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- * imported and modified include for newlib 2010/10/03 
+ * imported and modified include for newlib 2010/10/03
  * Marco Atzeri <marco_atzeri@yahoo.it>
  */
 
+#include "cephes_subrf.h"
 #include <complex.h>
 #include <math.h>
-#include "cephes_subrf.h"
 
 /* calculate cosh and sinh */
 
-void
-_cchshf(float x, float *c, float *s)
-{
+void _cchshf(float x, float *c, float *s) {
 	float e, ei;
 
 	if (fabsf(x) <= 0.5f) {
@@ -58,14 +56,12 @@ _cchshf(float x, float *c, float *s)
 /* Program to subtract nearest integer multiple of PI */
 
 /* extended precision value of PI: */
-static const double DP1 =  3.140625;
-static const double DP2 =  9.67502593994140625E-4;
-static const double DP3 =  1.509957990978376432E-7;
+static const double DP1 = 3.140625;
+static const double DP2 = 9.67502593994140625E-4;
+static const double DP3 = 1.509957990978376432E-7;
 #define MACHEPF 3.0e-8
 
-float
-_redupif(float x)
-{
+float _redupif(float x) {
 	float t;
 	long i;
 
@@ -75,7 +71,7 @@ _redupif(float x)
 	else
 		t -= 0.5f;
 
-	i = t;	/* the multiple */
+	i = t; /* the multiple */
 	t = i;
 	t = ((x - t * DP1) - t * DP2) - t * DP3;
 	return t;
@@ -83,9 +79,7 @@ _redupif(float x)
 
 /* Taylor series expansion for cosh(2y) - cos(2x) */
 
-float
-_ctansf(float complex z)
-{
+float _ctansf(float complex z) {
 	float f, x, x2, y, y2, rn, t, d;
 
 	x = fabsf(2.0f * crealf(z));
@@ -120,6 +114,6 @@ _ctansf(float complex z)
 		t = y2 - x2;
 		t /= f;
 		d += t;
-	} while (fabsf(t/d) > MACHEPF);
+	} while (fabsf(t / d) > MACHEPF);
 	return d;
 }

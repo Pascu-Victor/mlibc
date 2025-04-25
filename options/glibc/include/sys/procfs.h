@@ -12,11 +12,11 @@ extern "C" {
 typedef unsigned long elf_greg_t;
 
 #if defined(__x86_64__) || defined(__i386__) || defined(__loongarch64) || defined(__m68k__)
-#	include <sys/user.h>
+#include <sys/user.h>
 
-#	define ELF_NGREG (sizeof (struct user_regs_struct) / sizeof (elf_greg_t))
+#define ELF_NGREG (sizeof(struct user_regs_struct) / sizeof(elf_greg_t))
 #elif defined(__aarch64__) || defined(__riscv)
-#	define ELF_NGREG NGREG
+#define ELF_NGREG NGREG
 #endif
 
 typedef elf_greg_t elf_gregset_t[ELF_NGREG];

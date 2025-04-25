@@ -17,11 +17,11 @@ pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
 size_t count = 0;
 
 void timer_handler(union sigval val) {
-	(void) val;
+	(void)val;
 	pthread_mutex_lock(&mutex);
 	count++;
 	fprintf(stderr, "new count %zu\n", count);
-	if(count >= COUNTER_EXPIRATIONS) {
+	if (count >= COUNTER_EXPIRATIONS) {
 		pthread_cond_signal(&cond);
 	}
 	pthread_mutex_unlock(&mutex);
@@ -30,10 +30,11 @@ void timer_handler(union sigval val) {
 static void test_thread_notify() {
 	timer_t timer;
 	struct sigevent sev = {
-		.sigev_value = {
-			.sival_ptr = &timer,
-		},
-		.sigev_notify = SIGEV_THREAD,
+	    .sigev_value =
+	        {
+	            .sival_ptr = &timer,
+	        },
+	    .sigev_notify = SIGEV_THREAD,
 	};
 	sev.sigev_notify_function = timer_handler;
 	sev.sigev_notify_attributes = NULL;
@@ -42,21 +43,22 @@ static void test_thread_notify() {
 	assert(ret == 0);
 
 	struct itimerspec its = {
-		.it_interval = {
-			.tv_sec = 1,
-			.tv_nsec = 0,
-		},
-		.it_value = {
-			.tv_sec = 1,
-			.tv_nsec = 0,
-		},
+	    .it_interval =
+	        {
+	            .tv_sec = 1,
+	            .tv_nsec = 0,
+	        },
+	    .it_value = {
+	        .tv_sec = 1,
+	        .tv_nsec = 0,
+	    },
 	};
 	ret = timer_settime(timer, 0, &its, NULL);
 	assert(ret == 0);
 
 	pthread_mutex_lock(&mutex);
 
-	while(count < COUNTER_EXPIRATIONS)
+	while (count < COUNTER_EXPIRATIONS)
 		pthread_cond_wait(&cond, &mutex);
 
 	pthread_mutex_unlock(&mutex);

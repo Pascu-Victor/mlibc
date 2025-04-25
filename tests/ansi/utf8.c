@@ -1,10 +1,10 @@
 #include <assert.h>
 #include <inttypes.h>
+#include <locale.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <wchar.h>
-#include <locale.h>
 
 #if UINTPTR_MAX == UINT64_MAX
 #define WCHAR_SPEC ""
@@ -12,19 +12,30 @@
 #define WCHAR_SPEC "l"
 #endif
 
-#define EXPECT(func) ({ \
-		if(res != expected_ret) { \
-			printf(#func " decoded %d bytes (expected %d bytes), at %s:%d\n", \
-					res, expected_ret, __FILE__, line); \
-			fflush(stdout); \
-			abort(); \
-		} \
-		if(wc != expected) { \
-			printf(#func " output cp %" WCHAR_SPEC "x (expected cp %" WCHAR_SPEC "x), at %s:%d\n", wc, \
-					expected, __FILE__, line); \
-			fflush(stdout); \
-			abort(); \
-		} \
+#define EXPECT(func)                                                                               \
+	({                                                                                             \
+		if (res != expected_ret) {                                                                 \
+			printf(                                                                                \
+			    #func " decoded %d bytes (expected %d bytes), at %s:%d\n",                         \
+			    res,                                                                               \
+			    expected_ret,                                                                      \
+			    __FILE__,                                                                          \
+			    line                                                                               \
+			);                                                                                     \
+			fflush(stdout);                                                                        \
+			abort();                                                                               \
+		}                                                                                          \
+		if (wc != expected) {                                                                      \
+			printf(                                                                                \
+			    #func " output cp %" WCHAR_SPEC "x (expected cp %" WCHAR_SPEC "x), at %s:%d\n",    \
+			    wc,                                                                                \
+			    expected,                                                                          \
+			    __FILE__,                                                                          \
+			    line                                                                               \
+			);                                                                                     \
+			fflush(stdout);                                                                        \
+			abort();                                                                               \
+		}                                                                                          \
 	})
 
 void verify_decode(const char *input, wchar_t expected, int line) {

@@ -8,7 +8,7 @@
 int sched_getcpu(void) {
 	MLIBC_CHECK_OR_ENOSYS(mlibc::sys_getcpu, -1);
 	int cpu;
-	if(int e = mlibc::sys_getcpu(&cpu); e) {
+	if (int e = mlibc::sys_getcpu(&cpu); e) {
 		errno = e;
 		return -1;
 	}
@@ -17,7 +17,7 @@ int sched_getcpu(void) {
 
 int setns(int fd, int nstype) {
 	MLIBC_CHECK_OR_ENOSYS(mlibc::sys_setns, -1);
-	if(int e = mlibc::sys_setns(fd, nstype); e) {
+	if (int e = mlibc::sys_setns(fd, nstype); e) {
 		errno = e;
 		return -1;
 	}
@@ -27,7 +27,7 @@ int setns(int fd, int nstype) {
 int sched_getscheduler(pid_t pid) {
 	MLIBC_CHECK_OR_ENOSYS(mlibc::sys_getscheduler, -1);
 	int policy;
-	if(int e = mlibc::sys_getscheduler(pid, &policy); e) {
+	if (int e = mlibc::sys_getscheduler(pid, &policy); e) {
 		errno = e;
 		return -1;
 	}
@@ -36,7 +36,7 @@ int sched_getscheduler(pid_t pid) {
 
 int sched_getaffinity(pid_t pid, size_t cpusetsize, cpu_set_t *mask) {
 	MLIBC_CHECK_OR_ENOSYS(mlibc::sys_getaffinity, -1);
-	if(int e = mlibc::sys_getaffinity(pid, cpusetsize, mask); e) {
+	if (int e = mlibc::sys_getaffinity(pid, cpusetsize, mask); e) {
 		errno = e;
 		return -1;
 	}
@@ -45,7 +45,7 @@ int sched_getaffinity(pid_t pid, size_t cpusetsize, cpu_set_t *mask) {
 
 int unshare(int flags) {
 	MLIBC_CHECK_OR_ENOSYS(mlibc::sys_unshare, -1);
-	if(int e = mlibc::sys_unshare(flags); e) {
+	if (int e = mlibc::sys_unshare(flags); e) {
 		errno = e;
 		return -1;
 	}

@@ -4,7 +4,7 @@
  * Written by Matthias Drochner <drochner@NetBSD.org>.
  * Public domain.
  *
- * imported and modified include for newlib 2010/10/03 
+ * imported and modified include for newlib 2010/10/03
  * Marco Atzeri <marco_atzeri@yahoo.it>
  */
 
@@ -46,15 +46,12 @@ QUICKREF
 
 */
 
-
 #include <complex.h>
 
 #include "fdlibm.h"
 
-double
-cimag(double complex z)
-{
-	double_complex w = { .z = z };
+double cimag(double complex z) {
+	double_complex w = {.z = z};
 
 	return (IMAG_PART(w));
 }

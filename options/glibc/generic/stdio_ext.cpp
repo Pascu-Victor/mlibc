@@ -1,8 +1,8 @@
 
-#include <mlibc/file-io.hpp>
-#include <stdio_ext.h>
 #include <bits/ensure.h>
 #include <mlibc/debug.hpp>
+#include <mlibc/file-io.hpp>
+#include <stdio_ext.h>
 
 size_t __fbufsize(FILE *) {
 	__ensure(!"Not implemented");
@@ -27,13 +27,9 @@ int __fwritable(FILE *) {
 	__builtin_unreachable();
 }
 
-int __freading(FILE *file_base) {
-	return file_base->__io_mode == 0;
-}
+int __freading(FILE *file_base) { return file_base->__io_mode == 0; }
 
-int __fwriting(FILE *file_base) {
-	return file_base->__io_mode == 1;
-}
+int __fwriting(FILE *file_base) { return file_base->__io_mode == 1; }
 
 int __fsetlocking(FILE *file_base, int state) {
 	auto file = static_cast<mlibc::abstract_file *>(file_base);
@@ -60,8 +56,9 @@ void _flushlbf(void) {
 // The following functions are defined by musl.
 
 size_t __freadahead(FILE *file_base) {
-	if(file_base->__io_mode != 0) {
-		mlibc::infoLogger() << "mlibc: __freadahead() called but file is not open for reading" << frg::endlog;
+	if (file_base->__io_mode != 0) {
+		mlibc::infoLogger() << "mlibc: __freadahead() called but file is not open for reading"
+		                    << frg::endlog;
 		return 0;
 	}
 	return file_base->__valid_limit - file_base->__offset;
@@ -81,4 +78,3 @@ void __fseterr(FILE *) {
 	__ensure(!"Not implemented");
 	__builtin_unreachable();
 }
-

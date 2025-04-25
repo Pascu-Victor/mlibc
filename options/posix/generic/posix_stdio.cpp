@@ -3,10 +3,10 @@
 #endif
 
 #include <errno.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <fcntl.h>
 
 #include <bits/ensure.h>
 #include <mlibc-config.h>
@@ -17,16 +17,11 @@
 #include <mlibc/posix-sysdeps.hpp>
 
 struct popen_file : mlibc::fd_file {
-	popen_file(int fd, void (*do_dispose)(abstract_file *) = nullptr)
-		: fd_file(fd, do_dispose) {}
+	popen_file(int fd, void (*do_dispose)(abstract_file *) = nullptr) : fd_file(fd, do_dispose) {}
 
-	pid_t get_popen_pid() {
-		return _popen_pid;
-	}
+	pid_t get_popen_pid() { return _popen_pid; }
 
-	void set_popen_pid(pid_t new_pid) {
-		_popen_pid = new_pid;
-	}
+	void set_popen_pid(pid_t new_pid) { _popen_pid = new_pid; }
 
 private:
 	// Underlying PID in case of popen()
@@ -36,8 +31,9 @@ private:
 FILE *fmemopen(void *buf, size_t size, const char *__restrict mode) {
 	int flags = mlibc::fd_file::parse_modestring(mode);
 
-	return frg::construct<mlibc::fmemopen_mem_file>(getAllocator(), buf, size, flags,
-		mlibc::file_dispose_cb<mlibc::fmemopen_mem_file>);
+	return frg::construct<mlibc::fmemopen_mem_file>(
+	    getAllocator(), buf, size, flags, mlibc::file_dispose_cb<mlibc::fmemopen_mem_file>
+	);
 }
 
 int pclose(FILE *stream) {
@@ -51,8 +47,8 @@ int pclose(FILE *stream) {
 	fclose(file);
 
 	if (mlibc::sys_waitpid(pid, &status, 0, nullptr, &pid) != 0) {
-	    errno = ECHILD;
-	    return -1;
+		errno = ECHILD;
+		return -1;
 	}
 
 	return status;
@@ -63,8 +59,11 @@ FILE *popen(const char *command, const char *typestr) {
 	pid_t child;
 	FILE *ret = nullptr;
 
-	MLIBC_CHECK_OR_ENOSYS(mlibc::sys_fork && mlibc::sys_dup2 && mlibc::sys_execve &&
-			mlibc::sys_sigprocmask && mlibc::sys_sigaction && mlibc::sys_pipe, nullptr);
+	MLIBC_CHECK_OR_ENOSYS(
+	    mlibc::sys_fork && mlibc::sys_dup2 && mlibc::sys_execve && mlibc::sys_sigprocmask
+	        && mlibc::sys_sigaction && mlibc::sys_pipe,
+	    nullptr
+	);
 
 	if (typestr == nullptr) {
 		errno = EINVAL;
@@ -125,9 +124,7 @@ FILE *popen(const char *command, const char *typestr) {
 		}
 		mlibc::sys_close(fds[child_end]);
 
-		const char *args[] = {
-			"sh", "-c", command, nullptr
-		};
+		const char *args[] = {"sh", "-c", command, nullptr};
 
 		mlibc::sys_execve("/bin/sh", const_cast<char **>(args), environ);
 		_Exit(127);
@@ -136,9 +133,7 @@ FILE *popen(const char *command, const char *typestr) {
 		mlibc::sys_close(fds[child_end]);
 
 		ret = frg::construct<popen_file>(
-			getAllocator(),
-			fds[parent_end],
-			mlibc::file_dispose_cb<popen_file>
+		    getAllocator(), fds[parent_end], mlibc::file_dispose_cb<popen_file>
 		);
 		__ensure(ret);
 
@@ -159,13 +154,14 @@ FILE *popen(const char *command, const char *typestr) {
 }
 
 FILE *open_memstream(char **buf, size_t *sizeloc) {
-	return frg::construct<mlibc::memstream_mem_file>(getAllocator(), buf, sizeloc, O_RDWR,
-			mlibc::file_dispose_cb<mlibc::memstream_mem_file>);
+	return frg::construct<mlibc::memstream_mem_file>(
+	    getAllocator(), buf, sizeloc, O_RDWR, mlibc::file_dispose_cb<mlibc::memstream_mem_file>
+	);
 }
 
 int fseeko(FILE *file_base, off_t offset, int whence) {
 	auto file = static_cast<mlibc::abstract_file *>(file_base);
-	if(int e = file->seek(offset, whence); e) {
+	if (int e = file->seek(offset, whence); e) {
 		errno = e;
 		return -1;
 	}
@@ -179,7 +175,7 @@ int fseeko(FILE *file_base, off_t offset, int whence) {
 off_t ftello(FILE *file_base) {
 	auto file = static_cast<mlibc::abstract_file *>(file_base);
 	off_t current_offset;
-	if(int e = file->tell(&current_offset); e) {
+	if (int e = file->tell(&current_offset); e) {
 		errno = e;
 		return -1;
 	}
@@ -218,6 +214,7 @@ char *tempnam(const char *, const char *) {
 FILE *fopencookie(void *cookie, const char *__restrict mode, cookie_io_functions_t funcs) {
 	int flags = mlibc::fd_file::parse_modestring(mode);
 
-	return frg::construct<mlibc::cookie_file>(getAllocator(), cookie, flags, funcs,
-		mlibc::file_dispose_cb<mlibc::cookie_file>);
+	return frg::construct<mlibc::cookie_file>(
+	    getAllocator(), cookie, flags, funcs, mlibc::file_dispose_cb<mlibc::cookie_file>
+	);
 }

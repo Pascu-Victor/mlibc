@@ -2,8 +2,8 @@
 #ifndef _SYS_WAIT_H
 #define _SYS_WAIT_H
 
-#include <bits/posix/id_t.h>
 #include <abi-bits/pid_t.h>
+#include <bits/posix/id_t.h>
 /* for siginfo_t */
 #include <abi-bits/signal.h>
 #include <abi-bits/wait.h>
@@ -16,9 +16,7 @@ extern "C" {
 struct rusage;
 
 /* TODO: move to own file and include in sys/types.h */
-typedef enum {
-	P_ALL, P_PID, P_PGID, P_PIDFD
-} idtype_t;
+typedef enum { P_ALL, P_PID, P_PGID, P_PIDFD } idtype_t;
 
 #ifndef __MLIBC_ABI_ONLY
 
@@ -37,4 +35,3 @@ pid_t wait4(pid_t __pid, int *__status, int __options, struct rusage *__ru);
 #endif
 
 #endif /* _SYS_WAIT_H */
-

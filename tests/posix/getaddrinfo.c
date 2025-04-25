@@ -2,15 +2,15 @@
 #include <mlibc-config.h>
 #endif
 
-#include <netdb.h>
 #include <assert.h>
+#include <net/if.h>
+#include <netdb.h>
+#include <netinet/in.h>
 #include <stdbool.h>
 #include <stddef.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <net/if.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/socket.h>
 #include <unistd.h>
 
 #if __MLIBC_LINUX_OPTION || defined(USE_HOST_LIBC)
@@ -24,7 +24,8 @@ static bool has_ipv4_addr(void) {
 
 	int found = 0;
 	for (struct ifaddrs *cur = addrs; cur; cur = cur->ifa_next) {
-		if (cur->ifa_addr && (cur->ifa_flags & IFF_UP) && cur->ifa_addr->sa_family == AF_INET && strncmp(cur->ifa_name, "lo", IF_NAMESIZE)) {
+		if (cur->ifa_addr && (cur->ifa_flags & IFF_UP) && cur->ifa_addr->sa_family == AF_INET
+		    && strncmp(cur->ifa_name, "lo", IF_NAMESIZE)) {
 			found = 1;
 			break;
 		}
@@ -42,7 +43,8 @@ static bool has_ipv6_addr(void) {
 
 	int found = 0;
 	for (struct ifaddrs *cur = addrs; cur; cur = cur->ifa_next) {
-		if (cur->ifa_addr && (cur->ifa_flags & IFF_UP) && cur->ifa_addr->sa_family == AF_INET6 && strncmp(cur->ifa_name, "lo", IF_NAMESIZE)) {
+		if (cur->ifa_addr && (cur->ifa_flags & IFF_UP) && cur->ifa_addr->sa_family == AF_INET6
+		    && strncmp(cur->ifa_name, "lo", IF_NAMESIZE)) {
 			found = 1;
 			break;
 		}
@@ -63,7 +65,7 @@ int main() {
 	int ret = getaddrinfo(NULL, "443", &hints, &res);
 	assert(ret == 0);
 
-	struct sockaddr_in *addr = (struct sockaddr_in*)(res[0].ai_addr);
+	struct sockaddr_in *addr = (struct sockaddr_in *)(res[0].ai_addr);
 	assert(addr->sin_port == htons(443));
 	assert(res[0].ai_socktype == SOCK_STREAM);
 	assert(res[0].ai_protocol == IPPROTO_TCP);
@@ -82,7 +84,7 @@ int main() {
 	ret = getaddrinfo("10.10.10.10", NULL, &hints, &res);
 	assert(ret == 0);
 
-	addr = (struct sockaddr_in*)res[0].ai_addr;
+	addr = (struct sockaddr_in *)res[0].ai_addr;
 	assert((addr->sin_addr.s_addr & 0xFF) == 10);
 	assert(((addr->sin_addr.s_addr >> 8) & 0xFF) == 10);
 	assert(((addr->sin_addr.s_addr >> 16) & 0xFF) == 10);
@@ -103,7 +105,7 @@ int main() {
 	assert(ret == 0);
 
 	assert(res[0].ai_family == AF_INET6);
-	struct sockaddr_in6 *addr6 = (struct sockaddr_in6*) res[0].ai_addr;
+	struct sockaddr_in6 *addr6 = (struct sockaddr_in6 *)res[0].ai_addr;
 	assert(addr6->sin6_port == htons(1234));
 	assert(addr6->sin6_addr.s6_addr[15] == 1);
 	for (int i = 0; i < 15; i++) {
@@ -119,7 +121,7 @@ int main() {
 	assert(ret == 0);
 
 	assert(res[0].ai_family == AF_INET6);
-	addr6 = (struct sockaddr_in6*)res[0].ai_addr;
+	addr6 = (struct sockaddr_in6 *)res[0].ai_addr;
 	assert(addr6->sin6_port == htons(443));
 
 	freeaddrinfo(res);
@@ -131,7 +133,7 @@ int main() {
 	ret = getaddrinfo("localhost", NULL, &hints, &res);
 	if (has_ipv4_addr()) {
 		assert(ret == 0);
-		for(struct addrinfo *p = res; p != NULL; p = p->ai_next) {
+		for (struct addrinfo *p = res; p != NULL; p = p->ai_next) {
 			assert(p->ai_family == AF_INET);
 		}
 	} else {
@@ -144,7 +146,7 @@ int main() {
 	hints.ai_family = AF_INET6;
 	ret = getaddrinfo("localhost", NULL, &hints, &res);
 	assert(ret == 0);
-	for(struct addrinfo *p = res; p != NULL; p = p->ai_next) {
+	for (struct addrinfo *p = res; p != NULL; p = p->ai_next) {
 		assert(p->ai_family == AF_INET6);
 	}
 	freeaddrinfo(res);
@@ -160,7 +162,7 @@ int main() {
 	if (ret == 0) {
 		int found_ipv4 = 0;
 		int found_ipv6 = 0;
-		for(struct addrinfo *p = res; p != NULL; p = p->ai_next) {
+		for (struct addrinfo *p = res; p != NULL; p = p->ai_next) {
 			if (p->ai_family == AF_INET)
 				found_ipv4 = 1;
 			else if (p->ai_family == AF_INET6)

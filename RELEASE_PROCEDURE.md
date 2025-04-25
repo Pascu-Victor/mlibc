@@ -3,10 +3,11 @@
 mlibc uses [semantic versioning v2.0.0](https://semver.org/spec/v2.0.0.html) to denote releases.
 
 In short:
+
 - A bump in the major version signals an ABI or API break, or otherwise any other major change
-involving compatibility breakage.
+  involving compatibility breakage.
 - A bump in the minor version signals a newly released set of features, while still maintaining
-compatibility.
+  compatibility.
 - A bump in the patch signals a bug-fix, while not adding new features.
 
 The `master` branch is where active development occurs, and where PRs get merged into. Changes

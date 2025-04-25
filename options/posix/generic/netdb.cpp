@@ -1,27 +1,25 @@
-#include <netdb.h>
 #include <bits/ensure.h>
+#include <netdb.h>
 
-#include <mlibc/debug.hpp>
-#include <mlibc/lookup.hpp>
-#include <mlibc/allocator.hpp>
-#include <mlibc/services.hpp>
-#include <mlibc/posix-sysdeps.hpp>
-#include <frg/vector.hpp>
+#include <arpa/inet.h>
+#include <errno.h>
 #include <frg/array.hpp>
 #include <frg/span.hpp>
-#include <sys/socket.h>
-#include <arpa/inet.h>
-#include <stdlib.h>
-#include <stdio.h>
+#include <frg/vector.hpp>
+#include <mlibc/allocator.hpp>
+#include <mlibc/debug.hpp>
+#include <mlibc/lookup.hpp>
+#include <mlibc/posix-sysdeps.hpp>
+#include <mlibc/services.hpp>
 #include <stddef.h>
-#include <errno.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/socket.h>
 
 __thread int __mlibc_h_errno;
 
 // This function is from musl
-int *__h_errno_location(void) {
-	return &__mlibc_h_errno;
-}
+int *__h_errno_location(void) { return &__mlibc_h_errno; }
 
 void endhostent(void) {
 	__ensure(!"Not implemented");
@@ -45,7 +43,7 @@ void endservent(void) {
 
 void freeaddrinfo(struct addrinfo *ptr) {
 	if (ptr) {
-		auto buf = (struct mlibc::ai_buf*) ptr - offsetof(struct mlibc::ai_buf, ai);
+		auto buf = (struct mlibc::ai_buf *)ptr - offsetof(struct mlibc::ai_buf, ai);
 		// this string was allocated by a frg::string
 		getAllocator().free(ptr->ai_canonname);
 		free(buf);
@@ -58,8 +56,12 @@ const char *gai_strerror(int code) {
 	return buffer;
 }
 
-int getaddrinfo(const char *__restrict node, const char *__restrict service,
-		const struct addrinfo *__restrict hints, struct addrinfo **__restrict res) {
+int getaddrinfo(
+    const char *__restrict node,
+    const char *__restrict service,
+    const struct addrinfo *__restrict hints,
+    struct addrinfo **__restrict res
+) {
 	if (!node && !service)
 		return EAI_NONAME;
 
@@ -70,8 +72,8 @@ int getaddrinfo(const char *__restrict node, const char *__restrict service,
 		family = hints->ai_family;
 		flags = hints->ai_flags;
 
-		int mask = AI_V4MAPPED | AI_ADDRCONFIG | AI_NUMERICHOST | AI_PASSIVE |
-			AI_CANONNAME | AI_ALL | AI_NUMERICSERV;
+		int mask = AI_V4MAPPED | AI_ADDRCONFIG | AI_NUMERICHOST | AI_PASSIVE | AI_CANONNAME | AI_ALL
+		           | AI_NUMERICSERV;
 		if ((flags & mask) != flags)
 			return EAI_BADFLAGS;
 
@@ -97,7 +99,9 @@ int getaddrinfo(const char *__restrict node, const char *__restrict service,
 			else if (ipv4 != ipv6)
 				family = ipv4 ? AF_INET : AF_INET6;
 		} else {
-			mlibc::infoLogger() << "mlibc: sys_inet_configured() not implemented, cannot handle getaddrinfo with AI_ADDRCONFIG" << frg::endlog;
+			mlibc::infoLogger() << "mlibc: sys_inet_configured() not implemented, cannot handle "
+			                       "getaddrinfo with AI_ADDRCONFIG"
+			                    << frg::endlog;
 			errno = ENOSYS;
 			return EAI_SYSTEM;
 		}
@@ -114,7 +118,7 @@ int getaddrinfo(const char *__restrict node, const char *__restrict service,
 	if (node) {
 		if ((addr_count = mlibc::lookup_name_ip(addr_buf, node, family)) <= 0) {
 			if (flags & AI_NUMERICHOST)
-			       addr_count = -EAI_NONAME;
+				addr_count = -EAI_NONAME;
 			else if ((addr_count = mlibc::lookup_name_hosts(addr_buf, node, canon, family)) <= 0)
 				addr_count = mlibc::lookup_name_dns(addr_buf, node, canon, family);
 		}
@@ -130,8 +134,8 @@ int getaddrinfo(const char *__restrict node, const char *__restrict service,
 		addr_count = lookup_name_null(addr_buf, flags, family);
 	}
 
-	auto out = (struct mlibc::ai_buf *) calloc(serv_count * addr_count,
-			sizeof(struct mlibc::ai_buf));
+	auto out =
+	    (struct mlibc::ai_buf *)calloc(serv_count * addr_count, sizeof(struct mlibc::ai_buf));
 
 	if (node && !canon.size() && (flags & AI_CANONNAME))
 		canon = frg::string<MemoryAllocator>{node, getAllocator()};
@@ -142,7 +146,7 @@ int getaddrinfo(const char *__restrict node, const char *__restrict service,
 			out[i].ai.ai_socktype = serv_buf[j].socktype;
 			out[i].ai.ai_protocol = serv_buf[j].protocol;
 			out[i].ai.ai_flags = flags;
-			out[i].ai.ai_addr = (struct sockaddr *) &out[i].sa;
+			out[i].ai.ai_addr = (struct sockaddr *)&out[i].sa;
 
 			// If `node` is not null, and if requested by the AI_CANONNAME flag,
 			// the `ai_canonname` field of the first returned addrinfo structure
@@ -153,7 +157,7 @@ int getaddrinfo(const char *__restrict node, const char *__restrict service,
 			if (node && (flags & AI_CANONNAME) && i == 0 && !canon.empty())
 				out[i].ai.ai_canonname = canon.data();
 
-			if(i)
+			if (i)
 				out[i - 1].ai.ai_next = &out[i].ai;
 
 			switch (addr_buf.buf[i].family) {
@@ -187,28 +191,35 @@ struct hostent *gethostent(void) {
 	__builtin_unreachable();
 }
 
-int getnameinfo(const struct sockaddr *__restrict addr, socklen_t addr_len,
-		char *__restrict host, socklen_t host_len, char *__restrict serv,
-		socklen_t serv_len, int flags) {
+int getnameinfo(
+    const struct sockaddr *__restrict addr,
+    socklen_t addr_len,
+    char *__restrict host,
+    socklen_t host_len,
+    char *__restrict serv,
+    socklen_t serv_len,
+    int flags
+) {
 	frg::array<uint8_t, 16> addr_array;
 	int family = addr->sa_family;
 	in_port_t port;
 
-	switch(family) {
+	switch (family) {
 		case AF_INET: {
 			if (addr_len < sizeof(struct sockaddr_in))
 				return EAI_FAMILY;
-			auto sockaddr = reinterpret_cast<const struct sockaddr_in*>(addr);
-			memcpy(addr_array.data(), reinterpret_cast<const char*>(&sockaddr->sin_addr), 4);
+			auto sockaddr = reinterpret_cast<const struct sockaddr_in *>(addr);
+			memcpy(addr_array.data(), reinterpret_cast<const char *>(&sockaddr->sin_addr), 4);
 			port = sockaddr->sin_port;
 			break;
 		}
 		case AF_INET6: {
-			mlibc::infoLogger() << "getnameinfo(): ipv6 is not fully supported in this function" << frg::endlog;
+			mlibc::infoLogger() << "getnameinfo(): ipv6 is not fully supported in this function"
+			                    << frg::endlog;
 			if (addr_len < sizeof(struct sockaddr_in6))
 				return EAI_FAMILY;
-			auto sockaddr = reinterpret_cast<const struct sockaddr_in6*>(addr);
-			memcpy(addr_array.data(), reinterpret_cast<const char*>(&sockaddr->sin6_addr), 16);
+			auto sockaddr = reinterpret_cast<const struct sockaddr_in6 *>(addr);
+			memcpy(addr_array.data(), reinterpret_cast<const char *>(&sockaddr->sin6_addr), 16);
 			port = sockaddr->sin6_port;
 			break;
 		}
@@ -227,8 +238,8 @@ int getnameinfo(const struct sockaddr *__restrict addr, socklen_t addr_len,
 		if (!res) {
 			if (flags & NI_NAMEREQD)
 				return EAI_NONAME;
-			if(!inet_ntop(family, addr_array.data(), host, host_len)) {
-				switch(errno) {
+			if (!inet_ntop(family, addr_array.data(), host, host_len)) {
+				switch (errno) {
 					case EAFNOSUPPORT:
 						return EAI_FAMILY;
 					case ENOSPC:
@@ -318,8 +329,7 @@ struct hostent *gethostbyname(const char *name) {
 
 	h.h_name = canon.data();
 
-	h.h_aliases = reinterpret_cast<char**>(malloc((buf.aliases.size() + 1)
-				* sizeof(char*)));
+	h.h_aliases = reinterpret_cast<char **>(malloc((buf.aliases.size() + 1) * sizeof(char *)));
 	int alias_pos = 0;
 	for (auto &buf_name : buf.aliases) {
 		h.h_aliases[alias_pos] = buf_name.data();
@@ -339,12 +349,12 @@ struct hostent *gethostbyname(const char *name) {
 
 	// can only be AF_INET or AF_INET6
 	h.h_length = h.h_addrtype == AF_INET ? 4 : 16;
-	h.h_addr_list = reinterpret_cast<char**>(malloc((ret + 1) * sizeof(char*)));
+	h.h_addr_list = reinterpret_cast<char **>(malloc((ret + 1) * sizeof(char *)));
 	int addr_pos = 0;
 	for (int i = 0; i < ret; i++) {
 		if (buf.buf[i].family != h.h_addrtype)
 			continue;
-		h.h_addr_list[addr_pos] = reinterpret_cast<char*>(malloc(h.h_length));
+		h.h_addr_list[addr_pos] = reinterpret_cast<char *>(malloc(h.h_length));
 		memcpy(h.h_addr_list[addr_pos], buf.buf[i].addr, h.h_length);
 		addr_pos++;
 	}
@@ -363,14 +373,28 @@ struct hostent *gethostbyaddr(const void *, socklen_t, int) {
 	__builtin_unreachable();
 }
 
-int gethostbyaddr_r(const void *__restrict, socklen_t, int, struct hostent *__restrict,
-					char *__restrict, size_t, struct hostent **__restrict, int *__restrict) {
+int gethostbyaddr_r(
+    const void *__restrict,
+    socklen_t,
+    int,
+    struct hostent *__restrict,
+    char *__restrict,
+    size_t,
+    struct hostent **__restrict,
+    int *__restrict
+) {
 	__ensure(!"Not implemented");
 	__builtin_unreachable();
 }
 
-int gethostbyname_r(const char *__restrict, struct hostent *__restrict, char *__restrict, size_t,
-					struct hostent **__restrict, int *__restrict) {
+int gethostbyname_r(
+    const char *__restrict,
+    struct hostent *__restrict,
+    char *__restrict,
+    size_t,
+    struct hostent **__restrict,
+    int *__restrict
+) {
 	__ensure(!"Not implemented");
 	__builtin_unreachable();
 }
@@ -392,7 +416,7 @@ struct protoent *getprotoent(void) {
 
 struct servent *getservbyname(const char *name, const char *proto) {
 	int iproto = -1;
-	if (proto &&(!strncmp(proto, "tcp", 3) || !strncmp(proto, "TCP", 3)))
+	if (proto && (!strncmp(proto, "tcp", 3) || !strncmp(proto, "TCP", 3)))
 		iproto = IPPROTO_TCP;
 	else if (proto && (!strncmp(proto, "udp", 3) || !strncmp(proto, "UDP", 3)))
 		iproto = IPPROTO_UDP;
@@ -412,8 +436,7 @@ struct servent *getservbyname(const char *name, const char *proto) {
 	}
 
 	mlibc::service_result serv_buf{getAllocator()};
-	int count = mlibc::lookup_serv_by_name(serv_buf, name, iproto,
-			0, 0);
+	int count = mlibc::lookup_serv_by_name(serv_buf, name, iproto, 0, 0);
 	if (count <= 0)
 		return nullptr;
 
@@ -423,7 +446,8 @@ struct servent *getservbyname(const char *name, const char *proto) {
 	if (strncmp(name, serv_buf[0].name.data(), serv_buf[0].name.size()))
 		return nullptr;
 
-	ret.s_aliases = reinterpret_cast<char**>(malloc((serv_buf[0].aliases.size() + 1) * sizeof(char*)));
+	ret.s_aliases =
+	    reinterpret_cast<char **>(malloc((serv_buf[0].aliases.size() + 1) * sizeof(char *)));
 	int alias_pos = 0;
 	for (auto &buf_name : serv_buf[0].aliases) {
 		ret.s_aliases[alias_pos] = buf_name.data();
@@ -480,7 +504,8 @@ struct servent *getservbyport(int port, const char *proto) {
 	ret.s_name = serv_buf[0].name.data();
 	serv_buf[0].name.detach();
 
-	ret.s_aliases = reinterpret_cast<char**>(malloc((serv_buf[0].aliases.size() + 1) * sizeof(char*)));
+	ret.s_aliases =
+	    reinterpret_cast<char **>(malloc((serv_buf[0].aliases.size() + 1) * sizeof(char *)));
 	int alias_pos = 0;
 	for (auto &buf_name : serv_buf[0].aliases) {
 		ret.s_aliases[alias_pos] = buf_name.data();

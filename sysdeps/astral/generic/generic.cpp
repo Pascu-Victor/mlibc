@@ -240,7 +240,7 @@ namespace mlibc {
 		long ret;
 		return syscall(SYSCALL_PAUSE, &ret);
 	}
-	
+
 	int sys_chroot(const char *path) {
 		long ret;
 		return syscall(SYSCALL_CHROOT, &ret, (uint64_t)path);
@@ -288,7 +288,7 @@ namespace mlibc {
 	#define TTY_NAME_MAX 32
 	#define TTY_PREFIX "/dev/"
 
-	
+
 	int sys_ttyname(int fd, char * buffer, size_t size) {
 		size_t prefixLen = strlen(TTY_PREFIX);
 		if(size < TTY_NAME_MAX + prefixLen) {
@@ -498,7 +498,7 @@ namespace mlibc {
 		*length = ret;
 		return err;
 	}
-	
+
 	int sys_bind(int fd, const struct sockaddr *addr_ptr, socklen_t addr_length) {
 		long ret;
 		return syscall(SYSCALL_BIND, &ret, fd, (uint64_t)addr_ptr, addr_length);
@@ -690,7 +690,7 @@ namespace mlibc {
 	int sys_link(const char *old_path, const char *new_path) {
 		return sys_linkat(AT_FDCWD, old_path, AT_FDCWD, new_path, 0);
 	}
-	
+
 	int sys_symlinkat(const char *target_path, int dirfd, const char *link_path) {
 		return dolink(AT_FDCWD, target_path, dirfd, link_path, 0, 1);
 	}
@@ -826,7 +826,7 @@ namespace mlibc {
 		long ret;
 		syscall(SYSCALL_PRINT, &ret, (uint64_t)message);
 	}
-	
+
 	[[noreturn]] void sys_libc_panic() {
 		sys_libc_log("mlibc: panic");
 		sys_exit(1);
@@ -863,7 +863,7 @@ namespace mlibc {
 		size += 4096 - (size % 4096);
 		return sys_vm_unmap(pointer, size);
 	}
-	
+
 	int sys_openat(int dirfd, const char *path, int flags, mode_t mode, int *fd) {
 		long ret;
 		long err = syscall(SYSCALL_OPENAT, &ret, dirfd, (uint64_t)path, flags, mode);
@@ -901,7 +901,7 @@ namespace mlibc {
 		*new_offset = ret;
 		return error;
 	}
-	
+
 	int sys_close(int fd) {
 		long r;
 		return syscall(SYSCALL_CLOSE, &r, fd);
@@ -918,7 +918,7 @@ namespace mlibc {
 		long ret;
 		return syscall(SYSCALL_MUNMAP, &ret, (uintptr_t)pointer, size);
 	}
-	
+
 	int sys_isatty(int fd) {
 		long ret;
 		return syscall(SYSCALL_ISATTY, &ret, fd);

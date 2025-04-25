@@ -2,9 +2,9 @@
 #define _MLIBC_INTERNAL_THREADS_H
 
 #include <abi-bits/clockid_t.h>
-#include <bits/size_t.h>
 #include <bits/cpu_set.h>
 #include <bits/sigset_t.h>
+#include <bits/size_t.h>
 
 /* values for pthread_attr_{get,set}detachstate(). */
 #define __MLIBC_THREAD_CREATE_JOINABLE 0

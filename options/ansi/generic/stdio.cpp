@@ -1,12 +1,5 @@
 #include <ctype.h>
 #include <errno.h>
-#include <stdarg.h>
-#include <stdio.h>
-#include <string.h>
-#include <stdint.h>
-#include <stdlib.h>
-#include <wchar.h>
-#include <ctype.h>
 #include <limits.h>
 #include <math.h>
 
@@ -14,121 +7,150 @@
 
 #include <bits/ensure.h>
 
-#include <mlibc/lock.hpp>
+#include <frg/expected.hpp>
+#include <frg/mutex.hpp>
+#include <frg/printf.hpp>
 #include <mlibc/allocator.hpp>
+#include <mlibc/ansi-sysdeps.hpp>
 #include <mlibc/debug.hpp>
 #include <mlibc/file-io.hpp>
-#include <mlibc/ansi-sysdeps.hpp>
-#include <frg/mutex.hpp>
-#include <frg/expected.hpp>
-#include <frg/printf.hpp>
+#include <mlibc/lock.hpp>
 
-template<typename F>
+template <typename F>
 struct PrintfAgent {
-	PrintfAgent(F *formatter, frg::va_struct *vsp)
-	: _formatter{formatter}, _vsp{vsp} { }
+	PrintfAgent(F *formatter, frg::va_struct *vsp) : _formatter{formatter}, _vsp{vsp} {}
 
-	frg::expected<frg::format_error> operator() (char c) {
+	frg::expected<frg::format_error> operator()(char c) {
 		_formatter->append(c);
 		return {};
 	}
-	frg::expected<frg::format_error> operator() (const char *c, size_t n) {
+	frg::expected<frg::format_error> operator()(const char *c, size_t n) {
 		_formatter->append(c, n);
 		return {};
 	}
 
-	frg::expected<frg::format_error> operator() (char t, frg::format_options opts,
-			frg::printf_size_mod szmod) {
-		switch(t) {
-		case 'c':
-			if (szmod == frg::printf_size_mod::long_size) {
-				char c_buf[MB_LEN_MAX];
-				auto c = static_cast<wchar_t>(frg::pop_arg<wint_t>(_vsp, &opts));
-				mbstate_t shift_state = {};
-				size_t res = wcrtomb(c_buf, c, &shift_state);
-				if (res == size_t(-1))
-					return frg::format_error::agent_error;
-				_formatter->append(c_buf, res);
+	frg::expected<frg::format_error>
+	operator()(char t, frg::format_options opts, frg::printf_size_mod szmod) {
+		switch (t) {
+			case 'c':
+				if (szmod == frg::printf_size_mod::long_size) {
+					char c_buf[MB_LEN_MAX];
+					auto c = static_cast<wchar_t>(frg::pop_arg<wint_t>(_vsp, &opts));
+					mbstate_t shift_state = {};
+					size_t res = wcrtomb(c_buf, c, &shift_state);
+					if (res == size_t(-1))
+						return frg::format_error::agent_error;
+					_formatter->append(c_buf, res);
+					break;
+				}
+				frg::do_printf_chars(*_formatter, t, opts, szmod, _vsp);
 				break;
-			}
-			frg::do_printf_chars(*_formatter, t, opts, szmod, _vsp);
-			break;
-		case 'p': case 's':
-			frg::do_printf_chars(*_formatter, t, opts, szmod, _vsp);
-			break;
-		case 'd': case 'i': case 'o': case 'x': case 'X': case 'b': case 'B': case 'u':
-			frg::do_printf_ints(*_formatter, t, opts, szmod, _vsp);
-			break;
-		case 'f': case 'F': case 'g': case 'G': case 'e': case 'E': case 'a': case 'A':
-			frg::do_printf_floats(*_formatter, t, opts, szmod, _vsp);
-			break;
-		case 'm':
-			__ensure(!opts.fill_zeros);
-			__ensure(!opts.left_justify);
-			__ensure(!opts.alt_conversion);
-			__ensure(opts.minimum_width == 0);
-			__ensure(szmod == frg::printf_size_mod::default_size);
-			__ensure(!opts.precision);
-			_formatter->append(strerror(errno));
-			break;
-		case 'n': {
-			switch(szmod) {
-			case frg::printf_size_mod::default_size: {
-				auto p = frg::pop_arg<int *>(_vsp, &opts);
-				*p = _formatter->count;
-			} break;
-			case frg::printf_size_mod::char_size: {
-				auto p = frg::pop_arg<signed char *>(_vsp, &opts);
-				*p = static_cast<signed char>(_formatter->count);
-			} break;
-			case frg::printf_size_mod::short_size: {
-				auto p = frg::pop_arg<short *>(_vsp, &opts);
-				*p = static_cast<short>(_formatter->count);
-			} break;
-			case frg::printf_size_mod::long_size: {
-				auto p = frg::pop_arg<long *>(_vsp, &opts);
-				*p = static_cast<long>(_formatter->count);
-			} break;
-			case frg::printf_size_mod::longlong_size: {
-				auto p = frg::pop_arg<long long *>(_vsp, &opts);
-				*p = static_cast<long long>(_formatter->count);
-			} break;
-			case frg::printf_size_mod::longdouble_size:
-				__ensure(!"Illegal size for %n printf modifier");
+			case 'p':
+			case 's':
+				frg::do_printf_chars(*_formatter, t, opts, szmod, _vsp);
 				break;
-			case frg::printf_size_mod::native_size: {
-				auto p = frg::pop_arg<ptrdiff_t *>(_vsp, &opts);
-				*p = static_cast<ptrdiff_t>(_formatter->count);
-			} break;
-			case frg::printf_size_mod::intmax_size: {
-				auto p = frg::pop_arg<intmax_t *>(_vsp, &opts);
-				*p = static_cast<intmax_t>(_formatter->count);
-			} break;
-			}
+			case 'd':
+			case 'i':
+			case 'o':
+			case 'x':
+			case 'X':
+			case 'b':
+			case 'B':
+			case 'u':
+				frg::do_printf_ints(*_formatter, t, opts, szmod, _vsp);
+				break;
+			case 'f':
+			case 'F':
+			case 'g':
+			case 'G':
+			case 'e':
+			case 'E':
+			case 'a':
+			case 'A':
+				frg::do_printf_floats(*_formatter, t, opts, szmod, _vsp);
+				break;
+			case 'm':
+				__ensure(!opts.fill_zeros);
+				__ensure(!opts.left_justify);
+				__ensure(!opts.alt_conversion);
+				__ensure(opts.minimum_width == 0);
+				__ensure(szmod == frg::printf_size_mod::default_size);
+				__ensure(!opts.precision);
+				_formatter->append(strerror(errno));
+				break;
+			case 'n': {
+				switch (szmod) {
+					case frg::printf_size_mod::default_size: {
+						auto p = frg::pop_arg<int *>(_vsp, &opts);
+						*p = _formatter->count;
+					} break;
+					case frg::printf_size_mod::char_size: {
+						auto p = frg::pop_arg<signed char *>(_vsp, &opts);
+						*p = static_cast<signed char>(_formatter->count);
+					} break;
+					case frg::printf_size_mod::short_size: {
+						auto p = frg::pop_arg<short *>(_vsp, &opts);
+						*p = static_cast<short>(_formatter->count);
+					} break;
+					case frg::printf_size_mod::long_size: {
+						auto p = frg::pop_arg<long *>(_vsp, &opts);
+						*p = static_cast<long>(_formatter->count);
+					} break;
+					case frg::printf_size_mod::longlong_size: {
+						auto p = frg::pop_arg<long long *>(_vsp, &opts);
+						*p = static_cast<long long>(_formatter->count);
+					} break;
+					case frg::printf_size_mod::longdouble_size:
+						__ensure(!"Illegal size for %n printf modifier");
+						break;
+					case frg::printf_size_mod::native_size: {
+						auto p = frg::pop_arg<ptrdiff_t *>(_vsp, &opts);
+						*p = static_cast<ptrdiff_t>(_formatter->count);
+					} break;
+					case frg::printf_size_mod::intmax_size: {
+						auto p = frg::pop_arg<intmax_t *>(_vsp, &opts);
+						*p = static_cast<intmax_t>(_formatter->count);
+					} break;
+				}
 
-			break;
-		}
-		default:
-			mlibc::infoLogger() << "\e[31mmlibc: Unknown printf terminator '"
-					<< t << "'\e[39m" << frg::endlog;
-			__ensure(!"Illegal printf terminator");
+				break;
+			}
+			default:
+				mlibc::infoLogger()
+				    << "\e[31mmlibc: Unknown printf terminator '" << t << "'\e[39m" << frg::endlog;
+				__ensure(!"Illegal printf terminator");
 		}
 
 		return {};
 	}
 
 	std::optional<frg::printf_arg_type> format_type(char t, frg::printf_size_mod sz) {
-		switch(t) {
+		switch (t) {
 			case 'c':
 				if (sz == frg::printf_size_mod::long_size)
 					return frg::printf_arg_type::WCHAR;
 				else
 					return frg::printf_arg_type::CHAR;
-			case 's': case 'n':
+			case 's':
+			case 'n':
 				return frg::printf_arg_type::POINTER;
-			case 'f': case 'F': case 'g': case 'G': case 'e': case 'E': case 'a': case 'A':
+			case 'f':
+			case 'F':
+			case 'g':
+			case 'G':
+			case 'e':
+			case 'E':
+			case 'a':
+			case 'A':
 				return frg::printf_arg_type::DOUBLE;
-			case 'd': case 'i': case 'b': case 'B': case 'o': case 'x': case 'X': case 'u':
+			case 'd':
+			case 'i':
+			case 'b':
+			case 'B':
+			case 'o':
+			case 'x':
+			case 'X':
+			case 'u':
 				return frg::printf_arg_type::INT;
 			default:
 				_formatter->append("unknown format '");
@@ -144,8 +166,7 @@ private:
 };
 
 struct StreamPrinter {
-	StreamPrinter(FILE *stream)
-	: stream(stream), count(0) { }
+	StreamPrinter(FILE *stream) : stream(stream), count(0) {}
 
 	void append(char c) {
 		fwrite_unlocked(&c, 1, 1, stream);
@@ -167,8 +188,7 @@ struct StreamPrinter {
 };
 
 struct BufferPrinter {
-	BufferPrinter(char *buffer)
-	: buffer(buffer), count(0) { }
+	BufferPrinter(char *buffer) : buffer(buffer), count(0) {}
 
 	void append(char c) {
 		buffer[count] = c;
@@ -177,7 +197,7 @@ struct BufferPrinter {
 
 	void append(const char *str) {
 		// TODO: use strcat
-		for(size_t i = 0; str[i]; i++) {
+		for (size_t i = 0; str[i]; i++) {
 			buffer[count] = str[i];
 			count++;
 		}
@@ -185,7 +205,7 @@ struct BufferPrinter {
 
 	void append(const char *str, size_t n) {
 		// TODO: use strcat
-		for(size_t i = 0; i < n; i++) {
+		for (size_t i = 0; i < n; i++) {
 			buffer[count] = str[i];
 			count++;
 		}
@@ -196,24 +216,23 @@ struct BufferPrinter {
 };
 
 struct LimitedPrinter {
-	LimitedPrinter(char *buffer, size_t limit)
-	: buffer(buffer), limit(limit), count(0) { }
+	LimitedPrinter(char *buffer, size_t limit) : buffer(buffer), limit(limit), count(0) {}
 
 	void append(char c) {
-		if(count < limit)
+		if (count < limit)
 			buffer[count] = c;
 		count++;
 	}
 
 	void append(const char *str) {
 		// TODO: use strcat
-		for(size_t i = 0; str[i]; i++)
+		for (size_t i = 0; str[i]; i++)
 			append(str[i]);
 	}
 
 	void append(const char *str, size_t n) {
 		// TODO: use strcat
-		for(size_t i = 0; i < n; i++)
+		for (size_t i = 0; i < n; i++)
 			append(str[i]);
 	}
 
@@ -223,11 +242,10 @@ struct LimitedPrinter {
 };
 
 struct ResizePrinter {
-	ResizePrinter()
-	: buffer(nullptr), limit(0), count(0) { }
+	ResizePrinter() : buffer(nullptr), limit(0), count(0) {}
 
 	void expand() {
-		if(count == limit) {
+		if (count == limit) {
 			auto new_limit = frg::max(2 * limit, size_t(16));
 			auto new_buffer = reinterpret_cast<char *>(malloc(new_limit));
 			__ensure(new_buffer);
@@ -246,12 +264,12 @@ struct ResizePrinter {
 	}
 
 	void append(const char *str) {
-		for(size_t i = 0; str[i]; i++)
+		for (size_t i = 0; str[i]; i++)
 			append(str[i]);
 	}
 
 	void append(const char *str, size_t n) {
-		for(size_t i = 0; i < n; i++)
+		for (size_t i = 0; i < n; i++)
 			append(str[i]);
 	}
 
@@ -262,10 +280,10 @@ struct ResizePrinter {
 
 int remove(const char *filename) {
 	MLIBC_CHECK_OR_ENOSYS(mlibc::sys_rmdir, -1);
-	if(int e = mlibc::sys_rmdir(filename); e) {
+	if (int e = mlibc::sys_rmdir(filename); e) {
 		if (e == ENOTDIR) {
 			MLIBC_CHECK_OR_ENOSYS(mlibc::sys_unlinkat, -1);
-			if(e = mlibc::sys_unlinkat(AT_FDCWD, filename, 0); e) {
+			if (e = mlibc::sys_unlinkat(AT_FDCWD, filename, 0); e) {
 				errno = e;
 				return -1;
 			}
@@ -280,7 +298,7 @@ int remove(const char *filename) {
 
 int rename(const char *path, const char *new_path) {
 	MLIBC_CHECK_OR_ENOSYS(mlibc::sys_rename, -1);
-	if(int e = mlibc::sys_rename(path, new_path); e) {
+	if (int e = mlibc::sys_rename(path, new_path); e) {
 		errno = e;
 		return -1;
 	}
@@ -289,7 +307,7 @@ int rename(const char *path, const char *new_path) {
 
 int renameat(int olddirfd, const char *old_path, int newdirfd, const char *new_path) {
 	MLIBC_CHECK_OR_ENOSYS(mlibc::sys_renameat, -1);
-	if(int e = mlibc::sys_renameat(olddirfd, old_path, newdirfd, new_path); e) {
+	if (int e = mlibc::sys_renameat(olddirfd, old_path, newdirfd, new_path); e) {
 		errno = e;
 		return -1;
 	}
@@ -312,12 +330,12 @@ FILE *freopen(const char *__restrict path, const char *__restrict mode, FILE *__
 	auto file = static_cast<mlibc::abstract_file *>(f);
 	frg::unique_lock lock(file->_lock);
 
-	if(file->reopen(path, mode) == -1) {
+	if (file->reopen(path, mode) == -1) {
 		errno = EINVAL;
 		return nullptr;
 	}
 
-    return f;
+	return f;
 }
 
 void setbuf(FILE *__restrict stream, char *__restrict buffer) {
@@ -325,13 +343,9 @@ void setbuf(FILE *__restrict stream, char *__restrict buffer) {
 }
 // setvbuf() is provided by the POSIX sublibrary
 
-void setlinebuf(FILE *stream) {
-	setvbuf(stream, nullptr, _IOLBF, 0);
-}
+void setlinebuf(FILE *stream) { setvbuf(stream, nullptr, _IOLBF, 0); }
 
-void setbuffer(FILE *f, char *buf, size_t size) {
-	setvbuf(f, buf, buf ? _IOFBF : _IONBF, size);
-}
+void setbuffer(FILE *f, char *buf, size_t size) { setvbuf(f, buf, buf ? _IOFBF : _IONBF, size); }
 
 int fprintf(FILE *__restrict stream, const char *__restrict format, ...) {
 	va_list args;
@@ -359,7 +373,7 @@ int printf(const char *__restrict format, ...) {
 
 namespace {
 
-	enum {
+enum {
 	SCANF_TYPE_CHAR,
 	SCANF_TYPE_SHORT,
 	SCANF_TYPE_INTMAX,
@@ -415,16 +429,25 @@ void store_float(void *dest, unsigned int size, long double f) {
 	}
 }
 
-template<typename H>
+template <typename H>
 int do_scanf(H &handler, const char *fmt, __builtin_va_list args) {
-	#define NOMATCH_CHECK(cond) ({ if(cond) return match_count; }) // if cond is true, matching error
-	#define EOF_CHECK(cond) ({ if(cond) return match_count ? match_count : EOF; }) // if cond is true, no more data to read
+#define NOMATCH_CHECK(cond)                                                                        \
+	({                                                                                             \
+		if (cond)                                                                                  \
+			return match_count;                                                                    \
+	}) // if cond is true, matching error
+#define EOF_CHECK(cond)                                                                            \
+	({                                                                                             \
+		if (cond)                                                                                  \
+			return match_count ? match_count : EOF;                                                \
+	}) // if cond is true, no more data to read
 	int match_count = 0;
 	for (; *fmt; fmt++) {
 		if (isspace(*fmt)) {
-			while (isspace(fmt[1])) fmt++;
+			while (isspace(fmt[1]))
+				fmt++;
 			while (isspace(handler.look_ahead()))
-					handler.consume();
+				handler.consume();
 			continue;
 		}
 
@@ -444,7 +467,7 @@ int do_scanf(H &handler, const char *fmt, __builtin_va_list args) {
 			fmt += 3;
 		} else {
 			if (fmt[1] != '*') {
-				dest = va_arg(args, void*);
+				dest = va_arg(args, void *);
 			}
 			fmt++;
 		}
@@ -455,11 +478,11 @@ int do_scanf(H &handler, const char *fmt, __builtin_va_list args) {
 		int count = 0;
 
 		const auto append_to_buffer = [&](char c) {
-			if(allocate_buf) {
+			if (allocate_buf) {
 				temp_dest += c;
 			} else {
 				char *typed_dest = (char *)dest;
-				if(typed_dest)
+				if (typed_dest)
 					typed_dest[count] = c;
 			}
 
@@ -467,11 +490,11 @@ int do_scanf(H &handler, const char *fmt, __builtin_va_list args) {
 		};
 
 		const auto append_to_wbuffer = [&](wchar_t c) {
-			if(allocate_buf) {
+			if (allocate_buf) {
 				temp_wdest += c;
 			} else {
 				wchar_t *typed_dest = (wchar_t *)dest;
-				if(typed_dest)
+				if (typed_dest)
 					typed_dest[count] = c;
 			}
 
@@ -543,7 +566,7 @@ int do_scanf(H &handler, const char *fmt, __builtin_va_list args) {
 				fmt++;
 				break;
 			}
-			 case 'z': {
+			case 'z': {
 				type = SCANF_TYPE_SIZE_T;
 				fmt++;
 				break;
@@ -567,19 +590,19 @@ int do_scanf(H &handler, const char *fmt, __builtin_va_list args) {
 				char c = handler.look_ahead();
 				EOF_CHECK(c == '\0');
 
-				if(c == '-') {
+				if (c == '-') {
 					handler.consume();
 					is_negative = true;
-				} else if(c == '+')
+				} else if (c == '+')
 					handler.consume();
 
-				if(*fmt == 'i' && handler.look_ahead() == '0') {
+				if (*fmt == 'i' && handler.look_ahead() == '0') {
 					handler.consume();
 					c = handler.look_ahead();
-					if(tolower(c) == 'x') {
+					if (tolower(c) == 'x') {
 						handler.consume();
 						base = 16;
-					} else if(tolower(c) == 'b') {
+					} else if (tolower(c) == 'b') {
 						handler.consume();
 						base = 2;
 					} else {
@@ -636,7 +659,7 @@ int do_scanf(H &handler, const char *fmt, __builtin_va_list args) {
 				}
 
 				if (dest) {
-					if(is_negative)
+					if (is_negative)
 						store_int(dest, type, -res);
 					else
 						store_int(dest, type, res);
@@ -649,10 +672,10 @@ int do_scanf(H &handler, const char *fmt, __builtin_va_list args) {
 				char c = handler.look_ahead();
 				EOF_CHECK(c == '\0');
 
-				if(c == '-') {
+				if (c == '-') {
 					handler.consume();
 					is_negative = true;
-				} else if(c == '+')
+				} else if (c == '+')
 					handler.consume();
 
 				c = handler.look_ahead();
@@ -664,7 +687,7 @@ int do_scanf(H &handler, const char *fmt, __builtin_va_list args) {
 				}
 
 				if (dest) {
-					if(is_negative)
+					if (is_negative)
 						store_int(dest, type, -res);
 					else
 						store_int(dest, type, res);
@@ -679,10 +702,10 @@ int do_scanf(H &handler, const char *fmt, __builtin_va_list args) {
 				int count = 0;
 				EOF_CHECK(c == '\0');
 
-				if(c == '-') {
+				if (c == '-') {
 					handler.consume();
 					is_negative = true;
-				} else if(c == '+')
+				} else if (c == '+')
 					handler.consume();
 
 				c = handler.look_ahead();
@@ -713,7 +736,7 @@ int do_scanf(H &handler, const char *fmt, __builtin_va_list args) {
 				NOMATCH_CHECK(count == 0);
 
 				if (dest) {
-					if(is_negative)
+					if (is_negative)
 						store_int(dest, type, -res);
 					else
 						store_int(dest, type, res);
@@ -727,10 +750,10 @@ int do_scanf(H &handler, const char *fmt, __builtin_va_list args) {
 				int count = 0;
 				EOF_CHECK(c == '\0');
 
-				if(c == '-') {
+				if (c == '-') {
 					handler.consume();
 					is_negative = true;
-				} else if(c == '+')
+				} else if (c == '+')
 					handler.consume();
 
 				if (c == '0') {
@@ -754,7 +777,7 @@ int do_scanf(H &handler, const char *fmt, __builtin_va_list args) {
 				NOMATCH_CHECK(count == 0);
 
 				if (dest) {
-					if(is_negative)
+					if (is_negative)
 						store_int(dest, type, -res);
 					else
 						store_int(dest, type, res);
@@ -767,7 +790,7 @@ int do_scanf(H &handler, const char *fmt, __builtin_va_list args) {
 				while (c && !isspace(c)) {
 					handler.consume();
 
-					if(type == SCANF_TYPE_L)
+					if (type == SCANF_TYPE_L)
 						append_to_wbuffer(c);
 					else
 						append_to_buffer(c);
@@ -778,7 +801,7 @@ int do_scanf(H &handler, const char *fmt, __builtin_va_list args) {
 				}
 				NOMATCH_CHECK(count == 0);
 
-				if(type == SCANF_TYPE_L)
+				if (type == SCANF_TYPE_L)
 					append_to_wbuffer(L'\0');
 				else
 					append_to_buffer('\0');
@@ -793,7 +816,7 @@ int do_scanf(H &handler, const char *fmt, __builtin_va_list args) {
 				while (c && count < width) {
 					handler.consume();
 
-					if(type == SCANF_TYPE_L)
+					if (type == SCANF_TYPE_L)
 						append_to_wbuffer(c);
 					else
 						append_to_buffer(c);
@@ -816,16 +839,17 @@ int do_scanf(H &handler, const char *fmt, __builtin_va_list args) {
 
 				if (*fmt == '-') {
 					fmt++;
-					scanset[1+'-'] = 1 - invert;
+					scanset[1 + '-'] = 1 - invert;
 				} else if (*fmt == ']') {
 					fmt++;
-					scanset[1+']'] = 1 - invert;
+					scanset[1 + ']'] = 1 - invert;
 				}
 
 				for (; *fmt != ']'; fmt++) {
 					auto fmt_unsigned = reinterpret_cast<const unsigned char *>(fmt);
 
-					if (!*fmt) return EOF;
+					if (!*fmt)
+						return EOF;
 					if (*fmt == '-' && *(fmt + 1) != ']') {
 						fmt++;
 						fmt_unsigned++;
@@ -843,7 +867,7 @@ int do_scanf(H &handler, const char *fmt, __builtin_va_list args) {
 						break;
 					handler.consume();
 
-					if(type == SCANF_TYPE_L)
+					if (type == SCANF_TYPE_L)
 						append_to_wbuffer(c);
 					else
 						append_to_buffer(c);
@@ -852,7 +876,7 @@ int do_scanf(H &handler, const char *fmt, __builtin_va_list args) {
 				}
 				NOMATCH_CHECK(count == 0);
 
-				if(type == SCANF_TYPE_L)
+				if (type == SCANF_TYPE_L)
 					append_to_wbuffer(L'\0');
 				else
 					append_to_buffer('\0');
@@ -896,32 +920,32 @@ int do_scanf(H &handler, const char *fmt, __builtin_va_list args) {
 				break;
 			}
 			case 'n': {
-				if(dest) {
-					switch(type) {
-					case SCANF_TYPE_CHAR:
-						*(signed char *)dest = (signed char)handler.num_consumed;
-						break;
-					case SCANF_TYPE_SHORT:
-						*(short *)dest = (short)handler.num_consumed;
-						break;
-					case SCANF_TYPE_INTMAX:
-						*(intmax_t *)dest = (intmax_t)handler.num_consumed;
-						break;
-					case SCANF_TYPE_L:
-						*(long *)dest = (long)handler.num_consumed;
-						break;
-					case SCANF_TYPE_LL:
-						*(long long *)dest = (long long)handler.num_consumed;
-						break;
-					case SCANF_TYPE_PTRDIFF:
-						*(ptrdiff_t *)dest = (ptrdiff_t)handler.num_consumed;
-						break;
-					case SCANF_TYPE_SIZE_T:
-						*(size_t *)dest = (size_t)handler.num_consumed;
-						break;
-					case SCANF_TYPE_INT:
-						*(int *)dest = (int)handler.num_consumed;
-						break;
+				if (dest) {
+					switch (type) {
+						case SCANF_TYPE_CHAR:
+							*(signed char *)dest = (signed char)handler.num_consumed;
+							break;
+						case SCANF_TYPE_SHORT:
+							*(short *)dest = (short)handler.num_consumed;
+							break;
+						case SCANF_TYPE_INTMAX:
+							*(intmax_t *)dest = (intmax_t)handler.num_consumed;
+							break;
+						case SCANF_TYPE_L:
+							*(long *)dest = (long)handler.num_consumed;
+							break;
+						case SCANF_TYPE_LL:
+							*(long long *)dest = (long long)handler.num_consumed;
+							break;
+						case SCANF_TYPE_PTRDIFF:
+							*(ptrdiff_t *)dest = (ptrdiff_t)handler.num_consumed;
+							break;
+						case SCANF_TYPE_SIZE_T:
+							*(size_t *)dest = (size_t)handler.num_consumed;
+							break;
+						case SCANF_TYPE_INT:
+							*(int *)dest = (int)handler.num_consumed;
+							break;
 					}
 				}
 
@@ -1086,9 +1110,10 @@ int do_scanf(H &handler, const char *fmt, __builtin_va_list args) {
 			}
 		}
 
-		if(allocate_buf && dest) {
-			if(type == SCANF_TYPE_L) {
-				wchar_t *temp = (wchar_t *)getAllocator().allocate((temp_wdest.size() + 1) * sizeof(wchar_t));
+		if (allocate_buf && dest) {
+			if (type == SCANF_TYPE_L) {
+				wchar_t *temp =
+				    (wchar_t *)getAllocator().allocate((temp_wdest.size() + 1) * sizeof(wchar_t));
 				memcpy(temp, temp_wdest.data(), temp_wdest.size() * sizeof(wchar_t));
 				temp[temp_wdest.size()] = L'\0';
 
@@ -1104,7 +1129,8 @@ int do_scanf(H &handler, const char *fmt, __builtin_va_list args) {
 			}
 		}
 
-		if (dest) match_count++;
+		if (dest)
+			match_count++;
 	}
 	return match_count;
 }
@@ -1153,7 +1179,7 @@ int vfprintf(FILE *__restrict stream, const char *__restrict format, __builtin_v
 	auto file = static_cast<mlibc::abstract_file *>(stream);
 	frg::unique_lock lock(file->_lock);
 	StreamPrinter p{stream};
-//	mlibc::infoLogger() << "printf(" << format << ")" << frg::endlog;
+	//	mlibc::infoLogger() << "printf(" << format << ")" << frg::endlog;
 	auto res = frg::printf_format<NL_ARGMAX>(PrintfAgent{&p, &vs}, format, &vs);
 	if (!res) {
 		errno = EINVAL;
@@ -1193,7 +1219,7 @@ int vfscanf(FILE *__restrict stream, const char *__restrict format, __builtin_va
 	return do_scanf(handler, format, args);
 }
 
-int vprintf(const char *__restrict format, __builtin_va_list args){
+int vprintf(const char *__restrict format, __builtin_va_list args) {
 	return vfprintf(stdout, format, args);
 }
 
@@ -1202,14 +1228,15 @@ int vscanf(const char *__restrict, __builtin_va_list) {
 	__builtin_unreachable();
 }
 
-int vsnprintf(char *__restrict buffer, size_t max_size,
-		const char *__restrict format, __builtin_va_list args) {
+int vsnprintf(
+    char *__restrict buffer, size_t max_size, const char *__restrict format, __builtin_va_list args
+) {
 	frg::va_struct vs;
 	frg::arg arg_list[NL_ARGMAX + 1];
 	vs.arg_list = arg_list;
 	va_copy(vs.args, args);
 	LimitedPrinter p{buffer, max_size ? max_size - 1 : 0};
-//	mlibc::infoLogger() << "printf(" << format << ")" << frg::endlog;
+	//	mlibc::infoLogger() << "printf(" << format << ")" << frg::endlog;
 	auto res = frg::printf_format<NL_ARGMAX>(PrintfAgent{&p, &vs}, format, &vs);
 	if (!res) {
 		errno = EINVAL;
@@ -1226,7 +1253,7 @@ int vsprintf(char *__restrict buffer, const char *__restrict format, __builtin_v
 	vs.arg_list = arg_list;
 	va_copy(vs.args, args);
 	BufferPrinter p(buffer);
-//	mlibc::infoLogger() << "printf(" << format << ")" << frg::endlog;
+	//	mlibc::infoLogger() << "printf(" << format << ")" << frg::endlog;
 	auto res = frg::printf_format<NL_ARGMAX>(PrintfAgent{&p, &vs}, format, &vs);
 	if (!res) {
 		errno = EINVAL;
@@ -1238,9 +1265,7 @@ int vsprintf(char *__restrict buffer, const char *__restrict format, __builtin_v
 
 int vsscanf(const char *__restrict buffer, const char *__restrict format, __builtin_va_list args) {
 	struct {
-		char look_ahead() {
-			return *buffer;
-		}
+		char look_ahead() { return *buffer; }
 
 		char consume() {
 			num_consumed++;
@@ -1263,7 +1288,9 @@ int vfwscanf(FILE *__restrict, const wchar_t *__restrict, __builtin_va_list) { M
 
 int swprintf(wchar_t *__restrict, size_t, const wchar_t *__restrict, ...) { MLIBC_STUB_BODY; }
 int swscanf(wchar_t *__restrict, const wchar_t *__restrict, ...) { MLIBC_STUB_BODY; }
-int vswprintf(wchar_t *__restrict, size_t, const wchar_t *__restrict, __builtin_va_list) { MLIBC_STUB_BODY; }
+int vswprintf(wchar_t *__restrict, size_t, const wchar_t *__restrict, __builtin_va_list) {
+	MLIBC_STUB_BODY;
+}
 int vswscanf(wchar_t *__restrict, const wchar_t *__restrict, __builtin_va_list) { MLIBC_STUB_BODY; }
 
 int wprintf(const wchar_t *__restrict, ...) { MLIBC_STUB_BODY; }
@@ -1274,7 +1301,7 @@ int vwscanf(const wchar_t *__restrict, __builtin_va_list) { MLIBC_STUB_BODY; }
 int fgetc(FILE *stream) {
 	char c;
 	auto bytes_read = fread(&c, 1, 1, stream);
-	if(bytes_read != 1)
+	if (bytes_read != 1)
 		return EOF;
 	return c;
 }
@@ -1287,7 +1314,7 @@ char *fgets(char *__restrict buffer, int max_size, FILE *__restrict stream) {
 
 int fputc_unlocked(int c, FILE *stream) {
 	char d = c;
-	if(fwrite_unlocked(&d, 1, 1, stream) != 1)
+	if (fwrite_unlocked(&d, 1, 1, stream) != 1)
 		return EOF;
 	return 1;
 }
@@ -1313,29 +1340,19 @@ int fputs(const char *__restrict string, FILE *__restrict stream) {
 	return fputs_unlocked(string, stream);
 }
 
-int getc_unlocked(FILE *stream) {
-	return fgetc_unlocked(stream);
-}
+int getc_unlocked(FILE *stream) { return fgetc_unlocked(stream); }
 
-int getc(FILE *stream) {
-	return fgetc(stream);
-}
+int getc(FILE *stream) { return fgetc(stream); }
 
-int getchar_unlocked(void) {
-	return fgetc_unlocked(stdin);
-}
+int getchar_unlocked(void) { return fgetc_unlocked(stdin); }
 
-int getchar(void) {
-	return fgetc(stdin);
-}
+int getchar(void) { return fgetc(stdin); }
 
-char *gets(char *s){
-	return fgets(s, INT_MAX, stdin);
-}
+char *gets(char *s) { return fgets(s, INT_MAX, stdin); }
 
 int putc_unlocked(int c, FILE *stream) {
 	char d = c;
-	if(fwrite_unlocked(&d, 1, 1, stream) != 1)
+	if (fwrite_unlocked(&d, 1, 1, stream) != 1)
 		return EOF;
 	return c;
 }
@@ -1346,9 +1363,7 @@ int putc(int c, FILE *stream) {
 	return putc_unlocked(c, stream);
 }
 
-int putchar_unlocked(int c) {
-	return putc_unlocked(c, stdout);
-}
+int putchar_unlocked(int c) { return putc_unlocked(c, stdout); }
 
 int putchar(int c) {
 	auto file = static_cast<mlibc::abstract_file *>(stdout);
@@ -1362,12 +1377,11 @@ int puts(const char *string) {
 
 	size_t progress = 0;
 	size_t len = strlen(string);
-	while(progress < len) {
+	while (progress < len) {
 		size_t chunk;
-		if(file->write(string + progress,
-				len - progress, &chunk)) {
+		if (file->write(string + progress, len - progress, &chunk)) {
 			return EOF;
-		}else if(!chunk) {
+		} else if (!chunk) {
 			return EOF;
 		}
 
@@ -1399,7 +1413,7 @@ size_t fread(void *buffer, size_t size, size_t count, FILE *file_base) {
 	return fread_unlocked(buffer, size, count, file_base);
 }
 
-size_t fwrite(const void *buffer, size_t size , size_t count, FILE *file_base) {
+size_t fwrite(const void *buffer, size_t size, size_t count, FILE *file_base) {
 	auto file = static_cast<mlibc::abstract_file *>(file_base);
 	frg::unique_lock lock(file->_lock);
 	return fwrite_unlocked(buffer, size, count, file_base);
@@ -1409,7 +1423,7 @@ int fgetpos(FILE *__restrict f, fpos_t *__restrict out) {
 	auto file = static_cast<mlibc::abstract_file *>(f);
 	off_t current_offset;
 
-	if(int e = file->tell(&current_offset); e) {
+	if (int e = file->tell(&current_offset); e) {
 		errno = e;
 		return -1;
 	}
@@ -1423,7 +1437,7 @@ int fgetpos(FILE *__restrict f, fpos_t *__restrict out) {
 int fsetpos(FILE *f, const fpos_t *pos) {
 	auto file = static_cast<mlibc::abstract_file *>(f);
 	frg::unique_lock lock(file->_lock);
-	if(int e = file->seek(*pos, SEEK_SET); e) {
+	if (int e = file->seek(*pos, SEEK_SET); e) {
 		errno = e;
 		return -1;
 	}
@@ -1431,17 +1445,11 @@ int fsetpos(FILE *f, const fpos_t *pos) {
 }
 // ftell() is provided by the POSIX sublibrary
 
-void clearerr(FILE *file_base) {
-	file_base->__status_bits = 0;
-}
+void clearerr(FILE *file_base) { file_base->__status_bits = 0; }
 
-int feof(FILE *file_base) {
-	return file_base->__status_bits & __MLIBC_EOF_BIT;
-}
+int feof(FILE *file_base) { return file_base->__status_bits & __MLIBC_EOF_BIT; }
 
-int ferror(FILE *file_base) {
-	return file_base->__status_bits & __MLIBC_ERROR_BIT;
-}
+int ferror(FILE *file_base) { return file_base->__status_bits & __MLIBC_ERROR_BIT; }
 
 void perror(const char *string) {
 	int error = errno;
@@ -1453,13 +1461,11 @@ void perror(const char *string) {
 
 // POSIX extensions.
 
-ssize_t getline(char **line, size_t *n, FILE *stream) {
-	return getdelim(line, n, '\n', stream);
-}
+ssize_t getline(char **line, size_t *n, FILE *stream) { return getdelim(line, n, '\n', stream); }
 
 ssize_t getdelim(char **line, size_t *n, int delim, FILE *stream) {
 	// Otherwise, we cannot store the buffer / size.
-	if(!line || !n) {
+	if (!line || !n) {
 		errno = EINVAL;
 		return -1;
 	}
@@ -1528,7 +1534,7 @@ int vasprintf(char **out, const char *format, __builtin_va_list args) {
 	vs.arg_list = arg_list;
 	va_copy(vs.args, args);
 	ResizePrinter p;
-//	mlibc::infoLogger() << "printf(" << format << ")" << frg::endlog;
+	//	mlibc::infoLogger() << "printf(" << format << ")" << frg::endlog;
 	auto res = frg::printf_format<NL_ARGMAX>(PrintfAgent{&p, &vs}, format, &vs);
 	if (!res) {
 		errno = EINVAL;
@@ -1542,9 +1548,7 @@ int vasprintf(char **out, const char *format, __builtin_va_list args) {
 
 // Linux unlocked I/O extensions.
 
-void flockfile(FILE *file_base) {
-	static_cast<mlibc::abstract_file *>(file_base)->_lock.lock();
-}
+void flockfile(FILE *file_base) { static_cast<mlibc::abstract_file *>(file_base)->_lock.lock(); }
 
 void funlockfile(FILE *file_base) {
 	static_cast<mlibc::abstract_file *>(file_base)->_lock.unlock();
@@ -1555,41 +1559,34 @@ int ftrylockfile(FILE *file_base) {
 	return 0;
 }
 
-void clearerr_unlocked(FILE *file_base) {
-	file_base->__status_bits = 0;
-}
+void clearerr_unlocked(FILE *file_base) { file_base->__status_bits = 0; }
 
-int feof_unlocked(FILE *file_base) {
-	return file_base->__status_bits & __MLIBC_EOF_BIT;
-}
+int feof_unlocked(FILE *file_base) { return file_base->__status_bits & __MLIBC_EOF_BIT; }
 
-int ferror_unlocked(FILE *file_base) {
-	return file_base->__status_bits & __MLIBC_ERROR_BIT;
-}
+int ferror_unlocked(FILE *file_base) { return file_base->__status_bits & __MLIBC_ERROR_BIT; }
 
 int fgetc_unlocked(FILE *stream) {
 	unsigned char d;
-	if(fread_unlocked(&d, 1, 1, stream) != 1)
+	if (fread_unlocked(&d, 1, 1, stream) != 1)
 		return EOF;
 	return (int)d;
 }
 
 size_t fread_unlocked(void *buffer, size_t size, size_t count, FILE *file_base) {
 	auto file = static_cast<mlibc::abstract_file *>(file_base);
-	if(!size || !count)
+	if (!size || !count)
 		return 0;
 
 	// Distinguish two cases here: If the object size is one, we perform byte-wise reads.
 	// Otherwise, we try to read each object individually.
-	if(size == 1) {
+	if (size == 1) {
 		size_t progress = 0;
-		while(progress < count) {
+		while (progress < count) {
 			size_t chunk;
-			if(int e = file->read((char *)buffer + progress,
-					count - progress, &chunk)) {
+			if (int e = file->read((char *)buffer + progress, count - progress, &chunk)) {
 				errno = e;
 				return 0;
-			}else if(!chunk) {
+			} else if (!chunk) {
 				// TODO: Handle eof.
 				break;
 			}
@@ -1598,16 +1595,16 @@ size_t fread_unlocked(void *buffer, size_t size, size_t count, FILE *file_base) 
 		}
 
 		return progress;
-	}else{
-		for(size_t i = 0; i < count; i++) {
+	} else {
+		for (size_t i = 0; i < count; i++) {
 			size_t progress = 0;
-			while(progress < size) {
+			while (progress < size) {
 				size_t chunk;
-				if(int e = file->read((char *)buffer + i * size + progress,
-						size - progress, &chunk)) {
+				if (int e =
+				        file->read((char *)buffer + i * size + progress, size - progress, &chunk)) {
 					errno = e;
 					return 0;
-				}else if(!chunk) {
+				} else if (!chunk) {
 					// TODO: Handle eof.
 					break;
 				}
@@ -1615,7 +1612,7 @@ size_t fread_unlocked(void *buffer, size_t size, size_t count, FILE *file_base) 
 				progress += chunk;
 			}
 
-			if(progress < size)
+			if (progress < size)
 				return i;
 		}
 
@@ -1625,22 +1622,20 @@ size_t fread_unlocked(void *buffer, size_t size, size_t count, FILE *file_base) 
 
 size_t fwrite_unlocked(const void *buffer, size_t size, size_t count, FILE *file_base) {
 	auto file = static_cast<mlibc::abstract_file *>(file_base);
-	if(!size || !count)
+	if (!size || !count)
 		return 0;
 
 	// Distinguish two cases here: If the object size is one, we perform byte-wise writes.
 	// Otherwise, we try to write each object individually.
-	if(size == 1) {
+	if (size == 1) {
 		size_t progress = 0;
-		while(progress < count) {
+		while (progress < count) {
 			size_t chunk;
-			if(file->write((const char *)buffer + progress,
-					count - progress, &chunk)) {
+			if (file->write((const char *)buffer + progress, count - progress, &chunk)) {
 				// TODO: Handle I/O errors.
-				mlibc::infoLogger() << "mlibc: fwrite() I/O errors are not handled"
-						<< frg::endlog;
+				mlibc::infoLogger() << "mlibc: fwrite() I/O errors are not handled" << frg::endlog;
 				break;
-			}else if(!chunk) {
+			} else if (!chunk) {
 				// TODO: Handle eof.
 				break;
 			}
@@ -1649,18 +1644,19 @@ size_t fwrite_unlocked(const void *buffer, size_t size, size_t count, FILE *file
 		}
 
 		return progress;
-	}else{
-		for(size_t i = 0; i < count; i++) {
+	} else {
+		for (size_t i = 0; i < count; i++) {
 			size_t progress = 0;
-			while(progress < size) {
+			while (progress < size) {
 				size_t chunk;
-				if(file->write((const char *)buffer + i * size + progress,
-						size - progress, &chunk)) {
+				if (file->write(
+				        (const char *)buffer + i * size + progress, size - progress, &chunk
+				    )) {
 					// TODO: Handle I/O errors.
-					mlibc::infoLogger() << "mlibc: fwrite() I/O errors are not handled"
-							<< frg::endlog;
+					mlibc::infoLogger()
+					    << "mlibc: fwrite() I/O errors are not handled" << frg::endlog;
 					break;
-				}else if(!chunk) {
+				} else if (!chunk) {
 					// TODO: Handle eof.
 					break;
 				}
@@ -1668,7 +1664,7 @@ size_t fwrite_unlocked(const void *buffer, size_t size, size_t count, FILE *file
 				progress += chunk;
 			}
 
-			if(progress < size)
+			if (progress < size)
 				return i;
 		}
 
@@ -1678,8 +1674,8 @@ size_t fwrite_unlocked(const void *buffer, size_t size, size_t count, FILE *file
 
 char *fgets_unlocked(char *__restrict buffer, int max_size, FILE *__restrict stream) {
 	__ensure(max_size > 0);
-	for(int i = 0; ; i++) {
-		if(i == max_size - 1) {
+	for (int i = 0;; i++) {
+		if (i == max_size - 1) {
 			buffer[i] = 0;
 			return buffer;
 		}
@@ -1687,8 +1683,8 @@ char *fgets_unlocked(char *__restrict buffer, int max_size, FILE *__restrict str
 		auto c = fgetc_unlocked(stream);
 
 		// If fgetc() fails, there is either an EOF or an I/O error.
-		if(c == EOF) {
-			if(i) {
+		if (c == EOF) {
+			if (i) {
 				buffer[i] = 0;
 				return buffer;
 			} else {
@@ -1699,7 +1695,7 @@ char *fgets_unlocked(char *__restrict buffer, int max_size, FILE *__restrict str
 			buffer[i] = c;
 		}
 
-		if(c == '\n') {
+		if (c == '\n') {
 			buffer[i + 1] = 0;
 			return buffer;
 		}

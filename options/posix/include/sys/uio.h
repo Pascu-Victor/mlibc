@@ -2,10 +2,10 @@
 #define _SYS_UIO_H
 
 #include <abi-bits/pid_t.h>
-#include <bits/posix/iovec.h>
-#include <bits/ssize_t.h>
 #include <bits/off_t.h>
+#include <bits/posix/iovec.h>
 #include <bits/size_t.h>
+#include <bits/ssize_t.h>
 #include <limits.h>
 #include <mlibc-config.h>
 

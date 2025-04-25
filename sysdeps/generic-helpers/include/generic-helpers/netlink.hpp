@@ -20,14 +20,15 @@ namespace {
  */
 struct NetlinkHelper {
 	~NetlinkHelper() {
-		if(fd_)
+		if (fd_)
 			close(*fd_);
 	}
 
 	bool send_request(int type) {
-		if(!fd_ || *fd_ == -1) {
+		if (!fd_ || *fd_ == -1) {
 			int fd;
-			if(int e = mlibc::sys_socket(AF_NETLINK, SOCK_RAW | SOCK_CLOEXEC, NETLINK_ROUTE, &fd); e)
+			if (int e = mlibc::sys_socket(AF_NETLINK, SOCK_RAW | SOCK_CLOEXEC, NETLINK_ROUTE, &fd);
+			    e)
 				return false;
 			fd_ = fd;
 		}
@@ -43,22 +44,26 @@ struct NetlinkHelper {
 		request.hdr.nlmsg_len = NLMSG_LENGTH(sizeof(request) - sizeof(nlmsghdr));
 		request.msg.rtgen_family = AF_UNSPEC;
 
-		return send(fd_.value(), reinterpret_cast<void *>(&request), sizeof(request), 0) == sizeof(request);
+		return send(fd_.value(), reinterpret_cast<void *>(&request), sizeof(request), 0)
+		       == sizeof(request);
 	}
 
 	bool recv(void cb(void *, const nlmsghdr *), void *ctx) {
 		ssize_t read;
 
-		while((read = ::recv(fd_.value(), reinterpret_cast<msghdr *>(data_.data()), data_.size(), 0)) > 0) {
+		while ((read =
+		            ::recv(fd_.value(), reinterpret_cast<msghdr *>(data_.data()), data_.size(), 0))
+		       > 0) {
 			auto hdr = reinterpret_cast<nlmsghdr *>(data_.data());
 
-			for(; NLMSG_OK(hdr, static_cast<size_t>(read)); hdr = NLMSG_NEXT(hdr, read)) {
-				if(hdr->nlmsg_type == NLMSG_DONE)
+			for (; NLMSG_OK(hdr, static_cast<size_t>(read)); hdr = NLMSG_NEXT(hdr, read)) {
+				if (hdr->nlmsg_type == NLMSG_DONE)
 					return true;
-				if(hdr->nlmsg_type == NLMSG_ERROR) {
+				if (hdr->nlmsg_type == NLMSG_ERROR) {
 					nlmsgerr *err = reinterpret_cast<nlmsgerr *>(NLMSG_DATA(hdr));
-					mlibc::infoLogger() << "mlibc: NetlinkHelper received NLMSG_ERROR " << -err->error << ": "
-						<< strerror(-err->error) << frg::endlog;
+					mlibc::infoLogger()
+					    << "mlibc: NetlinkHelper received NLMSG_ERROR " << -err->error << ": "
+					    << strerror(-err->error) << frg::endlog;
 					return false;
 				}
 
@@ -68,6 +73,7 @@ struct NetlinkHelper {
 
 		return false;
 	}
+
 private:
 	frg::optional<int> fd_;
 	frg::array<uint8_t, 8192> data_;
@@ -95,8 +101,8 @@ public:
 		// append ourselves to the end of the chain
 		ifaddrs *last = *list;
 
-		if(last) {
-			while(last->ifa_next)
+		if (last) {
+			while (last->ifa_next)
 				last = last->ifa_next;
 
 			last->ifa_next = &this->ifa;
@@ -116,7 +122,7 @@ public:
 	 * it is not separately specified, via IFA_LOCAL and its handler.
 	 */
 	void set_addr(int family, const void *data, size_t bytes) {
-		if(ifa.ifa_addr == nullptr)
+		if (ifa.ifa_addr == nullptr)
 			ifa.ifa_addr = copy_addr(family, data, bytes, &addr_);
 
 		ifa.ifa_dstaddr = copy_addr(family, data, bytes, &dest_addr_);
@@ -136,8 +142,9 @@ public:
 		//   - while for a normally configured broadcast interface, it is the same as IFA_LOCAL.
 
 		// if we already have an ifa_addr, move it over to ifa_dstaddr
-		if(ifa.ifa_addr != nullptr)
-			ifa.ifa_dstaddr = reinterpret_cast<sockaddr *>(memcpy(&dest_addr_, &addr_, sizeof(addr_)));
+		if (ifa.ifa_addr != nullptr)
+			ifa.ifa_dstaddr =
+			    reinterpret_cast<sockaddr *>(memcpy(&dest_addr_, &addr_, sizeof(addr_)));
 
 		ifa.ifa_addr = copy_addr(family, data, byteCount, &addr_);
 	}
@@ -150,8 +157,8 @@ public:
 		memset(dst.data(), 0xFF, prefix_length / 8);
 
 		// if needed, set the last partial byte to its correct mask
-		if(prefix_length % 8)
-			dst[prefix_length/8] = (0xFF << (8 - (prefix_length % 8))) & 0xFF;
+		if (prefix_length % 8)
+			dst[prefix_length / 8] = (0xFF << (8 - (prefix_length % 8))) & 0xFF;
 
 		ifa.ifa_netmask = reinterpret_cast<sockaddr *>(&netmask_);
 	}
@@ -167,13 +174,14 @@ private:
 	/**
 	 * Copy an address to its storage, and return a pointer to that.
 	 */
-	sockaddr *copy_addr(sa_family_t family, const void *data, size_t byteCount, sockaddr_storage *ss) {
+	sockaddr *
+	copy_addr(sa_family_t family, const void *data, size_t byteCount, sockaddr_storage *ss) {
 		ss->ss_family = family;
 
 		auto sb = sockaddr_bytes(family, ss);
 		memcpy(sb.data(), data, frg::min(byteCount, sb.size()));
 
-		if(family == AF_INET6 && (IN6_IS_ADDR_LINKLOCAL(data) || IN6_IS_ADDR_MC_LINKLOCAL(data))) {
+		if (family == AF_INET6 && (IN6_IS_ADDR_LINKLOCAL(data) || IN6_IS_ADDR_MC_LINKLOCAL(data))) {
 			reinterpret_cast<sockaddr_in6 *>(ss)->sin6_scope_id = if_index_;
 		}
 
@@ -184,13 +192,13 @@ private:
 	 * Retrieve an appropriately sized span for the sockaddr's addr
 	 */
 	frg::span<uint8_t> sockaddr_bytes(int family, sockaddr_storage *ss) {
-		if(family == AF_INET) {
+		if (family == AF_INET) {
 			sockaddr_in *ss4 = reinterpret_cast<sockaddr_in *>(ss);
 			return {reinterpret_cast<uint8_t *>(&ss4->sin_addr), sizeof(ss4->sin_addr)};
-		} else if(family == AF_INET6) {
+		} else if (family == AF_INET6) {
 			sockaddr_in6 *ss6 = reinterpret_cast<sockaddr_in6 *>(ss);
 			return {reinterpret_cast<uint8_t *>(&ss6->sin6_addr), sizeof(ss6->sin6_addr)};
-		} else if(family == AF_PACKET) {
+		} else if (family == AF_PACKET) {
 			sockaddr_ll *sll = reinterpret_cast<sockaddr_ll *>(ss);
 			return {reinterpret_cast<uint8_t *>(&sll->sll_addr), sizeof(sll->sll_addr)};
 		} else {
@@ -204,12 +212,13 @@ private:
 static_assert(offsetof(IfaddrHelper, ifa) == 0);
 
 /**
- * Callback function to be used with NetlinkHelper for implementing `sys_getifaddrs` by using rtnetlink.
+ * Callback function to be used with NetlinkHelper for implementing `sys_getifaddrs` by using
+ * rtnetlink.
  */
 void getifaddrs_callback(void *context, const nlmsghdr *hdr) {
 	ifaddrs **out = reinterpret_cast<ifaddrs **>(context);
 
-	if(hdr->nlmsg_type == RTM_NEWLINK) {
+	if (hdr->nlmsg_type == RTM_NEWLINK) {
 		ifinfomsg *ifi = reinterpret_cast<ifinfomsg *>(NLMSG_DATA(hdr));
 
 		auto new_addr = frg::construct<IfaddrHelper>(getAllocator(), out);
@@ -219,19 +228,19 @@ void getifaddrs_callback(void *context, const nlmsghdr *hdr) {
 		rtattr *rta = IFLA_RTA(ifi);
 		size_t rta_len = IFLA_PAYLOAD(hdr);
 
-		while(RTA_OK(rta, rta_len)) {
-			if(rta->rta_type == IFLA_ADDRESS) {
-				if(RTA_PAYLOAD(rta) < sizeof(new_addr->addr_)) {
+		while (RTA_OK(rta, rta_len)) {
+			if (rta->rta_type == IFLA_ADDRESS) {
+				if (RTA_PAYLOAD(rta) < sizeof(new_addr->addr_)) {
 					new_addr->set_addr(AF_PACKET, RTA_DATA(rta), RTA_PAYLOAD(rta));
 					new_addr->set_packet_attrs(ifi->ifi_index, ifi->ifi_type, RTA_PAYLOAD(rta));
 				}
-			} else if(rta->rta_type == IFLA_BROADCAST) {
-				if(RTA_PAYLOAD(rta) < sizeof(new_addr->broadcast_)) {
+			} else if (rta->rta_type == IFLA_BROADCAST) {
+				if (RTA_PAYLOAD(rta) < sizeof(new_addr->broadcast_)) {
 					new_addr->set_broadcast_addr(AF_PACKET, RTA_DATA(rta), RTA_PAYLOAD(rta));
 					new_addr->set_packet_attrs(ifi->ifi_index, ifi->ifi_type, RTA_PAYLOAD(rta));
 				}
-			} else if(rta->rta_type == IFLA_IFNAME) {
-				if(RTA_PAYLOAD(rta) < sizeof(new_addr->name_)) {
+			} else if (rta->rta_type == IFLA_IFNAME) {
+				if (RTA_PAYLOAD(rta) < sizeof(new_addr->name_)) {
 					memcpy(new_addr->name_, RTA_DATA(rta), RTA_PAYLOAD(rta));
 					new_addr->ifa.ifa_name = new_addr->name_;
 				}
@@ -239,18 +248,18 @@ void getifaddrs_callback(void *context, const nlmsghdr *hdr) {
 
 			rta = RTA_NEXT(rta, rta_len);
 		}
-	} else if(hdr->nlmsg_type == RTM_NEWADDR) {
-		ifaddrmsg *msg = reinterpret_cast<ifaddrmsg*>(NLMSG_DATA(hdr));
+	} else if (hdr->nlmsg_type == RTM_NEWADDR) {
+		ifaddrmsg *msg = reinterpret_cast<ifaddrmsg *>(NLMSG_DATA(hdr));
 
 		const IfaddrHelper *current = reinterpret_cast<const IfaddrHelper *>(*out);
 		while (current != nullptr && current->if_index_ != static_cast<int>(msg->ifa_index)) {
-			current = reinterpret_cast<const IfaddrHelper*>(current->ifa.ifa_next);
+			current = reinterpret_cast<const IfaddrHelper *>(current->ifa.ifa_next);
 		}
 
 		IfaddrHelper *new_addr = frg::construct<IfaddrHelper>(getAllocator(), out);
 		new_addr->if_index_ = static_cast<int>(msg->ifa_index);
 
-		if(current != nullptr) {
+		if (current != nullptr) {
 			strcpy(new_addr->name_, current->name_);
 			new_addr->ifa.ifa_name = new_addr->name_;
 			new_addr->ifa.ifa_flags = current->ifa.ifa_flags;
@@ -259,25 +268,25 @@ void getifaddrs_callback(void *context, const nlmsghdr *hdr) {
 		rtattr *rta = IFA_RTA(msg);
 		size_t rta_len = IFA_PAYLOAD(hdr);
 
-		while(RTA_OK(rta, rta_len)) {
-			if(rta->rta_type == IFA_ADDRESS) {
-				if(msg->ifa_family == AF_INET || msg->ifa_family == AF_INET6) {
+		while (RTA_OK(rta, rta_len)) {
+			if (rta->rta_type == IFA_ADDRESS) {
+				if (msg->ifa_family == AF_INET || msg->ifa_family == AF_INET6) {
 					new_addr->set_addr(msg->ifa_family, RTA_DATA(rta), RTA_PAYLOAD(rta));
 					new_addr->set_netmask(msg->ifa_family, msg->ifa_prefixlen);
 				}
-			} else if(rta->rta_type == IFA_BROADCAST) {
-				if(msg->ifa_family == AF_INET) {
+			} else if (rta->rta_type == IFA_BROADCAST) {
+				if (msg->ifa_family == AF_INET) {
 					new_addr->set_broadcast_addr(msg->ifa_family, RTA_DATA(rta), RTA_PAYLOAD(rta));
-					if(current == nullptr) {
+					if (current == nullptr) {
 						new_addr->ifa.ifa_flags |= IFF_BROADCAST;
 					}
 				}
-			} else if(rta->rta_type == IFA_LOCAL) {
-				if(msg->ifa_family == AF_INET || msg->ifa_family == AF_INET6) {
+			} else if (rta->rta_type == IFA_LOCAL) {
+				if (msg->ifa_family == AF_INET || msg->ifa_family == AF_INET6) {
 					new_addr->set_local_address(msg->ifa_family, RTA_DATA(rta), RTA_PAYLOAD(rta));
 				}
-			} else if(rta->rta_type == IFA_LABEL) {
-				if(RTA_PAYLOAD(rta) < sizeof(new_addr->name_)) {
+			} else if (rta->rta_type == IFA_LABEL) {
+				if (RTA_PAYLOAD(rta) < sizeof(new_addr->name_)) {
 					memcpy(new_addr->name_, RTA_DATA(rta), RTA_PAYLOAD(rta));
 					new_addr->ifa.ifa_name = new_addr->name_;
 				}

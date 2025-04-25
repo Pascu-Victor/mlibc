@@ -1,9 +1,9 @@
 #ifndef _STRING_H
 #define _STRING_H
 
-#include <mlibc-config.h>
 #include <bits/null.h>
 #include <bits/size_t.h>
+#include <mlibc-config.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -43,7 +43,7 @@ char *strstr(const char *__pattern, const char *__s);
 char *strtok(char *__restrict __s, const char *__restrict __delimiter);
 
 /* This is a GNU extension. */
-char *strchrnul(const char * __s, int __c);
+char *strchrnul(const char *__s, int __c);
 
 /* [7.24.6] Miscellaneous functions */
 
@@ -75,18 +75,16 @@ int strerror_r(int __errnum, char *__buffer, size_t __size);
 #if __MLIBC_GLIBC_OPTION && defined(_GNU_SOURCE) && !defined(basename)
 char *__mlibc_gnu_basename_c(const char *__path);
 
-# ifdef __cplusplus
+#ifdef __cplusplus
 extern "C++" {
 static inline const char *__mlibc_gnu_basename(const char *__path) {
 	return __mlibc_gnu_basename_c(__path);
 }
-static inline char *__mlibc_gnu_basename(char *__path) {
-	return __mlibc_gnu_basename_c(__path);
+static inline char *__mlibc_gnu_basename(char *__path) { return __mlibc_gnu_basename_c(__path); }
 }
-}
-# else
-#  define __mlibc_gnu_basename __mlibc_gnu_basename_c
-# endif
+#else
+#define __mlibc_gnu_basename __mlibc_gnu_basename_c
+#endif
 
 #define basename __mlibc_gnu_basename
 #endif
@@ -98,10 +96,10 @@ static inline char *__mlibc_gnu_basename(char *__path) {
 #endif
 
 #if __MLIBC_POSIX_OPTION
-#	include <bits/posix/posix_string.h>
+#include <bits/posix/posix_string.h>
 #endif
 #if __MLIBC_GLIBC_OPTION
-#	include <bits/glibc/glibc_string.h>
+#include <bits/glibc/glibc_string.h>
 #endif
 
 #endif /* _STRING_H */

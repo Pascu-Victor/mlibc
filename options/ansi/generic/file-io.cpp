@@ -1,9 +1,9 @@
 
 #include <errno.h>
-#include <stdlib.h>
 #include <stdint.h>
-#include <string.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #if __MLIBC_GLIBC_OPTION
 #include <stdio_ext.h>
 #endif
@@ -16,8 +16,8 @@
 #include <frg/allocation.hpp>
 #include <frg/mutex.hpp>
 #include <mlibc/allocator.hpp>
-#include <mlibc/file-io.hpp>
 #include <mlibc/ansi-sysdeps.hpp>
+#include <mlibc/file-io.hpp>
 #include <mlibc/lock.hpp>
 
 namespace mlibc {
@@ -27,26 +27,24 @@ namespace mlibc {
 // --------------------------------------------------------------------------------------
 
 namespace {
-	using file_list = frg::intrusive_list<
-		abstract_file,
-		frg::locate_member<
-			abstract_file,
-			frg::default_list_hook<abstract_file>,
-			&abstract_file::_list_hook
-		>
-	>;
+using file_list = frg::intrusive_list<
+    abstract_file,
+    frg::locate_member<
+        abstract_file,
+        frg::default_list_hook<abstract_file>,
+        &abstract_file::_list_hook>>;
 
-	// Useful when debugging the FILE implementation.
-	constexpr bool globallyDisableBuffering = false;
+// Useful when debugging the FILE implementation.
+constexpr bool globallyDisableBuffering = false;
 
-	// The maximum number of characters we permit the user to ungetc.
-	constexpr size_t ungetBufferSize = 8;
+// The maximum number of characters we permit the user to ungetc.
+constexpr size_t ungetBufferSize = 8;
 
-	// List of files that will be flushed before exit().
-	file_list &global_file_list() {
-		static frg::eternal<file_list> list;
-		return list.get();
-	};
+// List of files that will be flushed before exit().
+file_list &global_file_list() {
+	static frg::eternal<file_list> list;
+	return list.get();
+};
 } // namespace
 
 // For pipe-like streams (seek returns ESPIPE), we need to make sure
@@ -56,7 +54,9 @@ namespace {
 //     open (e.g. for std{in,out,err}), we defer the type determination and cache the result.
 
 abstract_file::abstract_file(void (*do_dispose)(abstract_file *))
-: _type{stream_type::unknown}, _bufmode{buffer_mode::unknown}, _do_dispose{do_dispose} {
+: _type{stream_type::unknown},
+  _bufmode{buffer_mode::unknown},
+  _do_dispose{do_dispose} {
 	// TODO: For __fwriting to work correctly, set the __io_mode to 1 if the write is write-only.
 	__buffer_ptr = nullptr;
 	__unget_ptr = nullptr;
@@ -73,11 +73,11 @@ abstract_file::abstract_file(void (*do_dispose)(abstract_file *))
 }
 
 abstract_file::~abstract_file() {
-	if(__dirty_begin != __dirty_end)
+	if (__dirty_begin != __dirty_end)
 		mlibc::infoLogger() << "mlibc warning: File is not flushed before destruction"
-				<< frg::endlog;
+		                    << frg::endlog;
 
-	if(__buffer_ptr)
+	if (__buffer_ptr)
 		getAllocator().free(__buffer_ptr - ungetBufferSize);
 
 	auto it = global_file_list().iterator_to(this);
@@ -85,7 +85,7 @@ abstract_file::~abstract_file() {
 }
 
 void abstract_file::dispose() {
-	if(!_do_dispose)
+	if (!_do_dispose)
 		return;
 	_do_dispose(this);
 }
@@ -97,7 +97,7 @@ void abstract_file::dispose() {
 int abstract_file::read(char *buffer, size_t max_size, size_t *actual_size) {
 	__ensure(max_size);
 
-	if(_init_bufmode())
+	if (_init_bufmode())
 		return -1;
 
 	size_t unget_length = 0;
@@ -115,13 +115,13 @@ int abstract_file::read(char *buffer, size_t max_size, size_t *actual_size) {
 		}
 	}
 
-	if(globallyDisableBuffering || _bufmode == buffer_mode::no_buffer) {
+	if (globallyDisableBuffering || _bufmode == buffer_mode::no_buffer) {
 		size_t io_size;
-		if(int e = io_read(buffer, max_size, &io_size); e) {
+		if (int e = io_read(buffer, max_size, &io_size); e) {
 			__status_bits |= __MLIBC_ERROR_BIT;
 			return e;
 		}
-		if(!io_size)
+		if (!io_size)
 			__status_bits |= __MLIBC_EOF_BIT;
 		*actual_size = io_size + unget_length;
 		return 0;
@@ -129,27 +129,26 @@ int abstract_file::read(char *buffer, size_t max_size, size_t *actual_size) {
 
 	// Ensure correct buffer type for pipe-like streams.
 	// TODO: In order to support pipe-like streams we need to write-back the buffer.
-	if(__io_mode && __valid_limit)
-		mlibc::panicLogger() << "mlibc: Cannot read-write to same pipe-like stream"
-				<< frg::endlog;
+	if (__io_mode && __valid_limit)
+		mlibc::panicLogger() << "mlibc: Cannot read-write to same pipe-like stream" << frg::endlog;
 	__io_mode = 0;
 
 	// Clear the buffer, then buffer new data.
-	if(__offset == __valid_limit) {
+	if (__offset == __valid_limit) {
 		// TODO: We only have to write-back/reset if __valid_limit reaches the buffer end.
-		if(int e = _write_back(); e)
+		if (int e = _write_back(); e)
 			return e;
-		if(int e = _reset(); e)
+		if (int e = _reset(); e)
 			return e;
 
 		// Perform a read-ahead.
 		_ensure_allocation();
 		size_t io_size;
-		if(int e = io_read(__buffer_ptr, __buffer_size, &io_size); e) {
+		if (int e = io_read(__buffer_ptr, __buffer_size, &io_size); e) {
 			__status_bits |= __MLIBC_ERROR_BIT;
 			return e;
 		}
-		if(!io_size) {
+		if (!io_size) {
 			__status_bits |= __MLIBC_EOF_BIT;
 			*actual_size = 0;
 			return 0;
@@ -173,13 +172,13 @@ int abstract_file::read(char *buffer, size_t max_size, size_t *actual_size) {
 int abstract_file::write(const char *buffer, size_t max_size, size_t *actual_size) {
 	__ensure(max_size);
 
-	if(_init_bufmode())
+	if (_init_bufmode())
 		return -1;
-	if(globallyDisableBuffering || _bufmode == buffer_mode::no_buffer) {
+	if (globallyDisableBuffering || _bufmode == buffer_mode::no_buffer) {
 		// As we do not buffer, nothing can be dirty.
 		__ensure(__dirty_begin == __dirty_end);
 		size_t io_size;
-		if(int e = io_write(buffer, max_size, &io_size); e) {
+		if (int e = io_write(buffer, max_size, &io_size); e) {
 			__status_bits |= __MLIBC_ERROR_BIT;
 			return e;
 		}
@@ -188,10 +187,10 @@ int abstract_file::write(const char *buffer, size_t max_size, size_t *actual_siz
 	}
 
 	// Flush the buffer if necessary.
-	if(__offset == __buffer_size) {
-		if(int e = _write_back(); e)
+	if (__offset == __buffer_size) {
+		if (int e = _write_back(); e)
 			return e;
-		if(int e = _reset(); e)
+		if (int e = _reset(); e)
 			return e;
 	}
 
@@ -199,9 +198,8 @@ int abstract_file::write(const char *buffer, size_t max_size, size_t *actual_siz
 	// TODO: We could full support pipe-like files
 	// by ungetc()ing all data before a write happens,
 	// however, for now we just report an error.
-	if(!__io_mode && __valid_limit) // TODO: Only check this for pipe-like streams.
-		mlibc::panicLogger() << "mlibc: Cannot read-write to same pipe-like stream"
-				<< frg::endlog;
+	if (!__io_mode && __valid_limit) // TODO: Only check this for pipe-like streams.
+		mlibc::panicLogger() << "mlibc: Cannot read-write to same pipe-like stream" << frg::endlog;
 	__io_mode = 1;
 
 	__ensure(__offset < __buffer_size);
@@ -209,9 +207,9 @@ int abstract_file::write(const char *buffer, size_t max_size, size_t *actual_siz
 
 	// Line-buffered streams perform I/O on full lines.
 	bool flush_line = false;
-	if(_bufmode == buffer_mode::line_buffer) {
+	if (_bufmode == buffer_mode::line_buffer) {
 		auto nl = reinterpret_cast<char *>(memchr(buffer, '\n', chunk));
-		if(nl) {
+		if (nl) {
 			chunk = nl + 1 - buffer;
 			flush_line = true;
 		}
@@ -222,10 +220,10 @@ int abstract_file::write(const char *buffer, size_t max_size, size_t *actual_siz
 	_ensure_allocation();
 	memcpy(__buffer_ptr + __offset, buffer, chunk);
 
-	if(__dirty_begin != __dirty_end) {
+	if (__dirty_begin != __dirty_end) {
 		__dirty_begin = frg::min(__dirty_begin, __offset);
 		__dirty_end = frg::max(__dirty_end, __offset + chunk);
-	}else{
+	} else {
 		__dirty_begin = __offset;
 		__dirty_end = __offset + chunk;
 	}
@@ -233,8 +231,8 @@ int abstract_file::write(const char *buffer, size_t max_size, size_t *actual_siz
 	__offset += chunk;
 
 	// Flush line-buffered streams.
-	if(flush_line) {
-		if(_write_back())
+	if (flush_line) {
+		if (_write_back())
 			return -1;
 	}
 
@@ -261,8 +259,9 @@ int abstract_file::unget(char c) {
 
 int abstract_file::update_bufmode(buffer_mode mode) {
 	// setvbuf() has undefined behavior if I/O has been performed.
-	__ensure(__dirty_begin == __dirty_end
-			&& "update_bufmode() must only be called before performing I/O");
+	__ensure(
+	    __dirty_begin == __dirty_end && "update_bufmode() must only be called before performing I/O"
+	);
 	_bufmode = mode;
 	return 0;
 }
@@ -289,29 +288,28 @@ int abstract_file::flush() {
 
 int abstract_file::tell(off_t *current_offset) {
 	off_t seek_offset;
-	if(int e = io_seek(0, SEEK_CUR, &seek_offset); e)
+	if (int e = io_seek(0, SEEK_CUR, &seek_offset); e)
 		return e;
 
-	*current_offset = seek_offset
-		+ (off_t(__offset) - off_t(__io_offset))
-		+ (off_t(__unget_ptr) - off_t(__buffer_ptr));
+	*current_offset = seek_offset + (off_t(__offset) - off_t(__io_offset))
+	                  + (off_t(__unget_ptr) - off_t(__buffer_ptr));
 	return 0;
 }
 
 int abstract_file::seek(off_t offset, int whence) {
-	if(int e = _write_back(); e)
+	if (int e = _write_back(); e)
 		return e;
 
 	off_t new_offset;
-	if(whence == SEEK_CUR) {
+	if (whence == SEEK_CUR) {
 		auto seek_offset = offset + (off_t(__offset) - off_t(__io_offset));
-		if(int e = io_seek(seek_offset, whence, &new_offset); e) {
+		if (int e = io_seek(seek_offset, whence, &new_offset); e) {
 			__status_bits |= __MLIBC_ERROR_BIT;
 			return e;
 		}
-	}else{
+	} else {
 		__ensure(whence == SEEK_SET || whence == SEEK_END);
-		if(int e = io_seek(offset, whence, &new_offset); e) {
+		if (int e = io_seek(offset, whence, &new_offset); e) {
 			__status_bits |= __MLIBC_ERROR_BIT;
 			return e;
 		}
@@ -325,51 +323,52 @@ int abstract_file::seek(off_t offset, int whence) {
 }
 
 int abstract_file::_init_type() {
-	if(_type != stream_type::unknown)
+	if (_type != stream_type::unknown)
 		return 0;
 
-	if(int e = determine_type(&_type); e)
+	if (int e = determine_type(&_type); e)
 		return e;
 	__ensure(_type != stream_type::unknown);
 	return 0;
 }
 
 int abstract_file::_init_bufmode() {
-	if(_bufmode != buffer_mode::unknown)
+	if (_bufmode != buffer_mode::unknown)
 		return 0;
 
-	if(determine_bufmode(&_bufmode))
+	if (determine_bufmode(&_bufmode))
 		return -1;
 	__ensure(_bufmode != buffer_mode::unknown);
 	return 0;
 }
 
 int abstract_file::_write_back() {
-	if(int e = _init_type(); e)
+	if (int e = _init_type(); e)
 		return e;
 
-	if(__dirty_begin == __dirty_end)
+	if (__dirty_begin == __dirty_end)
 		return 0;
 
 	// For non-pipe streams, first do a seek to reset the
 	// I/O position to zero, then do a write().
-	if(_type == stream_type::file_like) {
-		if(__io_offset != __dirty_begin) {
+	if (_type == stream_type::file_like) {
+		if (__io_offset != __dirty_begin) {
 			__ensure(__dirty_begin - __io_offset > 0);
 			off_t new_offset;
-			if(int e = io_seek(off_t(__dirty_begin) - off_t(__io_offset), SEEK_CUR, &new_offset); e)
+			if (int e = io_seek(off_t(__dirty_begin) - off_t(__io_offset), SEEK_CUR, &new_offset);
+			    e)
 				return e;
 			__io_offset = __dirty_begin;
 		}
-	}else{
+	} else {
 		__ensure(_type == stream_type::pipe_like);
 		__ensure(__io_offset == __dirty_begin);
 	}
 
 	// Now, we are in the correct position to write-back everything.
-	while(__io_offset < __dirty_end) {
+	while (__io_offset < __dirty_end) {
 		size_t io_size;
-		if(int e = io_write(__buffer_ptr + __io_offset, __dirty_end - __io_offset, &io_size); e) {
+		if (int e = io_write(__buffer_ptr + __io_offset, __dirty_end - __io_offset, &io_size); e) {
 			__status_bits |= __MLIBC_ERROR_BIT;
 			return e;
 		}
@@ -401,12 +400,12 @@ int abstract_file::_save_pos() {
 }
 
 int abstract_file::_reset() {
-	if(int e = _init_type(); e)
+	if (int e = _init_type(); e)
 		return e;
 
 	// For pipe-like files, we must not forget already read data.
 	// TODO: Report this error to the user.
-	if(_type == stream_type::pipe_like)
+	if (_type == stream_type::pipe_like)
 		__ensure(__offset == __valid_limit);
 
 	__ensure(__dirty_begin == __dirty_end);
@@ -419,7 +418,7 @@ int abstract_file::_reset() {
 
 // This may still be called when buffering is disabled, for ungetc.
 void abstract_file::_ensure_allocation() {
-	if(__buffer_ptr)
+	if (__buffer_ptr)
 		return;
 
 	auto ptr = getAllocator().allocate(__buffer_size + ungetBufferSize);
@@ -432,17 +431,16 @@ void abstract_file::_ensure_allocation() {
 // --------------------------------------------------------------------------------------
 
 fd_file::fd_file(int fd, void (*do_dispose)(abstract_file *), bool force_unbuffered)
-: abstract_file{do_dispose}, _fd{fd}, _force_unbuffered{force_unbuffered} { }
+: abstract_file{do_dispose},
+  _fd{fd},
+  _force_unbuffered{force_unbuffered} {}
 
-int fd_file::fd() {
-	return _fd;
-}
+int fd_file::fd() { return _fd; }
 
 int fd_file::close() {
-	if(__dirty_begin != __dirty_end)
-		mlibc::infoLogger() << "mlibc warning: File is not flushed before closing"
-				<< frg::endlog;
-	if(int e = mlibc::sys_close(_fd); e)
+	if (__dirty_begin != __dirty_end)
+		mlibc::infoLogger() << "mlibc warning: File is not flushed before closing" << frg::endlog;
+	if (int e = mlibc::sys_close(_fd); e)
 		return e;
 	return 0;
 }
@@ -451,7 +449,10 @@ int fd_file::reopen(const char *path, const char *mode) {
 	int mode_flags = parse_modestring(mode);
 
 	int fd;
-	if(int e = sys_open(path, mode_flags, S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH|S_IWOTH, &fd); e) {
+	if (int e = sys_open(
+	        path, mode_flags, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH, &fd
+	    );
+	    e) {
 		return e;
 	}
 
@@ -465,7 +466,7 @@ int fd_file::reopen(const char *path, const char *mode) {
 	_reset();
 	_fd = fd;
 
-	if(mode_flags & O_APPEND) {
+	if (mode_flags & O_APPEND) {
 		seek(0, SEEK_END);
 	}
 
@@ -475,45 +476,46 @@ int fd_file::reopen(const char *path, const char *mode) {
 int fd_file::determine_type(stream_type *type) {
 	off_t offset;
 	int e = mlibc::sys_seek(_fd, 0, SEEK_CUR, &offset);
-	if(!e) {
+	if (!e) {
 		*type = stream_type::file_like;
 		return 0;
-	}else if(e == ESPIPE) {
+	} else if (e == ESPIPE) {
 		*type = stream_type::pipe_like;
 		return 0;
-	}else{
+	} else {
 		return e;
 	}
 }
 
 int fd_file::determine_bufmode(buffer_mode *mode) {
 	// When isatty() is not implemented, we fall back to the safest default (no buffering).
-	if(!mlibc::sys_isatty) {
+	if (!mlibc::sys_isatty) {
 		MLIBC_MISSING_SYSDEP();
 		*mode = buffer_mode::no_buffer;
 		return 0;
 	}
-	if(_force_unbuffered) {
+	if (_force_unbuffered) {
 		*mode = buffer_mode::no_buffer;
 		return 0;
 	}
 
-	if(int e = mlibc::sys_isatty(_fd); !e) {
+	if (int e = mlibc::sys_isatty(_fd); !e) {
 		*mode = buffer_mode::line_buffer;
 		return 0;
-	}else if(e == ENOTTY) {
+	} else if (e == ENOTTY) {
 		*mode = buffer_mode::full_buffer;
 		return 0;
-	}else{
+	} else {
 		mlibc::infoLogger() << "mlibc: sys_isatty() failed while determining whether"
-				" stream is interactive" << frg::endlog;
+		                       " stream is interactive"
+		                    << frg::endlog;
 		return -1;
 	}
 }
 
 int fd_file::io_read(char *buffer, size_t max_size, size_t *actual_size) {
 	ssize_t s;
-	if(int e = mlibc::sys_read(_fd, buffer, max_size, &s); e)
+	if (int e = mlibc::sys_read(_fd, buffer, max_size, &s); e)
 		return e;
 	*actual_size = s;
 	return 0;
@@ -521,14 +523,14 @@ int fd_file::io_read(char *buffer, size_t max_size, size_t *actual_size) {
 
 int fd_file::io_write(const char *buffer, size_t max_size, size_t *actual_size) {
 	ssize_t s;
-	if(int e = mlibc::sys_write(_fd, buffer, max_size, &s); e)
+	if (int e = mlibc::sys_write(_fd, buffer, max_size, &s); e)
 		return e;
 	*actual_size = s;
 	return 0;
 }
 
 int fd_file::io_seek(off_t offset, int whence, off_t *new_offset) {
-	if(int e = mlibc::sys_seek(_fd, offset, whence, new_offset); e)
+	if (int e = mlibc::sys_seek(_fd, offset, whence, new_offset); e)
 		return e;
 	return 0;
 }
@@ -586,22 +588,22 @@ int fd_file::parse_modestring(const char *mode) {
 } // namespace mlibc
 
 namespace {
-	mlibc::fd_file stdin_file{0};
-	mlibc::fd_file stdout_file{1};
-	mlibc::fd_file stderr_file{2, nullptr, true};
+mlibc::fd_file stdin_file{0};
+mlibc::fd_file stdout_file{1};
+mlibc::fd_file stderr_file{2, nullptr, true};
 
-	struct stdio_guard {
-		stdio_guard() { }
+struct stdio_guard {
+	stdio_guard() {}
 
-		~stdio_guard() {
-			// Only flush the files but do not close them.
-			for(auto it : mlibc::global_file_list()) {
-				if(int e = it->flush(); e)
-					mlibc::infoLogger() << "mlibc warning: Failed to flush file before exit()"
-							<< frg::endlog;
-			}
+	~stdio_guard() {
+		// Only flush the files but do not close them.
+		for (auto it : mlibc::global_file_list()) {
+			if (int e = it->flush(); e)
+				mlibc::infoLogger()
+				    << "mlibc warning: Failed to flush file before exit()" << frg::endlog;
 		}
-	} global_stdio_guard;
+	}
+} global_stdio_guard;
 } // namespace
 
 FILE *stderr = &stderr_file;
@@ -623,21 +625,22 @@ FILE *fopen(const char *path, const char *mode) {
 	int flags = mlibc::fd_file::parse_modestring(mode);
 
 	int fd;
-	if(int e = mlibc::sys_open(path, flags, 0666, &fd); e) {
+	if (int e = mlibc::sys_open(path, flags, 0666, &fd); e) {
 		errno = e;
 		return nullptr;
 	}
 
-	return frg::construct<mlibc::fd_file>(getAllocator(), fd,
-			mlibc::file_dispose_cb<mlibc::fd_file>);
+	return frg::construct<mlibc::fd_file>(
+	    getAllocator(), fd, mlibc::file_dispose_cb<mlibc::fd_file>
+	);
 }
 
 int fclose(FILE *file_base) {
 	auto file = static_cast<mlibc::abstract_file *>(file_base);
 	int e = 0;
-	if(file->flush())
+	if (file->flush())
 		e = EOF;
-	if(file->close())
+	if (file->close())
 		e = EOF;
 	file->dispose();
 	return e;
@@ -646,7 +649,7 @@ int fclose(FILE *file_base) {
 int fseek(FILE *file_base, long offset, int whence) {
 	auto file = static_cast<mlibc::abstract_file *>(file_base);
 	frg::unique_lock lock(file->_lock);
-	if(int e = file->seek(offset, whence); e) {
+	if (int e = file->seek(offset, whence); e) {
 		errno = e;
 		return -1;
 	}
@@ -657,7 +660,7 @@ long ftell(FILE *file_base) {
 	auto file = static_cast<mlibc::abstract_file *>(file_base);
 	frg::unique_lock lock(file->_lock);
 	off_t current_offset;
-	if(int e = file->tell(&current_offset); e) {
+	if (int e = file->tell(&current_offset); e) {
 		errno = e;
 		return -1;
 	}
@@ -665,28 +668,26 @@ long ftell(FILE *file_base) {
 }
 
 int fflush_unlocked(FILE *file_base) {
-	if(file_base == nullptr) {
+	if (file_base == nullptr) {
 		// Only flush the files but do not close them.
-		for(auto it : mlibc::global_file_list()) {
-			if(int e = it->flush(); e)
-				mlibc::infoLogger() << "mlibc warning: Failed to flush file"
-					<< frg::endlog;
+		for (auto it : mlibc::global_file_list()) {
+			if (int e = it->flush(); e)
+				mlibc::infoLogger() << "mlibc warning: Failed to flush file" << frg::endlog;
 		}
 		return 0;
 	}
 	auto file = static_cast<mlibc::abstract_file *>(file_base);
-	if(file->flush())
+	if (file->flush())
 		return EOF;
 	return 0;
 }
 int fflush(FILE *file_base) {
-	if(file_base == nullptr) {
+	if (file_base == nullptr) {
 		// Only flush the files but do not close them.
-		for(auto it : mlibc::global_file_list()) {
+		for (auto it : mlibc::global_file_list()) {
 			frg::unique_lock lock(it->_lock);
-			if(int e = it->flush(); e)
-				mlibc::infoLogger() << "mlibc warning: Failed to flush file"
-					<< frg::endlog;
+			if (int e = it->flush(); e)
+				mlibc::infoLogger() << "mlibc warning: Failed to flush file" << frg::endlog;
 		}
 		return 0;
 	}
@@ -701,22 +702,22 @@ int fflush(FILE *file_base) {
 int setvbuf(FILE *file_base, char *, int mode, size_t) {
 	// TODO: We could also honor the buffer, but for now use just set the mode.
 	auto file = static_cast<mlibc::abstract_file *>(file_base);
-	if(mode == _IONBF) {
-		if(int e = file->update_bufmode(mlibc::buffer_mode::no_buffer); e) {
+	if (mode == _IONBF) {
+		if (int e = file->update_bufmode(mlibc::buffer_mode::no_buffer); e) {
 			errno = e;
 			return -1;
 		}
-	}else if(mode == _IOLBF) {
-		if(int e = file->update_bufmode(mlibc::buffer_mode::line_buffer); e) {
+	} else if (mode == _IOLBF) {
+		if (int e = file->update_bufmode(mlibc::buffer_mode::line_buffer); e) {
 			errno = e;
 			return -1;
 		}
-	}else if(mode == _IOFBF) {
-		if(int e = file->update_bufmode(mlibc::buffer_mode::full_buffer); e) {
+	} else if (mode == _IOFBF) {
+		if (int e = file->update_bufmode(mlibc::buffer_mode::full_buffer); e) {
 			errno = e;
 			return -1;
 		}
-	}else{
+	} else {
 		errno = EINVAL;
 		return -1;
 	}
@@ -747,4 +748,3 @@ void __fpurge(FILE *file_base) {
 	file->purge();
 }
 #endif
-

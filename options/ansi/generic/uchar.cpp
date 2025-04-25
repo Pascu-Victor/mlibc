@@ -6,13 +6,15 @@ size_t c32rtomb(char *__restrict s, char32_t c32, mbstate_t *__restrict ps) {
 	return wcrtomb(s, c32, ps);
 }
 
-size_t mbrtoc32(char32_t *__restrict pc32, const char *__restrict pmb, size_t max, mbstate_t *__restrict ps) {
+size_t mbrtoc32(
+    char32_t *__restrict pc32, const char *__restrict pmb, size_t max, mbstate_t *__restrict ps
+) {
 	static mbstate_t internal_state;
 
-	if(!ps)
+	if (!ps)
 		ps = &internal_state;
 
-	if(!pmb)
+	if (!pmb)
 		return mbrtoc32(nullptr, "", 1, ps);
 
 	wchar_t wc;

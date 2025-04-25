@@ -1,10 +1,10 @@
 
+#include <bits/ensure.h>
 #include <errno.h>
+#include <limits.h>
 #include <mntent.h>
 #include <stdio.h>
-#include <limits.h>
 #include <string.h>
-#include <bits/ensure.h>
 
 namespace {
 
@@ -15,9 +15,7 @@ size_t internal_bufsize;
 
 #define SENTINEL (char *)&internal_buf
 
-FILE *setmntent(const char *name, const char *mode) {
-	return fopen(name, mode);
-}
+FILE *setmntent(const char *name, const char *mode) { return fopen(name, mode); }
 
 struct mntent *getmntent(FILE *f) {
 	static struct mntent mnt;
@@ -25,24 +23,30 @@ struct mntent *getmntent(FILE *f) {
 }
 
 int addmntent(FILE *f, const struct mntent *mnt) {
-	if(fseek(f, 0, SEEK_END)) {
+	if (fseek(f, 0, SEEK_END)) {
 		return 1;
 	}
-	return fprintf(f, "%s\t%s\t%s\t%s\t%d\t%d\n",
-		mnt->mnt_fsname, mnt->mnt_dir, mnt->mnt_type, mnt->mnt_opts,
-		mnt->mnt_freq, mnt->mnt_passno) < 0;
+	return fprintf(
+	           f,
+	           "%s\t%s\t%s\t%s\t%d\t%d\n",
+	           mnt->mnt_fsname,
+	           mnt->mnt_dir,
+	           mnt->mnt_type,
+	           mnt->mnt_opts,
+	           mnt->mnt_freq,
+	           mnt->mnt_passno
+	       )
+	       < 0;
 }
 
 int endmntent(FILE *f) {
-	if(f) {
+	if (f) {
 		fclose(f);
 	}
 	return 1;
 }
 
-char *hasmntopt(const struct mntent *mnt, const char *opt) {
-	return strstr(mnt->mnt_opts, opt);
-}
+char *hasmntopt(const struct mntent *mnt, const char *opt) { return strstr(mnt->mnt_opts, opt); }
 
 /* Adapted from musl */
 struct mntent *getmntent_r(FILE *f, struct mntent *mnt, char *linebuf, int buflen) {
@@ -55,34 +59,45 @@ struct mntent *getmntent_r(FILE *f, struct mntent *mnt, char *linebuf, int bufle
 	mnt->mnt_passno = 0;
 
 	do {
-		if(use_internal) {
+		if (use_internal) {
 			getline(&internal_buf, &internal_bufsize, f);
 			linebuf = internal_buf;
 		} else {
 			fgets(linebuf, buflen, f);
 		}
-		if(feof(f) || ferror(f)) {
+		if (feof(f) || ferror(f)) {
 			return nullptr;
 		}
-		if(!strchr(linebuf, '\n')) {
+		if (!strchr(linebuf, '\n')) {
 			fscanf(f, "%*[^\n]%*[\n]");
 			errno = ERANGE;
 			return nullptr;
 		}
 
 		len = strlen(linebuf);
-		if(len > INT_MAX) {
+		if (len > INT_MAX) {
 			continue;
 		}
 
-		for(i = 0; i < sizeof n / sizeof *n; i++) {
+		for (i = 0; i < sizeof n / sizeof *n; i++) {
 			n[i] = len;
 		}
 
-		sscanf(linebuf, " %n%*s%n %n%*s%n %n%*s%n %n%*s%n %d %d",
-			n, n + 1, n + 2, n + 3, n + 4, n + 5, n + 6, n + 7,
-			&mnt->mnt_freq, &mnt->mnt_passno);
-	} while(linebuf[n[0]] == '#' || n[1] == len);
+		sscanf(
+		    linebuf,
+		    " %n%*s%n %n%*s%n %n%*s%n %n%*s%n %d %d",
+		    n,
+		    n + 1,
+		    n + 2,
+		    n + 3,
+		    n + 4,
+		    n + 5,
+		    n + 6,
+		    n + 7,
+		    &mnt->mnt_freq,
+		    &mnt->mnt_passno
+		);
+	} while (linebuf[n[0]] == '#' || n[1] == len);
 
 	linebuf[n[1]] = 0;
 	linebuf[n[3]] = 0;

@@ -1,11 +1,11 @@
 
 #include <bits/ensure.h>
-#include <search.h>
-#include <stddef.h>
-#include <new>
+#include <frg/stack.hpp>
 #include <mlibc/allocator.hpp>
 #include <mlibc/search.hpp>
-#include <frg/stack.hpp>
+#include <new>
+#include <search.h>
+#include <stddef.h>
 #include <stdlib.h>
 
 struct node {
@@ -15,11 +15,48 @@ struct node {
 };
 
 namespace {
-	int height(struct node *node) {
-		return node ? node->h : 0;
+int height(struct node *node) { return node ? node->h : 0; }
+
+int rotate(struct node **nodep, int side) {
+	struct node *node = *nodep;
+	struct node *x = static_cast<struct node *>(node->a[side]);
+	struct node *y = static_cast<struct node *>(x->a[!side]);
+	struct node *z = static_cast<struct node *>(x->a[side]);
+
+	int height_node = node->h;
+	int height_y = height(y);
+	if (height_y > height(z)) {
+		// Perform double rotation
+		node->a[side] = y->a[!side];
+		x->a[!side] = y->a[side];
+		y->a[!side] = node;
+		y->a[side] = x;
+		node->h = height_y;
+		x->h = height_y;
+		y->h = height_y + 1;
+	} else {
+		// Perform single rotation
+		node->a[side] = y;
+		x->a[!side] = node;
+		node->h = height_y + 1;
+		x->h = height_y + 2;
+		y = x;
+	}
+	*nodep = y;
+	return y->h - height_node;
+}
+
+int balance_tree(struct node **nodep) {
+	struct node *node = *nodep;
+	int height_a = height(static_cast<struct node *>(node->a[0]));
+	int height_b = height(static_cast<struct node *>(node->a[1]));
+	if (height_a - height_b < 2) {
+		int old = node->h;
+		node->h = height_a < height_b ? height_b + 1 : height_a + 1;
+		return node->h - old;
 	}
 
-	int rotate(struct node **nodep, int side) {
+	int rotate(struct node * *nodep, int side) {
 		struct node *node = *nodep;
 		struct node *x = static_cast<struct node *>(node->a[side]);
 		struct node *y = static_cast<struct node *>(x->a[!side]);
@@ -43,13 +80,12 @@ namespace {
 			node->h = height_y + 1;
 			x->h = height_y + 2;
 			y = x;
-
 		}
 		*nodep = y;
 		return y->h - height_node;
 	}
 
-	int balance_tree(struct node **nodep) {
+	int balance_tree(struct node * *nodep) {
 		struct node *node = *nodep;
 		int height_a = height(static_cast<struct node *>(node->a[0]));
 		int height_b = height(static_cast<struct node *>(node->a[1]));
@@ -63,7 +99,7 @@ namespace {
 	}
 } // namespace
 
-void *tsearch(const void *key, void **rootp, int(*compar)(const void *, const void *)) {
+void *tsearch(const void *key, void **rootp, int (*compar)(const void *, const void *)) {
 	if (!rootp)
 		return nullptr;
 
@@ -81,7 +117,7 @@ void *tsearch(const void *key, void **rootp, int(*compar)(const void *, const vo
 		n = static_cast<struct node *>(n->a[c > 0]);
 	}
 
-	struct node *insert = static_cast<struct node*>(malloc(sizeof(struct node)));
+	struct node *insert = static_cast<struct node *>(malloc(sizeof(struct node)));
 	if (!insert)
 		return nullptr;
 	insert->key = key;
@@ -90,28 +126,29 @@ void *tsearch(const void *key, void **rootp, int(*compar)(const void *, const vo
 
 	(*nodes.top()) = insert;
 	nodes.pop();
-	while(nodes.size() && balance_tree(nodes.top())) nodes.pop();
+	while (nodes.size() && balance_tree(nodes.top()))
+		nodes.pop();
 	return insert;
 }
 
 // This implementation is taken from musl
 void *tfind(const void *key, void *const *rootp, int (*compar)(const void *, const void *)) {
-	if(!*rootp)
+	if (!*rootp)
 		return nullptr;
 
 	struct node *n = (struct node *)*rootp;
-	for(;;) {
-		if(!n)
+	for (;;) {
+		if (!n)
 			break;
 		int c = compar(key, n->key);
-		if(!c)
+		if (!c)
 			break;
 		n = (struct node *)n->a[c > 0];
 	}
 	return n;
 }
 
-void *tdelete(const void *key, void **rootp, int(*compar)(const void *, const void *)) {
+void *tdelete(const void *key, void **rootp, int (*compar)(const void *, const void *)) {
 	if (!*rootp)
 		return nullptr;
 
@@ -146,7 +183,8 @@ void *tdelete(const void *key, void **rootp, int(*compar)(const void *, const vo
 	// 3 cases:
 	// - no children, remove node
 	// - one child, replace node with it
-	// - two children, the predecessor replaces the node and balance up from the parent of the predecessor
+	// - two children, the predecessor replaces the node and balance up from the parent of the
+	// predecessor
 	switch (child_count) {
 		case 0:
 			nodes.pop();
@@ -189,7 +227,8 @@ void *tdelete(const void *key, void **rootp, int(*compar)(const void *, const vo
 	while (!nodes.empty() && balance_tree(nodes.top()))
 		nodes.pop();
 
-	// NOTE: this WILL return a dangling pointer. this is expected behaviour (see glibc's manual page)
+	// NOTE: this WILL return a dangling pointer. this is expected behaviour (see glibc's manual
+	// page)
 	return node_parent ? node_parent : n;
 }
 
@@ -208,7 +247,7 @@ void twalk(const void *root, void (*action)(const void *, VISIT, int)) {
 	struct walk_node wn = {node, VISIT::preorder};
 	nodes.push(wn);
 
-	while(!nodes.empty()) {
+	while (!nodes.empty()) {
 		wn = nodes.top();
 		nodes.pop();
 
@@ -247,8 +286,8 @@ void tdestroy(void *root, void (*free_node)(void *)) {
 	auto *n = static_cast<node *>(root);
 	frg::stack<node *, MemoryAllocator> nodes(getAllocator());
 
-	while(n || !nodes.empty()) {
-		if(n == nullptr) {
+	while (n || !nodes.empty()) {
+		if (n == nullptr) {
 			n = nodes.top();
 			nodes.pop();
 			free_node(const_cast<void *>(n->key));
@@ -262,8 +301,13 @@ void tdestroy(void *root, void (*free_node)(void *)) {
 	}
 }
 
-void *lsearch(const void *key, void *base, size_t *nelp, size_t width,
-		int (*compar)(const void *, const void *)) {
+void *lsearch(
+    const void *key,
+    void *base,
+    size_t *nelp,
+    size_t width,
+    int (*compar)(const void *, const void *)
+) {
 	(void)key;
 	(void)base;
 	(void)nelp;
@@ -273,8 +317,13 @@ void *lsearch(const void *key, void *base, size_t *nelp, size_t width,
 	__builtin_unreachable();
 }
 
-void *lfind(const void *key, const void *base, size_t *nelp,
-		size_t width, int (*compar)(const void *, const void *)) {
+void *lfind(
+    const void *key,
+    const void *base,
+    size_t *nelp,
+    size_t width,
+    int (*compar)(const void *, const void *)
+) {
 	(void)key;
 	(void)base;
 	(void)nelp;
@@ -285,20 +334,16 @@ void *lfind(const void *key, const void *base, size_t *nelp,
 }
 
 namespace {
-	hsearch_data globalTable {};
+hsearch_data globalTable{};
 } // namespace
 
-int hcreate(size_t num_entries) {
-	return mlibc::hcreate_r(num_entries, &globalTable);
-}
+int hcreate(size_t num_entries) { return mlibc::hcreate_r(num_entries, &globalTable); }
 
-void hdestroy(void) {
-	mlibc::hdestroy_r(&globalTable);
-}
+void hdestroy(void) { mlibc::hdestroy_r(&globalTable); }
 
 ENTRY *hsearch(ENTRY item, ACTION action) {
 	ENTRY *ret;
-	if(mlibc::hsearch_r(item, action, &ret, &globalTable) == 0) {
+	if (mlibc::hsearch_r(item, action, &ret, &globalTable) == 0) {
 		return nullptr;
 	}
 	return ret;

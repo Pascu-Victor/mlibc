@@ -1,20 +1,19 @@
 #ifndef MLIBC_LINUX_SYSDEPS
 #define MLIBC_LINUX_SYSDEPS
 
+#include <abi-bits/mode_t.h>
+#include <abi-bits/pid_t.h>
+#include <abi-bits/statx.h>
+#include <bits/off_t.h>
+#include <bits/size_t.h>
+#include <bits/ssize_t.h>
 #include <ifaddrs.h>
+#include <linux/capability.h>
+#include <poll.h>
 #include <sched.h>
 #include <stdarg.h>
 #include <sys/epoll.h>
-#include <sys/sysinfo.h>
 #include <sys/statfs.h>
-#include <poll.h>
-#include <linux/capability.h>
-#include <abi-bits/pid_t.h>
-#include <abi-bits/mode_t.h>
-#include <abi-bits/statx.h>
-#include <bits/off_t.h>
-#include <bits/ssize_t.h>
-#include <bits/size_t.h>
 
 namespace [[gnu::visibility("hidden")]] mlibc {
 
@@ -31,15 +30,21 @@ int sys_ioctl(int fd, unsigned long request, void *arg, int *result);
 [[gnu::weak]] int sys_inotify_rm_watch(int ifd, int wd);
 [[gnu::weak]] int sys_epoll_create(int flags, int *fd);
 [[gnu::weak]] int sys_epoll_ctl(int epfd, int mode, int fd, struct epoll_event *ev);
-[[gnu::weak]] int sys_epoll_pwait(int epfd, struct epoll_event *ev, int n,
-		int timeout, const sigset_t *sigmask, int *raised);
-[[gnu::weak]] int sys_mount(const char *source, const char *target,
-		const char *fstype, unsigned long flags, const void *data);
+[[gnu::weak]] int sys_epoll_pwait(
+    int epfd, struct epoll_event *ev, int n, int timeout, const sigset_t *sigmask, int *raised
+);
+[[gnu::weak]] int sys_mount(
+    const char *source,
+    const char *target,
+    const char *fstype,
+    unsigned long flags,
+    const void *data
+);
 [[gnu::weak]] int sys_umount2(const char *target, int flags);
 [[gnu::weak]] int sys_eventfd_create(unsigned int initval, int flags, int *fd);
 [[gnu::weak]] int sys_timerfd_create(int clockid, int flags, int *fd);
-[[gnu::weak]] int sys_timerfd_settime(int fd, int flags,
-		const struct itimerspec *value, struct itimerspec *oldvalue);
+[[gnu::weak]] int
+sys_timerfd_settime(int fd, int flags, const struct itimerspec *value, struct itimerspec *oldvalue);
 [[gnu::weak]] int sys_timerfd_gettime(int fd, struct itimerspec *its);
 [[gnu::weak]] int sys_signalfd_create(const sigset_t *, int flags, int *fd);
 [[gnu::weak]] int sys_reboot(int cmd);
@@ -56,26 +61,21 @@ int sys_ioctl(int fd, unsigned long request, void *arg, int *result);
 [[gnu::weak]] int sys_swapon(const char *path, int flags);
 [[gnu::weak]] int sys_swapoff(const char *path);
 
-[[gnu::weak]] int sys_setxattr(const char *path, const char *name,
-	const void *val, size_t size, int flags);
-[[gnu::weak]] int sys_lsetxattr(const char *path, const char *name,
-	const void *val, size_t size, int flags);
-[[gnu::weak]] int sys_fsetxattr(int fd, const char *name, const void *val,
-	size_t size, int flags);
+[[gnu::weak]] int
+sys_setxattr(const char *path, const char *name, const void *val, size_t size, int flags);
+[[gnu::weak]] int
+sys_lsetxattr(const char *path, const char *name, const void *val, size_t size, int flags);
+[[gnu::weak]] int sys_fsetxattr(int fd, const char *name, const void *val, size_t size, int flags);
 
-[[gnu::weak]] int sys_getxattr(const char *path, const char *name,
-	void *val, size_t size, ssize_t *nread);
-[[gnu::weak]] int sys_lgetxattr(const char *path, const char *name,
-	void *val, size_t size, ssize_t *nread);
-[[gnu::weak]] int sys_fgetxattr(int fd, const char *name, void *val,
-	size_t size, ssize_t *nread);
+[[gnu::weak]] int
+sys_getxattr(const char *path, const char *name, void *val, size_t size, ssize_t *nread);
+[[gnu::weak]] int
+sys_lgetxattr(const char *path, const char *name, void *val, size_t size, ssize_t *nread);
+[[gnu::weak]] int sys_fgetxattr(int fd, const char *name, void *val, size_t size, ssize_t *nread);
 
-[[gnu::weak]] int sys_listxattr(const char *path, char *list, size_t size,
-	ssize_t *nread);
-[[gnu::weak]] int sys_llistxattr(const char *path, char *list, size_t size,
-	ssize_t *nread);
-[[gnu::weak]] int sys_flistxattr(int fd, char *list, size_t size,
-	ssize_t *nread);
+[[gnu::weak]] int sys_listxattr(const char *path, char *list, size_t size, ssize_t *nread);
+[[gnu::weak]] int sys_llistxattr(const char *path, char *list, size_t size, ssize_t *nread);
+[[gnu::weak]] int sys_flistxattr(int fd, char *list, size_t size, ssize_t *nread);
 
 [[gnu::weak]] int sys_removexattr(const char *path, const char *name);
 [[gnu::weak]] int sys_lremovexattr(const char *path, const char *name);
@@ -84,7 +84,8 @@ int sys_ioctl(int fd, unsigned long request, void *arg, int *result);
 [[gnu::weak]] int sys_statfs(const char *path, struct statfs *buf);
 [[gnu::weak]] int sys_fstatfs(int fd, struct statfs *buf);
 
-[[gnu::weak]] int sys_statx(int dirfd, const char *pathname, int flags, unsigned int mask, struct statx *statxbuf);
+[[gnu::weak]] int
+sys_statx(int dirfd, const char *pathname, int flags, unsigned int mask, struct statx *statxbuf);
 
 [[gnu::weak]] int sys_getifaddrs(struct ifaddrs **);
 
@@ -97,14 +98,24 @@ int sys_ioctl(int fd, unsigned long request, void *arg, int *result);
 [[gnu::weak]] int sys_pidfd_getpid(int fd, pid_t *outpid);
 [[gnu::weak]] int sys_pidfd_send_signal(int pidfd, int sig, siginfo_t *info, unsigned int flags);
 
-[[gnu::weak]] int sys_process_vm_readv(pid_t pid,
-		const struct iovec *local_iov, unsigned long liovcnt,
-		const struct iovec *remote_iov, unsigned long riovcnt,
-		unsigned long flags, ssize_t *out);
-[[gnu::weak]] int sys_process_vm_writev(pid_t pid,
-		const struct iovec *local_iov, unsigned long liovcnt,
-		const struct iovec *remote_iov, unsigned long riovcnt,
-		unsigned long flags, ssize_t *out);
+[[gnu::weak]] int sys_process_vm_readv(
+    pid_t pid,
+    const struct iovec *local_iov,
+    unsigned long liovcnt,
+    const struct iovec *remote_iov,
+    unsigned long riovcnt,
+    unsigned long flags,
+    ssize_t *out
+);
+[[gnu::weak]] int sys_process_vm_writev(
+    pid_t pid,
+    const struct iovec *local_iov,
+    unsigned long liovcnt,
+    const struct iovec *remote_iov,
+    unsigned long riovcnt,
+    unsigned long flags,
+    ssize_t *out
+);
 
 } // namespace mlibc
 

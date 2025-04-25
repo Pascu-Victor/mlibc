@@ -10,7 +10,7 @@ void vwarn(const char *fmt, va_list params) {
 	fprintf(stderr, "%s: ", program_invocation_short_name);
 	if (fmt) {
 		vfprintf(stderr, fmt, params);
-                fwrite(": ", 1, 2, stderr);
+		fwrite(": ", 1, 2, stderr);
 	}
 	perror(nullptr);
 }

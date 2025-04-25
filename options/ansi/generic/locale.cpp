@@ -5,70 +5,64 @@
 
 #include <bits/ensure.h>
 
-#include <mlibc/debug.hpp>
 #include <frg/optional.hpp>
+#include <mlibc/debug.hpp>
 
 namespace {
-	// Values of the C locale are defined by the C standard.
-	constexpr lconv c_lconv = {
-		const_cast<char *>("."), // decimal_point
-		const_cast<char *>(""), // thousands_sep
-		const_cast<char *>(""), // grouping
-		const_cast<char *>(""), // mon_decimal_point
-		const_cast<char *>(""), // mon_thousands_sep
-		const_cast<char *>(""), // mon_grouping
-		const_cast<char *>(""), // positive_sign
-		const_cast<char *>(""), // negative_sign
-		const_cast<char *>(""), // currency_symbol
-		CHAR_MAX, // frac_digits
-		CHAR_MAX, // p_cs_precedes
-		CHAR_MAX, // n_cs_precedes
-		CHAR_MAX, // p_sep_by_space
-		CHAR_MAX, // n_sep_by_space
-		CHAR_MAX, // p_sign_posn
-		CHAR_MAX, // n_sign_posn
-		const_cast<char *>(""), // int_curr_symbol
-		CHAR_MAX, // int_frac_digits
-		CHAR_MAX, // int_p_cs_precedes
-		CHAR_MAX, // int_n_cs_precedes
-		CHAR_MAX, // int_p_sep_by_space
-		CHAR_MAX, // int_n_sep_by_space
-		CHAR_MAX, // int_p_sign_posn
-		CHAR_MAX // int_n_sign_posn
-	};
+// Values of the C locale are defined by the C standard.
+constexpr lconv c_lconv = {
+    const_cast<char *>("."), // decimal_point
+    const_cast<char *>(""),  // thousands_sep
+    const_cast<char *>(""),  // grouping
+    const_cast<char *>(""),  // mon_decimal_point
+    const_cast<char *>(""),  // mon_thousands_sep
+    const_cast<char *>(""),  // mon_grouping
+    const_cast<char *>(""),  // positive_sign
+    const_cast<char *>(""),  // negative_sign
+    const_cast<char *>(""),  // currency_symbol
+    CHAR_MAX,                // frac_digits
+    CHAR_MAX,                // p_cs_precedes
+    CHAR_MAX,                // n_cs_precedes
+    CHAR_MAX,                // p_sep_by_space
+    CHAR_MAX,                // n_sep_by_space
+    CHAR_MAX,                // p_sign_posn
+    CHAR_MAX,                // n_sign_posn
+    const_cast<char *>(""),  // int_curr_symbol
+    CHAR_MAX,                // int_frac_digits
+    CHAR_MAX,                // int_p_cs_precedes
+    CHAR_MAX,                // int_n_cs_precedes
+    CHAR_MAX,                // int_p_sep_by_space
+    CHAR_MAX,                // int_n_sep_by_space
+    CHAR_MAX,                // int_p_sign_posn
+    CHAR_MAX                 // int_n_sign_posn
+};
 } // namespace
 
 namespace mlibc {
-	struct locale_description {
-		// Identifier of this locale. used in setlocale().
-		const char *name;
-		lconv lc;
-	};
+struct locale_description {
+	// Identifier of this locale. used in setlocale().
+	const char *name;
+	lconv lc;
+};
 
-	constinit const locale_description c_locale{
-		.name = "C",
-		.lc = c_lconv
-	};
+constinit const locale_description c_locale{.name = "C", .lc = c_lconv};
 
-	constinit const locale_description posix_locale{
-		.name = "POSIX",
-		.lc = c_lconv
-	};
+constinit const locale_description posix_locale{.name = "POSIX", .lc = c_lconv};
 
-	const locale_description *query_locale_description(const char *name) {
-		if(!strcmp(name, "C"))
-			return &c_locale;
-		if(!strcmp(name, "POSIX"))
-			return &posix_locale;
-		return nullptr;
-	}
+const locale_description *query_locale_description(const char *name) {
+	if (!strcmp(name, "C"))
+		return &c_locale;
+	if (!strcmp(name, "POSIX"))
+		return &posix_locale;
+	return nullptr;
+}
 
-	const locale_description *collate_facet;
-	const locale_description *ctype_facet;
-	const locale_description *monetary_facet;
-	const locale_description *numeric_facet;
-	const locale_description *time_facet;
-	const locale_description *messages_facet;
+const locale_description *collate_facet;
+const locale_description *ctype_facet;
+const locale_description *monetary_facet;
+const locale_description *numeric_facet;
+const locale_description *time_facet;
+const locale_description *messages_facet;
 } // namespace mlibc
 
 [[gnu::constructor]]
@@ -82,7 +76,7 @@ static void init_locale() {
 }
 
 char *setlocale(int category, const char *name) {
-	if(category == LC_ALL) {
+	if (category == LC_ALL) {
 		// ´TODO: Implement correct return value when categories differ.
 		auto current_desc = mlibc::collate_facet;
 		__ensure(current_desc == mlibc::ctype_facet);
@@ -91,15 +85,15 @@ char *setlocale(int category, const char *name) {
 		__ensure(current_desc == mlibc::time_facet);
 		__ensure(current_desc == mlibc::messages_facet);
 
-		if(name) {
+		if (name) {
 			// Our default C locale is the C locale.
-			if(!strlen(name))
+			if (!strlen(name))
 				name = "C";
 
 			auto new_desc = mlibc::query_locale_description(name);
-			if(!new_desc) {
-				mlibc::infoLogger() << "mlibc: Locale " << name
-						<< " is not supported" << frg::endlog;
+			if (!new_desc) {
+				mlibc::infoLogger()
+				    << "mlibc: Locale " << name << " is not supported" << frg::endlog;
 				return nullptr;
 			}
 
@@ -111,43 +105,43 @@ char *setlocale(int category, const char *name) {
 			mlibc::messages_facet = new_desc;
 		}
 		return const_cast<char *>(current_desc->name);
-	}else{
+	} else {
 		const mlibc::locale_description **facet_ptr;
-		switch(category) {
-		case LC_COLLATE:
-			facet_ptr = &mlibc::collate_facet;
-			break;
-		case LC_CTYPE:
-			facet_ptr = &mlibc::ctype_facet;
-			break;
-		case LC_MONETARY:
-			facet_ptr = &mlibc::monetary_facet;
-			break;
-		case LC_NUMERIC:
-			facet_ptr = &mlibc::numeric_facet;
-			break;
-		case LC_TIME:
-			facet_ptr = &mlibc::time_facet;
-			break;
-		case LC_MESSAGES:
-			facet_ptr = &mlibc::messages_facet;
-			break;
-		default:
-			mlibc::infoLogger() << "mlibc: Unexpected value " << category
-					<< " for category in setlocale()" << frg::endlog;
-			return nullptr;
+		switch (category) {
+			case LC_COLLATE:
+				facet_ptr = &mlibc::collate_facet;
+				break;
+			case LC_CTYPE:
+				facet_ptr = &mlibc::ctype_facet;
+				break;
+			case LC_MONETARY:
+				facet_ptr = &mlibc::monetary_facet;
+				break;
+			case LC_NUMERIC:
+				facet_ptr = &mlibc::numeric_facet;
+				break;
+			case LC_TIME:
+				facet_ptr = &mlibc::time_facet;
+				break;
+			case LC_MESSAGES:
+				facet_ptr = &mlibc::messages_facet;
+				break;
+			default:
+				mlibc::infoLogger() << "mlibc: Unexpected value " << category
+				                    << " for category in setlocale()" << frg::endlog;
+				return nullptr;
 		}
 
 		auto current_desc = *facet_ptr;
-		if(name) {
+		if (name) {
 			// Our default C locale is the C locale.
-			if(!strlen(name))
+			if (!strlen(name))
 				name = "C";
 
 			auto new_desc = mlibc::query_locale_description(name);
-			if(!new_desc) {
-				mlibc::infoLogger() << "mlibc: Locale " << name
-						<< " is not supported" << frg::endlog;
+			if (!new_desc) {
+				mlibc::infoLogger()
+				    << "mlibc: Locale " << name << " is not supported" << frg::endlog;
 				return nullptr;
 			}
 
@@ -158,7 +152,7 @@ char *setlocale(int category, const char *name) {
 }
 
 namespace {
-	lconv effective_lc;
+lconv effective_lc;
 } // namespace
 
 struct lconv *localeconv(void) {

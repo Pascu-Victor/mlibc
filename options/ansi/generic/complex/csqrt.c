@@ -28,7 +28,7 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- * imported and modified include for newlib 2010/10/03 
+ * imported and modified include for newlib 2010/10/03
  * Marco Atzeri <marco_atzeri@yahoo.it>
  */
 
@@ -48,14 +48,14 @@ SYNOPSIS
 
 
 DESCRIPTION
-        These functions compute the complex square root of <[z]>, with 
-        a branch cut along the negative real axis. 
+        These functions compute the complex square root of <[z]>, with
+        a branch cut along the negative real axis.
 
         <<csqrtf>> is identical to <<csqrt>>, except that it performs
         its calculations on <<floats complex>>.
 
 RETURNS
-        The csqrt functions return the complex square root value, in 
+        The csqrt functions return the complex square root value, in
         the range of the right halfplane (including the imaginary axis).
 
 PORTABILITY
@@ -66,18 +66,15 @@ QUICKREF
 
 */
 
-
 #include <complex.h>
 #include <math.h>
 
-double complex
-csqrt(double complex z)
-{
+double complex csqrt(double complex z) {
 	double complex w;
 	double x, y, r, t, scale;
 
-	x = creal (z);
-	y = cimag (z);
+	x = creal(z);
+	y = cimag(z);
 
 	if (y == 0.0) {
 		if (x == 0.0) {
@@ -109,7 +106,7 @@ csqrt(double complex z)
 		scale = 2.0;
 	} else {
 #if 1
-		x *= 1.8014398509481984e16;  /* 2^54 */
+		x *= 1.8014398509481984e16; /* 2^54 */
 		y *= 1.8014398509481984e16;
 		scale = 7.450580596923828125e-9; /* 2^-27 */
 #else
@@ -122,7 +119,7 @@ csqrt(double complex z)
 	r = cabs(w);
 	if (x > 0) {
 		t = sqrt(0.5 * r + 0.5 * x);
-		r = scale * fabs((0.5 * y) / t );
+		r = scale * fabs((0.5 * y) / t);
 		t *= scale;
 	} else {
 		r = sqrt(0.5 * r - 0.5 * x);

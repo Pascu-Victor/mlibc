@@ -22,44 +22,44 @@ extern "C" {
 #endif
 
 /* Argument for signal() */
-typedef void (*__sighandler) (int);
+typedef void (*__sighandler)(int);
 
 #define SIG_ERR ((__sighandler)(void *)(-1))
 #define SIG_DFL ((__sighandler)(void *)(-2))
 #define SIG_IGN ((__sighandler)(void *)(-3))
 
-#define SIGHUP     1
-#define SIGINT     2
-#define SIGQUIT    3
-#define SIGCONT    4
-#define SIGBUS     5
-#define SIGABRT    6
-#define SIGCHLD    7
-#define SIGFPE     8
-#define SIGKILL    9
-#define SIGILL    10
-#define SIGPIPE   11
-#define SIGSEGV   12
-#define SIGSTOP   13
-#define SIGALRM   14
-#define SIGTERM   15
-#define SIGTSTP   16
-#define SIGTTIN   17
-#define SIGTTOU   18
-#define SIGUSR1   19
-#define SIGUSR2   20
-#define SIGIO     21
-#define SIGPOLL   SIGIO
-#define SIGPROF   22
-#define SIGSYS    23
+#define SIGHUP 1
+#define SIGINT 2
+#define SIGQUIT 3
+#define SIGCONT 4
+#define SIGBUS 5
+#define SIGABRT 6
+#define SIGCHLD 7
+#define SIGFPE 8
+#define SIGKILL 9
+#define SIGILL 10
+#define SIGPIPE 11
+#define SIGSEGV 12
+#define SIGSTOP 13
+#define SIGALRM 14
+#define SIGTERM 15
+#define SIGTSTP 16
+#define SIGTTIN 17
+#define SIGTTOU 18
+#define SIGUSR1 19
+#define SIGUSR2 20
+#define SIGIO 21
+#define SIGPOLL SIGIO
+#define SIGPROF 22
+#define SIGSYS 23
 #define SIGCANCEL SIGSYS
-#define SIGTRAP   24
-#define SIGURG    25
+#define SIGTRAP 24
+#define SIGURG 25
 #define SIGVTALRM 26
-#define SIGXCPU   27
-#define SIGXFSZ   28
-#define SIGWINCH  29
-#define SIGPWR    30
+#define SIGXCPU 27
+#define SIGXFSZ 28
+#define SIGWINCH 29
+#define SIGPWR 30
 
 /* siginfo->si_info constants */
 /* SIGBUS */
@@ -106,9 +106,9 @@ typedef long sigset_t;
 #define SS_DISABLE 2
 
 typedef struct __stack {
-        void *ss_sp;
-        size_t ss_size;
-        int ss_flags;
+	void *ss_sp;
+	size_t ss_size;
+	int ss_flags;
 } stack_t;
 
 /* constants for sigev_notify of struct sigevent */

@@ -1,13 +1,13 @@
+#include <ctype.h>
+#include <errno.h>
+#include <mlibc/debug.hpp>
 #include <mlibc/services.hpp>
 #include <netdb.h>
-#include <stdio.h>
-#include <errno.h>
-#include <string.h>
-#include <stdlib.h>
-#include <ctype.h>
-#include <sys/socket.h>
 #include <netinet/in.h>
-#include <mlibc/debug.hpp>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/socket.h>
 
 namespace mlibc {
 
@@ -26,7 +26,7 @@ static int parse_rest(service_buf &buf, char *end, int proto) {
 		return 0;
 	}
 
-	//TODO(geert): also parse aliases.
+	// TODO(geert): also parse aliases.
 
 	return 1;
 }
@@ -46,7 +46,7 @@ static int lookup_serv_file_port(service_result &buf, int proto, int port) {
 
 	char line_buf[129] = {0};
 	char *line = line_buf + 1;
-	while(fgets(line, 128, file)) {
+	while (fgets(line, 128, file)) {
 		int name_length = 0;
 		char *pos;
 		// easy way to handle comments, just move the end of the line
@@ -58,7 +58,8 @@ static int lookup_serv_file_port(service_result &buf, int proto, int port) {
 
 		char *end = nullptr;
 		for (pos = line; *pos; pos++) {
-			for (; isalpha(*pos); pos++);
+			for (; isalpha(*pos); pos++)
+				;
 			int rport = strtoul(pos, &end, 10);
 			if (rport != port || rport > 65535) {
 				pos = end;
@@ -68,7 +69,7 @@ static int lookup_serv_file_port(service_result &buf, int proto, int port) {
 			// We have found the port, time to rewind to the start
 			// of the line.
 			for (; pos[-1]; pos--)
-				if(!isspace(pos[-1]))
+				if (!isspace(pos[-1]))
 					name_length++;
 			break;
 		}
@@ -79,8 +80,7 @@ static int lookup_serv_file_port(service_result &buf, int proto, int port) {
 		if (!name_length)
 			continue;
 
-		auto name = frg::string<MemoryAllocator>(pos, name_length,
-				getAllocator());
+		auto name = frg::string<MemoryAllocator>(pos, name_length, getAllocator());
 
 		struct service_buf sbuf = {};
 		sbuf.port = port;
@@ -94,8 +94,7 @@ static int lookup_serv_file_port(service_result &buf, int proto, int port) {
 	return buf.size();
 }
 
-static int lookup_serv_file_name(service_result &buf, const char *name,
-		int proto) {
+static int lookup_serv_file_name(service_result &buf, const char *name, int proto) {
 	auto file = fopen(_PATH_SERVICES, "r");
 	if (!file) {
 		switch (errno) {
@@ -110,7 +109,7 @@ static int lookup_serv_file_name(service_result &buf, const char *name,
 
 	char line[128];
 	int name_length = strlen(name);
-	while(fgets(line, 128, file)) {
+	while (fgets(line, 128, file)) {
 		char *pos;
 		// easy way to handle comments, just move the end of the line
 		// to the beginning of the comment
@@ -131,7 +130,7 @@ static int lookup_serv_file_name(service_result &buf, const char *name,
 			continue;
 
 		// Skip the name at the beginning of the line.
-		for(pos = line; *pos && !isspace(*pos); pos++)
+		for (pos = line; *pos && !isspace(*pos); pos++)
 			;
 
 		char *end = nullptr;
@@ -146,19 +145,16 @@ static int lookup_serv_file_name(service_result &buf, const char *name,
 			continue;
 
 		buf.push_back(sbuf);
-
 	}
 
 	fclose(file);
 	return buf.size();
 }
 
-
 // This function returns a negative error code, since a positive
 // return code means success.
-int lookup_serv_by_name(service_result &buf, const char *name, int proto,
-		int socktype, int flags) {
-	switch(socktype) {
+int lookup_serv_by_name(service_result &buf, const char *name, int proto, int socktype, int flags) {
+	switch (socktype) {
 		case SOCK_STREAM:
 			if (!proto)
 				proto = IPPROTO_TCP;

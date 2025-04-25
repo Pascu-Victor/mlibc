@@ -637,7 +637,8 @@ def parse(file: pathlib.Path, base_dir: pathlib.Path):
     try:
         tu = index.parse(
             base_dir / file,
-            args=[f"-I{p}" for p in config["includes"]] + ["-I" + str(base_dir), "-D_GNU_SOURCE"],
+            args=[f"-I{p}" for p in config["includes"]]
+            + ["-I" + str(base_dir), "-D_GNU_SOURCE"],
             options=clang.cindex.TranslationUnit.PARSE_DETAILED_PROCESSING_RECORD
             | clang.cindex.TranslationUnit.PARSE_SKIP_FUNCTION_BODIES,
         )
@@ -662,14 +663,13 @@ def parse(file: pathlib.Path, base_dir: pathlib.Path):
 def gcc_install_path(gcc: str) -> pathlib.Path | None:
     try:
         result = subprocess.run(
-            [gcc, '-print-search-dirs'],
-            capture_output=True,
-            text=True,
-            check=True
+            [gcc, "-print-search-dirs"], capture_output=True, text=True, check=True
         )
         for line in result.stdout.splitlines():
-            if line.startswith('install:'):
-                return (pathlib.Path(line.removeprefix('install: ').strip()) / 'include').resolve()
+            if line.startswith("install:"):
+                return (
+                    pathlib.Path(line.removeprefix("install: ").strip()) / "include"
+                ).resolve()
     except subprocess.CalledProcessError as e:
         print(f"Error running {gcc}:", e)
     except FileNotFoundError:
@@ -690,7 +690,9 @@ if __name__ == "__main__":
 
     colorama.just_fix_windows_console()
 
-    with io.open(os.path.join(os.path.dirname(__file__), "rust-libc-config.yml"), "r") as f:
+    with io.open(
+        os.path.join(os.path.dirname(__file__), "rust-libc-config.yml"), "r"
+    ) as f:
         config = yaml.load(f, yaml.CSafeLoader)
 
     path = pathlib.Path(args.path)
@@ -700,12 +702,16 @@ if __name__ == "__main__":
         print("could not determine gcc's include directory")
         exit(1)
 
-    gcc_include_path = os.path.relpath(pathlib.Path(gcc_include_path), pathlib.Path.cwd())
+    gcc_include_path = os.path.relpath(
+        pathlib.Path(gcc_include_path), pathlib.Path.cwd()
+    )
     if "includes" not in config:
-            config["includes"] = list()
+        config["includes"] = list()
     config["includes"].insert(0, gcc_include_path)
 
-    with io.open(os.path.join(os.path.dirname(__file__), "rust-libc-header.rs"), "r") as f:
+    with io.open(
+        os.path.join(os.path.dirname(__file__), "rust-libc-header.rs"), "r"
+    ) as f:
         emit(f.read())
 
     state = State()

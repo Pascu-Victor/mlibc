@@ -1,6 +1,6 @@
-#include <semaphore.h>
 #include <assert.h>
 #include <errno.h>
+#include <semaphore.h>
 
 int main() {
 	sem_t sem;

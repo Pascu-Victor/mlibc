@@ -28,7 +28,7 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- * imported and modified include for newlib 2010/10/03 
+ * imported and modified include for newlib 2010/10/03
  * Marco Atzeri <marco_atzeri@yahoo.it>
  */
 
@@ -64,20 +64,17 @@ QUICKREF
 
 */
 
-
 #include <complex.h>
 #include <math.h>
 
-double complex
-ctanh(double complex z)
-{
+double complex ctanh(double complex z) {
 	double complex w;
 	double x, y, d;
 
 	x = creal(z);
 	y = cimag(z);
 	d = cosh(2.0 * x) + cos(2.0 * y);
-	w = sinh(2.0 * x) / d  +  (sin(2.0 * y) / d) * I;
+	w = sinh(2.0 * x) / d + (sin(2.0 * y) / d) * I;
 
 	return w;
 }

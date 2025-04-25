@@ -1,51 +1,53 @@
+#include <bits/ensure.h>
+#include <mlibc/debug.hpp>
 #include <mlibc/lookup.hpp>
 #include <mlibc/resolv_conf.hpp>
-#include <mlibc/debug.hpp>
 #include <mlibc/services.hpp>
-#include <bits/ensure.h>
 
+#include <arpa/inet.h>
+#include <ctype.h>
+#include <errno.h>
+#include <frg/scope_exit.hpp>
 #include <frg/string.hpp>
 #include <mlibc/allocator.hpp>
+#include <mlibc/ansi-sysdeps.hpp>
+#include <poll.h>
+#include <stdio.h>
 #include <string.h>
 #include <sys/socket.h>
-#include <errno.h>
-#include <arpa/inet.h>
-#include <unistd.h>
-#include <stdio.h>
-#include <ctype.h>
-#include <poll.h>
-#include <frg/scope_exit.hpp>
-#include <mlibc/ansi-sysdeps.hpp>
 #include <time.h>
+#include <unistd.h>
 
 namespace mlibc {
 
 namespace {
-	constexpr unsigned short RETURN_NOERROR [[maybe_unused]] = 0x0;
-	constexpr unsigned short RETURN_NXDOMAIN = 0x3;
+constexpr unsigned short RETURN_NOERROR [[maybe_unused]] = 0x0;
+constexpr unsigned short RETURN_NXDOMAIN = 0x3;
 
-	constexpr unsigned int RECORD_A = 1;
-	constexpr unsigned int RECORD_CNAME = 5;
-	constexpr unsigned int RECORD_PTR = 12;
-	constexpr unsigned int RECORD_AAAA = 28;
+constexpr unsigned int RECORD_A = 1;
+constexpr unsigned int RECORD_CNAME = 5;
+constexpr unsigned int RECORD_PTR = 12;
+constexpr unsigned int RECORD_AAAA = 28;
 
-	int get_poll_timeout(struct timespec *original_time) {
-		struct timespec current_time;
-		if (int e = mlibc::sys_clock_get(CLOCK_MONOTONIC, &current_time.tv_sec, &current_time.tv_nsec); e)
-			mlibc::panicLogger() << "mlibc: sys_clock_get() failed with error code: " << e << frg::endlog;
+int get_poll_timeout(struct timespec *original_time) {
+	struct timespec current_time;
+	if (int e = mlibc::sys_clock_get(CLOCK_MONOTONIC, &current_time.tv_sec, &current_time.tv_nsec);
+	    e)
+		mlibc::panicLogger() << "mlibc: sys_clock_get() failed with error code: " << e
+		                     << frg::endlog;
 
-		current_time.tv_sec -= original_time->tv_sec;
-		current_time.tv_nsec -= original_time->tv_nsec;
-		if (current_time.tv_nsec < 0) {
-			--current_time.tv_sec;
-			current_time.tv_nsec = 1000000000 + current_time.tv_nsec;
-		}
-
-		// poll timeout unit is msec
-		// default timeout is 5 seconds
-		// TODO resolv.conf can specify a timeout and we ignore it currently.
-		return frg::max(5000l - (current_time.tv_sec * 1000 + current_time.tv_nsec / 1000000), 0l);
+	current_time.tv_sec -= original_time->tv_sec;
+	current_time.tv_nsec -= original_time->tv_nsec;
+	if (current_time.tv_nsec < 0) {
+		--current_time.tv_sec;
+		current_time.tv_nsec = 1000000000 + current_time.tv_nsec;
 	}
+
+	// poll timeout unit is msec
+	// default timeout is 5 seconds
+	// TODO resolv.conf can specify a timeout and we ignore it currently.
+	return frg::max(5000l - (current_time.tv_sec * 1000 + current_time.tv_nsec / 1000000), 0l);
+}
 } // namespace
 
 static frg::string<MemoryAllocator> read_dns_name(char *buf, char *&it) {
@@ -74,8 +76,12 @@ static frg::string<MemoryAllocator> read_dns_name(char *buf, char *&it) {
 	return res;
 }
 
-int lookup_name_dns(struct lookup_result &buf, const char *name,
-		frg::string<MemoryAllocator> &canon_name, int family) {
+int lookup_name_dns(
+    struct lookup_result &buf,
+    const char *name,
+    frg::string<MemoryAllocator> &canon_name,
+    int family
+) {
 	frg::string<MemoryAllocator> request{getAllocator()};
 
 	int num_q = 1;
@@ -135,14 +141,13 @@ int lookup_name_dns(struct lookup_result &buf, const char *name,
 		return -EAI_SYSTEM;
 	}
 
-	frg::scope_exit close_fd{[&] {
-		close(fd);
-	}};
+	frg::scope_exit close_fd{[&] { close(fd); }};
 
-	size_t sent = sendto(fd, request.data(), request.size(), 0,
-			(struct sockaddr*)&sin, sizeof(sin));
+	size_t sent =
+	    sendto(fd, request.data(), request.size(), 0, (struct sockaddr *)&sin, sizeof(sin));
 	if (sent != request.size()) {
-		mlibc::infoLogger() << "lookup_name_dns(): sendto() failed to send everything" << frg::endlog;
+		mlibc::infoLogger() << "lookup_name_dns(): sendto() failed to send everything"
+		                    << frg::endlog;
 		return -EAI_SYSTEM;
 	}
 
@@ -156,7 +161,8 @@ int lookup_name_dns(struct lookup_result &buf, const char *name,
 	pollfd.events = POLLIN;
 
 	if (int e = mlibc::sys_clock_get(CLOCK_MONOTONIC, &start_time.tv_sec, &start_time.tv_nsec); e)
-		mlibc::panicLogger() << "mlibc: sys_clock_get() failed with error code: " << e << frg::endlog;
+		mlibc::panicLogger() << "mlibc: sys_clock_get() failed with error code: " << e
+		                     << frg::endlog;
 
 	while ((fds_ready = poll(&pollfd, 1, get_poll_timeout(&start_time))) > 0) {
 		ssize_t rlen = recvfrom(fd, response, 256, 0, nullptr, nullptr);
@@ -168,7 +174,7 @@ int lookup_name_dns(struct lookup_result &buf, const char *name,
 		if ((size_t)rlen < sizeof(struct dns_header))
 			continue;
 
-		auto response_header = reinterpret_cast<struct dns_header*>(response);
+		auto response_header = reinterpret_cast<struct dns_header *>(response);
 		if (response_header->identification != header.identification)
 			return -EAI_FAIL;
 
@@ -178,7 +184,7 @@ int lookup_name_dns(struct lookup_result &buf, const char *name,
 		auto it = response + sizeof(struct dns_header);
 		for (int i = 0; i < ntohs(response_header->no_q); i++) {
 			auto dns_name = read_dns_name(response, it);
-			(void) dns_name;
+			(void)dns_name;
 			it += 4;
 		}
 
@@ -218,8 +224,8 @@ int lookup_name_dns(struct lookup_result &buf, const char *name,
 					buf.aliases.push(std::move(dns_name));
 					break;
 				default:
-					mlibc::infoLogger() << "lookup_name_dns: unknown rr type "
-						<< rr_type << frg::endlog;
+					mlibc::infoLogger()
+					    << "lookup_name_dns: unknown rr type " << rr_type << frg::endlog;
 					break;
 			}
 		}
@@ -251,8 +257,8 @@ int lookup_addr_dns(frg::span<char> name, frg::array<uint8_t, 16> &addr, int fam
 	memcpy(request.data(), &header, sizeof(header));
 
 	char addr_str[64];
-	if(!inet_ntop(family, addr.data(), addr_str, sizeof(addr_str))) {
-		switch(errno) {
+	if (!inet_ntop(family, addr.data(), addr_str, sizeof(addr_str))) {
+		switch (errno) {
 			case EAFNOSUPPORT:
 				return -EAI_FAMILY;
 			case ENOSPC:
@@ -273,7 +279,7 @@ int lookup_addr_dns(frg::span<char> name, frg::array<uint8_t, 16> &addr, int fam
 		request += char(length);
 		request += substring;
 		ptr = next + 1;
-	} while(ptr != 0);
+	} while (ptr != 0);
 
 	request += char(0);
 	// set question type to fetch PTR records
@@ -306,15 +312,14 @@ int lookup_addr_dns(frg::span<char> name, frg::array<uint8_t, 16> &addr, int fam
 		return -EAI_SYSTEM;
 	}
 
-	frg::scope_exit close_fd{[&] {
-		close(fd);
-	}};
+	frg::scope_exit close_fd{[&] { close(fd); }};
 
-	size_t sent = sendto(fd, request.data(), request.size(), 0,
-			(struct sockaddr*)&sin, sizeof(sin));
+	size_t sent =
+	    sendto(fd, request.data(), request.size(), 0, (struct sockaddr *)&sin, sizeof(sin));
 
 	if (sent != request.size()) {
-		mlibc::infoLogger() << "lookup_name_dns(): sendto() failed to send everything" << frg::endlog;
+		mlibc::infoLogger() << "lookup_name_dns(): sendto() failed to send everything"
+		                    << frg::endlog;
 		return -EAI_SYSTEM;
 	}
 
@@ -328,7 +333,8 @@ int lookup_addr_dns(frg::span<char> name, frg::array<uint8_t, 16> &addr, int fam
 	pollfd.events = POLLIN;
 
 	if (int e = mlibc::sys_clock_get(CLOCK_MONOTONIC, &start_time.tv_sec, &start_time.tv_nsec); e)
-		mlibc::panicLogger() << "mlibc: sys_clock_get() failed with error code: " << e << frg::endlog;
+		mlibc::panicLogger() << "mlibc: sys_clock_get() failed with error code: " << e
+		                     << frg::endlog;
 
 	while ((fds_ready = poll(&pollfd, 1, get_poll_timeout(&start_time))) > 0) {
 		ssize_t rlen = recvfrom(fd, response, 256, 0, nullptr, nullptr);
@@ -340,14 +346,14 @@ int lookup_addr_dns(frg::span<char> name, frg::array<uint8_t, 16> &addr, int fam
 		if ((size_t)rlen < sizeof(struct dns_header))
 			continue;
 
-		auto response_header = reinterpret_cast<struct dns_header*>(response);
+		auto response_header = reinterpret_cast<struct dns_header *>(response);
 		if (response_header->identification != header.identification)
 			return -EAI_FAIL;
 
 		auto it = response + sizeof(struct dns_header);
 		for (int i = 0; i < ntohs(response_header->no_q); i++) {
 			auto dns_name = read_dns_name(response, it);
-			(void) dns_name;
+			(void)dns_name;
 			it += 4;
 		}
 
@@ -374,8 +380,8 @@ int lookup_addr_dns(frg::span<char> name, frg::array<uint8_t, 16> &addr, int fam
 					return 1;
 				}
 				default:
-					mlibc::infoLogger() << "lookup_addr_dns: unknown rr type "
-						<< rr_type << frg::endlog;
+					mlibc::infoLogger()
+					    << "lookup_addr_dns: unknown rr type " << rr_type << frg::endlog;
 					break;
 			}
 			num_ans += ntohs(response_header->no_ans);
@@ -391,8 +397,12 @@ int lookup_addr_dns(frg::span<char> name, frg::array<uint8_t, 16> &addr, int fam
 	return 0;
 }
 
-int lookup_name_hosts(struct lookup_result &buf, const char *name,
-		frg::string<MemoryAllocator> &canon_name, int family) {
+int lookup_name_hosts(
+    struct lookup_result &buf,
+    const char *name,
+    frg::string<MemoryAllocator> &canon_name,
+    int family
+) {
 	auto file = fopen("/etc/hosts", "r");
 	if (!file) {
 		switch (errno) {
@@ -415,41 +425,49 @@ int lookup_name_hosts(struct lookup_result &buf, const char *name,
 			*pos = '\0';
 		}
 
-		for(pos = line + 1; (pos = strstr(pos, name)) &&
-				(!isspace(pos[-1]) || !isspace(pos[name_length])); pos++);
+		for (pos = line + 1;
+		     (pos = strstr(pos, name)) && (!isspace(pos[-1]) || !isspace(pos[name_length]));
+		     pos++)
+			;
 		if (!pos)
 			continue;
 
-		for (pos = line; !isspace(*pos); pos++);
+		for (pos = line; !isspace(*pos); pos++)
+			;
 		*pos = '\0';
 
 		struct dns_addr_buf buffer;
 
 		if ((family == AF_UNSPEC || family == AF_INET) && inet_pton(AF_INET, line, buffer.addr)) {
 			buffer.family = AF_INET;
-		} else if((family == AF_UNSPEC || family == AF_INET6) && inet_pton(AF_INET6, line, buffer.addr)) {
+		} else if ((family == AF_UNSPEC || family == AF_INET6)
+		           && inet_pton(AF_INET6, line, buffer.addr)) {
 			buffer.family = AF_INET6;
 		} else {
 			continue; // not a valid address
 		}
 
 		pos++;
-		for(; *pos && isspace(*pos); pos++);
+		for (; *pos && isspace(*pos); pos++)
+			;
 		char *end;
-		for(end = pos; *end && !isspace(*end); end++);
+		for (end = pos; *end && !isspace(*end); end++)
+			;
 
-		buffer.name = frg::string<MemoryAllocator>{pos,
-			static_cast<size_t>(end - pos), getAllocator()};
+		buffer.name =
+		    frg::string<MemoryAllocator>{pos, static_cast<size_t>(end - pos), getAllocator()};
 		canon_name = buffer.name;
 
 		buf.buf.push(std::move(buffer));
 
 		pos = end;
 		while (pos[1]) {
-			for (; *pos && isspace(*pos); pos++);
-			for (end = pos; *end && !isspace(*end); end++);
-			auto name = frg::string<MemoryAllocator>{pos,
-				static_cast<size_t>(end - pos), getAllocator()};
+			for (; *pos && isspace(*pos); pos++)
+				;
+			for (end = pos; *end && !isspace(*end); end++)
+				;
+			auto name =
+			    frg::string<MemoryAllocator>{pos, static_cast<size_t>(end - pos), getAllocator()};
 			buf.aliases.push(std::move(name));
 			pos = end;
 		}
@@ -474,8 +492,8 @@ int lookup_addr_hosts(frg::span<char> name, frg::array<uint8_t, 16> &addr, int f
 
 	// Buffer to hold ASCII version of address
 	char addr_str[64];
-	if(!inet_ntop(family, addr.data(), addr_str, sizeof(addr_str))) {
-		switch(errno) {
+	if (!inet_ntop(family, addr.data(), addr_str, sizeof(addr_str))) {
+		switch (errno) {
 			case EAFNOSUPPORT:
 				return -EAI_FAMILY;
 			case ENOSPC:
@@ -497,9 +515,11 @@ int lookup_addr_hosts(frg::span<char> name, frg::array<uint8_t, 16> &addr, int f
 		if (strncmp(line, addr_str, addr_str_len))
 			continue;
 
-		for (pos = line + addr_str_len + 1; isspace(*pos); pos++);
+		for (pos = line + addr_str_len + 1; isspace(*pos); pos++)
+			;
 		char *begin = pos;
-		for (; !isspace(*pos); pos++);
+		for (; !isspace(*pos); pos++)
+			;
 		char *end = pos;
 
 		size_t size = end - begin;

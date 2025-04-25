@@ -94,7 +94,7 @@ jobs:
           [binaries]
           c = 'gcc'
           cpp = 'g++'
-          
+
           [host_machine]
           system = 'linux'
           cpu_family = 'x86_64'

@@ -3,24 +3,15 @@
 
 #include <stdio.h>
 
-#include <mlibc/lock.hpp>
-#include <mlibc/allocator.hpp>
 #include <frg/list.hpp>
+#include <mlibc/allocator.hpp>
+#include <mlibc/lock.hpp>
 
 namespace mlibc {
 
-enum class stream_type {
-	unknown,
-	file_like,
-	pipe_like
-};
+enum class stream_type { unknown, file_like, pipe_like };
 
-enum class buffer_mode {
-	unknown,
-	no_buffer,
-	line_buffer,
-	full_buffer
-};
+enum class buffer_mode { unknown, no_buffer, line_buffer, full_buffer };
 struct StdioLock {
 	bool uselock = true;
 	RecursiveFutexLock futexlock;
@@ -28,7 +19,6 @@ struct StdioLock {
 		if (uselock) {
 			futexlock.lock();
 		}
-
 	}
 	void unlock() {
 		if (uselock) {
@@ -47,7 +37,7 @@ public:
 
 	abstract_file(const abstract_file &) = delete;
 
-	abstract_file &operator= (const abstract_file &) = delete;
+	abstract_file &operator=(const abstract_file &) = delete;
 
 	virtual ~abstract_file();
 
@@ -76,6 +66,7 @@ protected:
 	virtual int io_seek(off_t offset, int whence, off_t *new_offset) = 0;
 
 	int _reset();
+
 private:
 	int _init_type();
 	int _init_bufmode();

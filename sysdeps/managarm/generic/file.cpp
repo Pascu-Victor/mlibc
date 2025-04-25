@@ -444,9 +444,9 @@ int sys_fcntl(int fd, int request, va_list args, int *result) {
 		managarm::fs::SvrResponse<MemoryAllocator> resp(getSysdepsAllocator());
 		resp.ParseFromArray(recv_resp.data(), recv_resp.length());
 		if (resp.error() == managarm::fs::Errors::ILLEGAL_OPERATION_TARGET) {
-			mlibc::infoLogger(
-			) << "\e[31mmlibc: fcntl(F_ADD_SEALS) unimplemented for this file\e[39m"
-			  << frg::endlog;
+			mlibc::infoLogger()
+			    << "\e[31mmlibc: fcntl(F_ADD_SEALS) unimplemented for this file\e[39m"
+			    << frg::endlog;
 			return EINVAL;
 		} else if (resp.error() != managarm::fs::Errors::SUCCESS) {
 			return resp.error() | toErrno;
@@ -477,9 +477,9 @@ int sys_fcntl(int fd, int request, va_list args, int *result) {
 		managarm::fs::SvrResponse<MemoryAllocator> resp(getSysdepsAllocator());
 		resp.ParseFromArray(recv_resp.data(), recv_resp.length());
 		if (resp.error() == managarm::fs::Errors::ILLEGAL_OPERATION_TARGET) {
-			mlibc::infoLogger(
-			) << "\e[31mmlibc: fcntl(F_GET_SEALS) unimplemented for this file\e[39m"
-			  << frg::endlog;
+			mlibc::infoLogger()
+			    << "\e[31mmlibc: fcntl(F_GET_SEALS) unimplemented for this file\e[39m"
+			    << frg::endlog;
 			return EINVAL;
 		} else if (resp.error() != managarm::fs::Errors::SUCCESS) {
 			return resp.error() | toErrno;
@@ -918,9 +918,9 @@ int sys_msg_send(int sockfd, const struct msghdr *hdr, int flags, ssize_t *lengt
 				req.add_fds(fd);
 			}
 		} else {
-			mlibc::infoLogger(
-			) << "mlibc: sys_msg_send only supports SCM_RIGHTS or SCM_CREDENTIALS, got: "
-			  << cmsg->cmsg_type << "!" << frg::endlog;
+			mlibc::infoLogger()
+			    << "mlibc: sys_msg_send only supports SCM_RIGHTS or SCM_CREDENTIALS, got: "
+			    << cmsg->cmsg_type << "!" << frg::endlog;
 			return EINVAL;
 		}
 	}
@@ -1552,9 +1552,9 @@ int sys_pidfd_send_signal(int pidfd, int sig, siginfo_t *info, unsigned int flag
 
 int sys_reboot(int command) {
 	if (command != RB_POWER_OFF && command != RB_AUTOBOOT) {
-		mlibc::infoLogger(
-		) << "mlibc: Anything other than power off or reboot is not supported yet!"
-		  << frg::endlog;
+		mlibc::infoLogger()
+		    << "mlibc: Anything other than power off or reboot is not supported yet!"
+		    << frg::endlog;
 		return EINVAL;
 	}
 

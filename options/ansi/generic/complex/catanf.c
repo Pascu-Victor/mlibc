@@ -28,21 +28,19 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- * imported and modified include for newlib 2010/10/03 
+ * imported and modified include for newlib 2010/10/03
  * Marco Atzeri <marco_atzeri@yahoo.it>
  */
 
+#include "cephes_subrf.h"
 #include <complex.h>
 #include <math.h>
-#include "cephes_subrf.h"
 
 #ifdef __weak_alias
 __weak_alias(catanf, _catanf)
 #endif
 
-float complex
-catanf(float complex z)
-{
+    float complex catanf(float complex z) {
 	float complex w;
 	float a, t, x, x2, y;
 
@@ -64,7 +62,7 @@ catanf(float complex z)
 		goto ovrf;
 
 	t = y + 1.0f;
-	a = (x2 + (t * t))/a;
+	a = (x2 + (t * t)) / a;
 	w = w + (0.25f * logf(a)) * I;
 	return w;
 

@@ -30,7 +30,7 @@ int bcmp(const void *__s1, const void *__s2, size_t __n);
 void bcopy(const void *__s1, void *__s2, size_t __n);
 void bzero(void *__s, size_t __n);
 
-char *index (const char *__s, int __c);
+char *index(const char *__s, int __c);
 char *rindex(const char *__s, int __c);
 #endif
 
@@ -41,4 +41,3 @@ char *rindex(const char *__s, int __c);
 #endif
 
 #endif /* _STRINGS_H */
-

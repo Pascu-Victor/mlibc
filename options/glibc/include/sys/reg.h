@@ -29,7 +29,10 @@
 #define ES 24
 #define FS 25
 #define GS 26
-#elif !(defined(__i386__) || defined(__riscv) || defined(__aarch64__) || defined(__m68k__) || defined(__loongarch64))
+#elif !(                                                                                           \
+    defined(__i386__) || defined(__riscv) || defined(__aarch64__) || defined(__m68k__)             \
+    || defined(__loongarch64)                                                                      \
+)
 #error "Missing architecture specific code."
 #endif
 

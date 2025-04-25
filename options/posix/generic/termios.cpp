@@ -1,5 +1,5 @@
 #ifndef _GNU_SOURCE
-# define _GNU_SOURCE
+#define _GNU_SOURCE
 #endif
 
 #include <errno.h>
@@ -8,20 +8,16 @@
 #include <bits/ensure.h>
 #include <mlibc/posix-sysdeps.hpp>
 
-speed_t cfgetispeed(const struct termios *tios) {
-	return tios->c_cflag & CBAUD;
-}
+speed_t cfgetispeed(const struct termios *tios) { return tios->c_cflag & CBAUD; }
 
-speed_t cfgetospeed(const struct termios *tios) {
-	return tios->c_cflag & CBAUD;
-}
+speed_t cfgetospeed(const struct termios *tios) { return tios->c_cflag & CBAUD; }
 
 int cfsetispeed(struct termios *termios, speed_t speed) {
 	return speed ? cfsetospeed(termios, speed) : 0;
 }
 
 int cfsetospeed(struct termios *termios, speed_t speed) {
-	if(speed & ~CBAUD) {
+	if (speed & ~CBAUD) {
 		errno = EINVAL;
 		return -1;
 	}
@@ -44,7 +40,7 @@ void cfmakeraw(struct termios *t) {
 
 int tcdrain(int fd) {
 	MLIBC_CHECK_OR_ENOSYS(mlibc::sys_tcdrain, -1);
-	if(int e = mlibc::sys_tcdrain(fd); e) {
+	if (int e = mlibc::sys_tcdrain(fd); e) {
 		errno = e;
 		return -1;
 	}
@@ -53,7 +49,7 @@ int tcdrain(int fd) {
 
 int tcflow(int fd, int action) {
 	MLIBC_CHECK_OR_ENOSYS(mlibc::sys_tcflow, -1);
-	if(int e = mlibc::sys_tcflow(fd, action); e) {
+	if (int e = mlibc::sys_tcflow(fd, action); e) {
 		errno = e;
 		return -1;
 	}
@@ -62,7 +58,7 @@ int tcflow(int fd, int action) {
 
 int tcflush(int fd, int queue_selector) {
 	MLIBC_CHECK_OR_ENOSYS(mlibc::sys_tcflush, -1);
-	if(int e = mlibc::sys_tcflush(fd, queue_selector); e) {
+	if (int e = mlibc::sys_tcflush(fd, queue_selector); e) {
 		errno = e;
 		return -1;
 	}
@@ -71,7 +67,7 @@ int tcflush(int fd, int queue_selector) {
 
 int tcgetattr(int fd, struct termios *attr) {
 	MLIBC_CHECK_OR_ENOSYS(mlibc::sys_tcgetattr, -1);
-	if(int e = mlibc::sys_tcgetattr(fd, attr); e) {
+	if (int e = mlibc::sys_tcgetattr(fd, attr); e) {
 		errno = e;
 		return -1;
 	}
@@ -81,7 +77,7 @@ int tcgetattr(int fd, struct termios *attr) {
 pid_t tcgetsid(int fd) {
 	int sid, scratch;
 	MLIBC_CHECK_OR_ENOSYS(mlibc::sys_ioctl, -1);
-	if(int e = mlibc::sys_ioctl(fd, TIOCGSID, &sid, &scratch); e) {
+	if (int e = mlibc::sys_ioctl(fd, TIOCGSID, &sid, &scratch); e) {
 		errno = e;
 		return -1;
 	}
@@ -95,10 +91,9 @@ int tcsendbreak(int, int) {
 
 int tcsetattr(int fd, int opts, const struct termios *attr) {
 	MLIBC_CHECK_OR_ENOSYS(mlibc::sys_tcsetattr, -1);
-	if(int e = mlibc::sys_tcsetattr(fd, opts, attr); e) {
+	if (int e = mlibc::sys_tcsetattr(fd, opts, attr); e) {
 		errno = e;
 		return -1;
 	}
 	return 0;
 }
-

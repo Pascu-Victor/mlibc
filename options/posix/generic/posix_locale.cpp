@@ -1,5 +1,5 @@
-#include <bits/posix/posix_locale.h>
 #include <bits/ensure.h>
+#include <bits/posix/posix_locale.h>
 #include <mlibc/debug.hpp>
 
 namespace {
@@ -11,7 +11,7 @@ bool uselocale_seen = false;
 
 locale_t newlocale(int, const char *, locale_t) {
 	// Due to all of the locale functions being stubs, the locale will not be used
-	if(!newlocale_seen) {
+	if (!newlocale_seen) {
 		mlibc::infoLogger() << "mlibc: newlocale() is a no-op" << frg::endlog;
 		newlocale_seen = true;
 	}
@@ -24,7 +24,7 @@ void freelocale(locale_t) {
 }
 
 locale_t uselocale(locale_t) {
-	if(!uselocale_seen) {
+	if (!uselocale_seen) {
 		mlibc::infoLogger() << "mlibc: uselocale() is a no-op" << frg::endlog;
 		uselocale_seen = true;
 	}

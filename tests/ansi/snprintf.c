@@ -3,9 +3,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
-#include <assert.h>
 #include <string.h>
-#include <math.h>
 #include <wctype.h>
 
 int main() {
@@ -56,11 +54,11 @@ int main() {
 	assert(strcmp(buf, "1234") == 0);
 	assert(snprintf(buf, 128, "%lld", 1234LL) == 4);
 	assert(strcmp(buf, "1234") == 0);
-	assert(snprintf(buf, 128, "%jd", (intmax_t) 1234) == 4);
+	assert(snprintf(buf, 128, "%jd", (intmax_t)1234) == 4);
 	assert(strcmp(buf, "1234") == 0);
-	assert(snprintf(buf, 128, "%zd", (ssize_t) 1234) == 4);
+	assert(snprintf(buf, 128, "%zd", (ssize_t)1234) == 4);
 	assert(strcmp(buf, "1234") == 0);
-	assert(snprintf(buf, 128, "%td", (ptrdiff_t) 1234) == 4);
+	assert(snprintf(buf, 128, "%td", (ptrdiff_t)1234) == 4);
 	assert(strcmp(buf, "1234") == 0);
 
 	assert(snprintf(buf, 128, "%i", 1234) == 4);
@@ -77,11 +75,11 @@ int main() {
 	assert(strcmp(buf, "1234") == 0);
 	assert(snprintf(buf, 128, "%lli", 1234LL) == 4);
 	assert(strcmp(buf, "1234") == 0);
-	assert(snprintf(buf, 128, "%ji", (intmax_t) 1234) == 4);
+	assert(snprintf(buf, 128, "%ji", (intmax_t)1234) == 4);
 	assert(strcmp(buf, "1234") == 0);
-	assert(snprintf(buf, 128, "%zi", (ssize_t) 1234) == 4);
+	assert(snprintf(buf, 128, "%zi", (ssize_t)1234) == 4);
 	assert(strcmp(buf, "1234") == 0);
-	assert(snprintf(buf, 128, "%ti", (ptrdiff_t) 1234) == 4);
+	assert(snprintf(buf, 128, "%ti", (ptrdiff_t)1234) == 4);
 	assert(strcmp(buf, "1234") == 0);
 
 	assert(snprintf(buf, 128, "%b", 0b1011) == 4);
@@ -96,9 +94,9 @@ int main() {
 	assert(strcmp(buf, "1011") == 0);
 	assert(snprintf(buf, 128, "%llb", 0b1011ULL) == 4);
 	assert(strcmp(buf, "1011") == 0);
-	assert(snprintf(buf, 128, "%jb", (uintmax_t) 0b1011) == 4);
+	assert(snprintf(buf, 128, "%jb", (uintmax_t)0b1011) == 4);
 	assert(strcmp(buf, "1011") == 0);
-	assert(snprintf(buf, 128, "%zb", (size_t) 0b1011) == 4);
+	assert(snprintf(buf, 128, "%zb", (size_t)0b1011) == 4);
 	assert(strcmp(buf, "1011") == 0);
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wformat"
@@ -120,9 +118,9 @@ int main() {
 	assert(strcmp(buf, "1234") == 0);
 	assert(snprintf(buf, 128, "%llo", 01234ULL) == 4);
 	assert(strcmp(buf, "1234") == 0);
-	assert(snprintf(buf, 128, "%jo", (uintmax_t) 01234) == 4);
+	assert(snprintf(buf, 128, "%jo", (uintmax_t)01234) == 4);
 	assert(strcmp(buf, "1234") == 0);
-	assert(snprintf(buf, 128, "%zo", (size_t) 01234) == 4);
+	assert(snprintf(buf, 128, "%zo", (size_t)01234) == 4);
 	assert(strcmp(buf, "1234") == 0);
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wformat"
@@ -146,9 +144,9 @@ int main() {
 	assert(strcmp(buf, "1234ab") == 0);
 	assert(snprintf(buf, 128, "%llx", 0x1234ABULL) == 6);
 	assert(strcmp(buf, "1234ab") == 0);
-	assert(snprintf(buf, 128, "%jx", (uintmax_t) 0x1234AB) == 6);
+	assert(snprintf(buf, 128, "%jx", (uintmax_t)0x1234AB) == 6);
 	assert(strcmp(buf, "1234ab") == 0);
-	assert(snprintf(buf, 128, "%zx", (size_t) 0x1234AB) == 6);
+	assert(snprintf(buf, 128, "%zx", (size_t)0x1234AB) == 6);
 	assert(strcmp(buf, "1234ab") == 0);
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wformat"
@@ -170,9 +168,9 @@ int main() {
 	assert(strcmp(buf, "1234") == 0);
 	assert(snprintf(buf, 128, "%llu", 1234ULL) == 4);
 	assert(strcmp(buf, "1234") == 0);
-	assert(snprintf(buf, 128, "%ju", (uintmax_t) 1234) == 4);
+	assert(snprintf(buf, 128, "%ju", (uintmax_t)1234) == 4);
 	assert(strcmp(buf, "1234") == 0);
-	assert(snprintf(buf, 128, "%zu", (size_t) 1234) == 4);
+	assert(snprintf(buf, 128, "%zu", (size_t)1234) == 4);
 	assert(strcmp(buf, "1234") == 0);
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wformat"
@@ -337,12 +335,12 @@ int main() {
 	assert(strcmp(buf, "0xffffffffffffffff") == 0);
 #else
 	uintptr_t ptr_value = 0xFFFFFFFF;
-	assert(snprintf(buf, 128, "%p", (void*)ptr_value) == 10);
+	assert(snprintf(buf, 128, "%p", (void *)ptr_value) == 10);
 	assert(strcmp(buf, "0xffffffff") == 0);
 #endif
 
 	ptr_value = 0xFFFF;
-	assert(snprintf(buf, 128, "%p", (void*)ptr_value) == 6);
+	assert(snprintf(buf, 128, "%p", (void *)ptr_value) == 6);
 	assert(strcmp(buf, "0xffff") == 0);
 
 	assert(snprintf(buf, 128, "%-4dhello", 12) == 9);
@@ -452,7 +450,7 @@ int main() {
 	setlocale(LC_ALL, "C.utf8");
 
 	int written = 0;
-	ret = snprintf(buf, 128, "%1$lc%2$n", (wint_t) L'π', &written);
+	ret = snprintf(buf, 128, "%1$lc%2$n", (wint_t)L'π', &written);
 	fprintf(stderr, "ret %d '%.128s' out=%d\n", ret, buf, written);
 	assert(written == 2);
 
