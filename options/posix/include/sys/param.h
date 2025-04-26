@@ -14,22 +14,25 @@
 #define MAXSYMLINKS 20
 #define MAXHOSTNAMELEN HOST_NAME_MAX
 
+#ifndef EXEC_PAGESIZE
+#define EXEC_PAGESIZE 4096
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 #undef MIN
-#define MIN(a,b) (((a) < (b)) ? (a) : (b))
+#define MIN(a, b) (((a) < (b)) ? (a) : (b))
 #undef MAX
-#define MAX(a,b) (((a) > (b)) ? (a) : (b))
+#define MAX(a, b) (((a) > (b)) ? (a) : (b))
 
-#define howmany(x, y)  (((x) + ((y) - 1)) / (y))
+#define howmany(x, y) (((x) + ((y) - 1)) / (y))
 
-#define roundup(x, y)  ((((x) + ((y) - 1)) / (y)) * (y))
+#define roundup(x, y) ((((x) + ((y) - 1)) / (y)) * (y))
 
 #ifdef __cplusplus
 }
 #endif
 
 #endif /* _SYS_PARAM_H */
-

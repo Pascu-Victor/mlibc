@@ -6,7 +6,6 @@
 #include <bits/ansi/time_t.h>
 #include <bits/ansi/timespec.h>
 #include <bits/threads.h>
-#include <bits/size_t.h>
 #include <mlibc-config.h>
 
 /* MISSING: parts of POSIX [PS], [SS] and [TSP] options */
@@ -17,7 +16,11 @@ extern "C" {
 
 #if __MLIBC_LINUX_OPTION && defined(_GNU_SOURCE)
 #include <bits/linux/linux_sched.h>
-#include <bits/linux/cpu_set.h>
+#endif
+
+#if __MLIBC_WOS_OPTION
+#include <bits/wos/cpu_set.h>
+#include <bits/wos/wos_sched.h>
 #endif
 
 #define SCHED_OTHER 0
@@ -47,4 +50,3 @@ int sched_setparam(pid_t __pid, const struct sched_param *__param);
 #endif
 
 #endif /* _SCHED_H */
-

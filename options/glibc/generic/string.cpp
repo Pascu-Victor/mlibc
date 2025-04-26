@@ -1,6 +1,7 @@
 #ifndef _GNU_SOURCE
-# define _GNU_SOURCE
+#define _GNU_SOURCE
 #endif
+#include <string.h>
 #include <type_traits>
 
 #include <ctype.h>
@@ -12,7 +13,7 @@
  * modifies the string.
  */
 char *__mlibc_gnu_basename_c(const char *path) {
-	char *basename_component = strrchr(path, '/');
+	char *basename_component = (char *)strrchr(path, '/');
 	if (!basename_component) {
 		return const_cast<char *>(path);
 	}
@@ -23,14 +24,10 @@ char *__mlibc_gnu_basename_c(const char *path) {
  * checked, to make sure we actually match expectations.
  */
 static_assert(
-	std::is_same_v<decltype(basename((const char *)nullptr)), const char*>,
-	"C++ overloads broken"
+    std::is_same_v<decltype(basename((const char *)nullptr)), const char *>, "C++ overloads broken"
 );
 
-static_assert(
-	std::is_same_v<decltype(basename((char *)nullptr)), char*>,
-	"C++ overloads broken"
-);
+static_assert(std::is_same_v<decltype(basename((char *)nullptr)), char *>, "C++ overloads broken");
 
 // Taken from musl.
 int strverscmp(const char *l0, const char *r0) {
@@ -41,26 +38,26 @@ int strverscmp(const char *l0, const char *r0) {
 
 	/* Find maximal matching prefix and track its maximal digit
 	 * suffix and whether those digits are all zeros. */
-	for(dp = i = 0; l[i] == r[i]; i++) {
+	for (dp = i = 0; l[i] == r[i]; i++) {
 		int c = l[i];
-		if(!c)
+		if (!c)
 			return 0;
-		if(!isdigit(c))
+		if (!isdigit(c))
 			dp = i + 1, z = 1;
-		else if(c != '0')
+		else if (c != '0')
 			z = 0;
 	}
 
-	if(l[dp] != '0' && r[dp] != '0') {
+	if (l[dp] != '0' && r[dp] != '0') {
 		/* If we're not looking at a digit sequence that began
 		 * with a zero, longest digit string is greater. */
-		for(j = i; isdigit(l[j]); j++) {
-			if(!isdigit(r[j]))
+		for (j = i; isdigit(l[j]); j++) {
+			if (!isdigit(r[j]))
 				return 1;
 		}
-		if(isdigit(r[j]))
+		if (isdigit(r[j]))
 			return -1;
-	} else if(z && dp < i && (isdigit(l[i]) || isdigit(r[i]))) {
+	} else if (z && dp < i && (isdigit(l[i]) || isdigit(r[i]))) {
 		/* Otherwise, if common prefix of digit sequence is
 		 * all zeros, digits order less than non-digits. */
 		return (unsigned char)(l[i] - '0') - (unsigned char)(r[i] - '0');
@@ -74,7 +71,7 @@ void *mempcpy(void *dest, const void *src, size_t len) {
 }
 
 void explicit_bzero(void *s, size_t len) {
-  memset (s, 0, len);
-  // Compiler barrier to prevent optimizing away the memset
-  asm volatile ("" ::: "memory");
+	memset(s, 0, len);
+	// Compiler barrier to prevent optimizing away the memset
+	asm volatile("" ::: "memory");
 }

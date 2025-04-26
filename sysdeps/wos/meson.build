@@ -1,8 +1,9 @@
 sysdep_supported_options = {
 	'posix': true,
 	'linux': false,
-	'glibc': false,
+	'glibc': true,
 	'bsd': false,
+    'wos': true,
 }
 
 libc_sources += files(
@@ -10,6 +11,10 @@ libc_sources += files(
 )
 
 if not no_headers
+    install_headers(
+        'include/syscallnos.h',
+    )
+
 	install_headers(
 		'include/abi-bits/access.h',
         'include/abi-bits/auxv.h',
@@ -18,12 +23,14 @@ if not no_headers
         'include/abi-bits/clockid_t.h',
         'include/abi-bits/dev_t.h',
         'include/abi-bits/errno.h',
+        'include/abi-bits/epoll.h',
         'include/abi-bits/fcntl.h',
         'include/abi-bits/fsblkcnt_t.h',
         'include/abi-bits/fsfilcnt_t.h',
         'include/abi-bits/gid_t.h',
         'include/abi-bits/in.h',
         'include/abi-bits/ino_t.h',
+        'include/abi-bits/ioctls.h',
         'include/abi-bits/ipc.h',
         'include/abi-bits/limits.h',
         'include/abi-bits/mode_t.h',
@@ -42,7 +49,9 @@ if not no_headers
         'include/abi-bits/socket.h',
         'include/abi-bits/socklen_t.h',
         'include/abi-bits/stat.h',
+        'include/abi-bits/statfs.h',
         'include/abi-bits/statvfs.h',
+        'include/abi-bits/statx.h',
         'include/abi-bits/suseconds_t.h',
         'include/abi-bits/termios.h',
         'include/abi-bits/time.h',
@@ -70,4 +79,11 @@ if not no_headers
         'include/sys/syslog.h',
         subdir: 'sys',
     )
+	install_headers('include/sys/syscall.h', subdir: 'sys')
+
+    install_headers(
+		'include/bits/syscall.h',
+		'include/bits/syscall_aliases.h',
+		subdir: 'bits'
+	)
 endif

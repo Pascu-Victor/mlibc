@@ -2,20 +2,19 @@
 #ifndef _UNISTD_H
 #define _UNISTD_H
 
-#include <mlibc-config.h>
-#include <bits/types.h>
-#include <bits/null.h>
-#include <bits/size_t.h>
-#include <bits/ssize_t.h>
-#include <bits/off_t.h>
-#include <bits/types.h>
 #include <abi-bits/access.h>
-#include <abi-bits/uid_t.h>
 #include <abi-bits/gid_t.h>
 #include <abi-bits/pid_t.h>
 #include <abi-bits/seek-whence.h>
+#include <abi-bits/uid_t.h>
+#include <bits/null.h>
+#include <bits/off_t.h>
+#include <bits/size_t.h>
+#include <bits/ssize_t.h>
+#include <bits/types.h>
+#include <mlibc-config.h>
 
-#if __MLIBC_SYSDEP_HAS_BITS_SYSCALL_H && __MLIBC_LINUX_OPTION
+#if __MLIBC_SYSDEP_HAS_BITS_SYSCALL_H && (__MLIBC_LINUX_OPTION || __MLIBC_WOS_OPTION)
 #include <bits/syscall.h>
 #endif /* __MLIBC_SYSDEP_HAS_BITS_SYSCALL_H && __MLIBC_LINUX_OPTION */
 
@@ -110,15 +109,15 @@ extern "C" {
 
 /* MISSING: _PC macros */
 /* For now, use the Linux ABI for _PC constants. */
-#define _PC_LINK_MAX		0
-#define _PC_MAX_CANON		1
-#define _PC_MAX_INPUT		2
-#define _PC_NAME_MAX		3
-#define _PC_PATH_MAX		4
-#define _PC_PIPE_BUF		5
-#define _PC_CHOWN_RESTRICTED	6
-#define _PC_NO_TRUNC		7
-#define _PC_VDISABLE		8
+#define _PC_LINK_MAX 0
+#define _PC_MAX_CANON 1
+#define _PC_MAX_INPUT 2
+#define _PC_NAME_MAX 3
+#define _PC_PATH_MAX 4
+#define _PC_PIPE_BUF 5
+#define _PC_CHOWN_RESTRICTED 6
+#define _PC_NO_TRUNC 7
+#define _PC_VDISABLE 8
 
 #define _PC_FILESIZEBITS 9
 #define _PC_SYMLINK_MAX 10
@@ -255,7 +254,7 @@ extern "C" {
 
 /* Port-specific _SC_* define values */
 
-#if defined (__ironclad__)
+#if defined(__ironclad__)
 #define _SC_TOTAL_PAGES 1000
 #define _SC_HOST_OPEN_MAX 1001
 #endif /* defined (__ironclad__) */
@@ -343,7 +342,8 @@ uid_t getuid(void);
 int isatty(int __fd);
 int lchown(const char *__path, uid_t __uid, gid_t __gid);
 int link(const char *__oldpath, const char *__newpath);
-int linkat(int __olddirfd, const char *__oldpath, int __newdirfd, const char *__newpath, int __flags);
+int
+linkat(int __olddirfd, const char *__oldpath, int __newdirfd, const char *__newpath, int __flags);
 
 #if defined(_DEFAULT_SOURCE) || __MLIBC_XOPEN >= 500
 #define F_LOCK 1
@@ -367,7 +367,8 @@ ssize_t pread(int __fd, void *__buf, size_t __size, off_t __offset);
 ssize_t pwrite(int __fd, const void *__buf, size_t __size, off_t __offset);
 ssize_t read(int __fd, void *__buffer, size_t __size);
 ssize_t readlink(const char *__restrict __path, char *__restrict __buf, size_t __size);
-ssize_t readlinkat(int __dirfd, const char *__restrict __path, char *__restrict __buf, size_t __size);
+ssize_t
+readlinkat(int __dirfd, const char *__restrict __path, char *__restrict __buf, size_t __size);
 int rmdir(const char *__path);
 int setegid(gid_t __egid);
 int seteuid(uid_t __euid);
@@ -478,8 +479,7 @@ int getresgid(gid_t *__rgid, gid_t *__egid, gid_t *__sgid);
 #endif
 
 #if __MLIBC_LINUX_OPTION
-#	include <bits/linux/linux_unistd.h>
+#include <bits/linux/linux_unistd.h>
 #endif
 
 #endif /* _UNISTD_H */
-
