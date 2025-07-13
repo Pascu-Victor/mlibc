@@ -35,9 +35,8 @@ void sys_exit(int status) {
 
 #endif
 
-int sys_anon_allocate(unsigned long size, void **pointer) {
+void sys_anon_allocate(unsigned long size, void **pointer) {
 	// create syscall for virtual memory allocation
-	return -1;
 }
 
 } // namespace mlibc

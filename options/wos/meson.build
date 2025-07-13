@@ -13,6 +13,7 @@ if not no_headers
 	# )
     install_headers(
 		'include/ifaddrs.h',
+		'include/malloc.h',
 	)
 	install_headers(
 		'include/bits/wos/wos_unistd.h',
@@ -39,7 +40,7 @@ if not no_headers
 		# 'include/sys/prctl.h',
 		# 'include/sys/ptrace.h',
 		# 'include/sys/random.h',
-		# 'include/sys/sendfile.h',
+		'include/sys/sendfile.h',
 		# 'include/sys/signalfd.h',
 		# 'include/sys/sysmacros.h',
 		# 'include/sys/timerfd.h',

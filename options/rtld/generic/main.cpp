@@ -655,7 +655,6 @@ extern "C" void *interpreterMain(uintptr_t *entry_stack) {
 	for (size_t i = 0; i < initialRepository->dependencyQueue.size(); i++) {
 		auto current = initialRepository->dependencyQueue[i];
 		initialRepository->discoverDependenciesFromLoadedObject(current);
-		current->dependenciesDiscovered = true;
 	}
 #else
 	executableSO = initialRepository->injectStaticObject(

@@ -1,11 +1,11 @@
 #ifndef _SYS_MMAN_H
 #define _SYS_MMAN_H
 
-#include <mlibc-config.h>
 #include <abi-bits/mode_t.h>
 #include <abi-bits/vm-flags.h>
 #include <bits/off_t.h>
 #include <bits/size_t.h>
+#include <mlibc-config.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -32,7 +32,7 @@ int msync(void *__addr, size_t __size, int __flags);
 int shm_open(const char *__name, int __oflag, mode_t __mode);
 int shm_unlink(const char *__name);
 
-#if __MLIBC_LINUX_OPTION && defined(_GNU_SOURCE)
+#if __MLIBC_LINUX_OPTION && defined(_GNU_SOURCE) || __MLIBC_WOS_OPTION
 void *mremap(void *__old_address, size_t __old_size, size_t __new_size, int __flags, ...);
 int remap_file_pages(void *__addr, size_t __size, int __prot, size_t __pgoff, int __flags);
 int memfd_create(const char *__name, unsigned int __flags);

@@ -132,8 +132,7 @@ int shm_unlink(const char *name) {
 		return -1;
 	return unlink(name);
 }
-
-#if __MLIBC_LINUX_OPTION
+#if __MLIBC_LINUX_OPTION || __MLIBC_WOS_OPTION
 void *mremap(void *pointer, size_t size, size_t new_size, int flags, ...) {
 	__ensure(flags == MREMAP_MAYMOVE);
 

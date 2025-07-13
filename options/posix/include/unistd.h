@@ -14,7 +14,7 @@
 #include <bits/types.h>
 #include <mlibc-config.h>
 
-#if __MLIBC_SYSDEP_HAS_BITS_SYSCALL_H && (__MLIBC_LINUX_OPTION || __MLIBC_WOS_OPTION)
+#if __MLIBC_SYSDEP_HAS_BITS_SYSCALL_H && __MLIBC_LINUX_OPTION
 #include <bits/syscall.h>
 #endif /* __MLIBC_SYSDEP_HAS_BITS_SYSCALL_H && __MLIBC_LINUX_OPTION */
 

@@ -295,13 +295,11 @@ endif
 
 posix_option = get_option('posix_option').require(sysdep_supported_options.get('posix')).allowed()
 linux_option = get_option('linux_option').require(sysdep_supported_options.get('linux')).allowed()
-wos_option = get_option('wos_option').require(sysdep_supported_options.get('wos')).allowed()
 glibc_option = get_option('glibc_option').require(sysdep_supported_options.get('glibc')).allowed()
-bsd_option = get_option('bsd_option').require(sysdep_supported_options.get('bsd')).allowed()\
+bsd_option = get_option('bsd_option').require(sysdep_supported_options.get('bsd')).allowed()
 
 mlibc_conf.set10('__MLIBC_POSIX_OPTION', posix_option)
 mlibc_conf.set10('__MLIBC_LINUX_OPTION', linux_option)
-mlibc_conf.set10('__MLIBC_WOS_OPTION', wos_option)
 mlibc_conf.set10('__MLIBC_GLIBC_OPTION', glibc_option)
 mlibc_conf.set10('__MLIBC_BSD_OPTION', bsd_option)
 mlibc_conf.set10('__MLIBC_SYSDEP_HAS_BITS_SYSCALL_H', provides_bits_syscall_h)
@@ -323,28 +321,6 @@ if linux_option
 		if not import('fs').is_dir(get_option('linux_kernel_headers'))
 			error('linux_kernel_headers is not set to a valid path')
 		endif
-
-		cc_search_path = run_command(meson.get_compiler('cpp', native: true), '-E', '-Wp,-v', '-xc', '/dev/null', check: true).stderr()
-		search_paths = []
-
-		search_started = false
-		foreach line : cc_search_path.strip().splitlines()
-			if not search_started and line == '#include <...> search starts here:'
-				search_started = true
-				continue
-			elif search_started and line == 'End of search list.'
-				search_started = false
-			elif search_started
-				search_paths += line.strip()
-			endif
-		endforeach
-
-		foreach path : search_paths
-			if fs.is_samepath(get_option('linux_kernel_headers'), path)
-				warning('Please install Linux kernel headers to a directory using \'make headers_install\'.')
-				error('Using system include paths for \'linux_kernel_headers\' is unsupported!')
-			endif
-		endforeach
 	endif
 
 	rtld_include_dirs += include_directories('options/linux/include')
@@ -354,11 +330,6 @@ if linux_option
 
 	libc_deps += linux_kernel_dep
 	rtld_deps += linux_kernel_dep
-endif
-
-if wos_option
-    rtld_include_dirs += include_directories('options/wos/include')
-    libc_include_dirs += include_directories('options/wos/include')
 endif
 
 if glibc_option
@@ -483,7 +454,6 @@ subdir('options/posix')
 subdir('options/lsb')
 subdir('options/glibc')
 subdir('options/linux')
-subdir('options/wos')
 subdir('options/bsd')
 
 rtlib_deps = []
