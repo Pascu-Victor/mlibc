@@ -8,7 +8,6 @@
  */
 /* clang-format off */
 #include <linux/unistd.h>
-#include <bits/syscall_aliases.h>
 /* clang-format on */
 
 #endif /* _SYS_SYSCALL_H */

@@ -109,7 +109,6 @@ if not no_headers
 	install_headers('include/sys/syscall.h', subdir: 'sys')
 	install_headers(
 		'include/bits/syscall.h',
-		'include/bits/syscall_aliases.h',
 		subdir: 'bits'
 	)
 endif

@@ -81,7 +81,6 @@ if not headers_only
 	rtld_deps += frigg_dep
 
 	add_project_arguments('-Wno-unused-function', '-D__MLIBC_BUILDING_MLIBC', language: ['c', 'cpp'])
-	add_project_arguments('-nostdinc', '-fno-builtin', '-ffreestanding', language: ['c', 'cpp'])
 	add_project_arguments('-Werror=misleading-indentation', language: ['c', 'cpp'])
 	add_project_arguments('-fno-rtti', '-fno-exceptions', language: 'cpp')
 	add_project_link_arguments('-nostdlib', language: ['c', 'cpp'])
@@ -297,11 +296,13 @@ posix_option = get_option('posix_option').require(sysdep_supported_options.get('
 linux_option = get_option('linux_option').require(sysdep_supported_options.get('linux')).allowed()
 glibc_option = get_option('glibc_option').require(sysdep_supported_options.get('glibc')).allowed()
 bsd_option = get_option('bsd_option').require(sysdep_supported_options.get('bsd')).allowed()
+wos_option = get_option('wos_option').require(sysdep_supported_options.get('wos')).allowed()
 
 mlibc_conf.set10('__MLIBC_POSIX_OPTION', posix_option)
 mlibc_conf.set10('__MLIBC_LINUX_OPTION', linux_option)
 mlibc_conf.set10('__MLIBC_GLIBC_OPTION', glibc_option)
 mlibc_conf.set10('__MLIBC_BSD_OPTION', bsd_option)
+mlibc_conf.set10('__MLIBC_WOS_OPTION', wos_option)
 mlibc_conf.set10('__MLIBC_SYSDEP_HAS_BITS_SYSCALL_H', provides_bits_syscall_h)
 
 rtld_include_dirs += include_directories('options/ansi/include')
@@ -340,6 +341,11 @@ endif
 if bsd_option
 	rtld_include_dirs += include_directories('options/bsd/include')
 	libc_include_dirs += include_directories('options/bsd/include')
+endif
+
+if wos_option
+	rtld_include_dirs += include_directories('options/wos/include')
+	libc_include_dirs += include_directories('options/wos/include')
 endif
 
 rtld_include_dirs += include_directories('options/elf/include')
@@ -455,19 +461,46 @@ subdir('options/lsb')
 subdir('options/glibc')
 subdir('options/linux')
 subdir('options/bsd')
+subdir('options/wos')
 
 rtlib_deps = []
 
 if not headers_only
 	if libgcc_dependency
 		libgcc = meson.get_compiler('c').find_library('gcc', required: false)
-
 		compiler_rt_name = 'libclang_rt.builtins-' + host_machine.cpu_family()
+        message('compiler_rt ' + compiler_rt_name)
+
+		# Try to find compiler-rt library in standard locations first
 		compiler_rt = meson.get_compiler('c').find_library(compiler_rt_name, required: false)
 
 		if not compiler_rt.found()
 			compiler_rt_name = 'libclang_rt.builtins'
 			compiler_rt = meson.get_compiler('c').find_library(compiler_rt_name, required: false)
+		endif
+
+		# If not found in standard locations, try clang's resource directory
+		if not compiler_rt.found()
+			# Get clang's resource directory
+			clang_resource_dir = run_command(c_compiler.cmd_array(), '-print-resource-dir', check: false).stdout().strip()
+			if clang_resource_dir != ''
+				clang_lib_dir = clang_resource_dir / 'lib'
+				message('Searching for compiler-rt in: ' + clang_lib_dir)
+
+				# Try with architecture suffix first
+				compiler_rt_name = 'libclang_rt.builtins-' + host_machine.cpu_family()
+				compiler_rt = meson.get_compiler('c').find_library(compiler_rt_name,
+					required: false,
+					dirs: [clang_lib_dir])
+
+				# Try without architecture suffix if not found
+				if not compiler_rt.found()
+					compiler_rt_name = 'libclang_rt.builtins'
+					compiler_rt = meson.get_compiler('c').find_library(compiler_rt_name,
+						required: false,
+						dirs: [clang_lib_dir])
+				endif
+			endif
 		endif
 
 		if libgcc.found()

@@ -178,7 +178,7 @@ size_t strftime(
 			case 'z': {
 				auto min = tm->tm_gmtoff / 60;
 				auto diff = ((min / 60) * 100) + (min % 60);
-				chunk = snprintf(p, space, "%c%04d", diff >= 0 ? '+' : '-', abs(diff));
+				chunk = snprintf(p, space, "%c%04ld", diff >= 0 ? '+' : '-', labs(diff));
 				if (chunk >= space)
 					return 0;
 				p += chunk;

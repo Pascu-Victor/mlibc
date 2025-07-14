@@ -35,7 +35,7 @@ void sys_exit(int status) {
 
 #endif
 
-void sys_anon_allocate(unsigned long size, void **pointer) {
+int sys_anon_allocate(size_t size, void **pointer) {
 	// create syscall for virtual memory allocation
 }
 

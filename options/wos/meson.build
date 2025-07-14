@@ -40,6 +40,7 @@ if not no_headers
 		# 'include/sys/prctl.h',
 		# 'include/sys/ptrace.h',
 		# 'include/sys/random.h',
+		'include/sys/hcf.h',
 		'include/sys/sendfile.h',
 		# 'include/sys/signalfd.h',
 		# 'include/sys/sysmacros.h',
