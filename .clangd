@@ -1,0 +1,37 @@
+CompileFlags:
+    CompilationDatabase: ../../mlibc-build
+    Add:
+        - -D__MLIBC_BUILDING_MLIBC
+    Remove:
+        - -Werror=misleading-indentation
+        - -fno-PIC
+
+Diagnostics:
+    ClangTidy:
+        Add:
+            - "bugprone-*"
+            - "readability-*"
+            - "performance-*"
+            - "misc-*"
+        Remove:
+            - readability-identifier-length
+            - readability-function-cognitive-complexity
+            - bugprone-easily-swappable-parameters
+            - bugprone-reserved-identifier
+            - misc-no-recursion
+            - readability-braces-around-statements
+            - readability-implicit-bool-conversion
+            - misc-use-internal-linkage
+    UnusedIncludes: None
+    MissingIncludes: None
+
+Index:
+    Background: Build
+
+InlayHints:
+    Enabled: Yes
+    ParameterNames: Yes
+    DeducedTypes: Yes
+
+Hover:
+    ShowAKA: Yes

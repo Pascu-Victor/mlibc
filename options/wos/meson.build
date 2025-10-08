@@ -1,17 +1,17 @@
-
 if not wos_option
 	subdir_done()
 endif
 libc_sources += files(
-	'generic/sched.cpp',
 	'generic/ifaddrs.cpp',
+	'generic/sched.cpp',
+	'generic/vfs.cpp',
 )
 
 if not no_headers
 	# install_headers(
 	# 	'include/module.h',
 	# )
-    install_headers(
+	install_headers(
 		'include/ifaddrs.h',
 		'include/malloc.h',
 	)
@@ -20,7 +20,7 @@ if not no_headers
 		'include/bits/wos/wos_sched.h',
 		# 'include/bits/linux/linux_stat.h',
 		'include/bits/wos/cpu_set.h',
-		subdir: 'bits/wos'
+		subdir: 'bits/wos',
 	)
 	# install_headers(
 	# 	'include/netpacket/packet.h',
@@ -56,7 +56,6 @@ if not no_headers
 		# 'include/sys/swap.h',
 		'include/sys/statfs.h',
 		# 'include/sys/vfs.h',
-		subdir: 'sys'
+		subdir: 'sys',
 	)
 endif
-

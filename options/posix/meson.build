@@ -68,7 +68,7 @@ if not headers_only
 		'musl-generic-regex/regerror.c',
 		'musl-generic-regex/regexec.c',
 		'musl-generic-regex/tre-mem.c',
-		pic: true,
+		pic: false,
 		include_directories: libc_include_dirs,
 		dependencies: libc_deps,
 		c_args: ['-Wno-unused', '-Wno-implicit', '-Wno-parentheses', '-Wno-sign-compare', '-Wno-attributes', '-Wno-unknown-pragmas', '-Wno-implicit-fallthrough', '-Wno-unused-parameter']

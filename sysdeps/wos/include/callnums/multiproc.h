@@ -6,5 +6,7 @@ enum class threadInfoOps : uint64_t {
 	currentThreadId,
 	nativeThreadCount,
 };
-
+enum class threadControlOps : uint64_t {
+	setTCB,
+};
 } // namespace ker::abi::multiproc

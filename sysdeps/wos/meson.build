@@ -1,18 +1,19 @@
 sysdep_supported_options = {
-	'posix': true,
-	'linux': false,
-	'glibc': true,
-	'bsd': false,
-	'wos': true,
+    'posix': true,
+    'linux': false,
+    'glibc': true,
+    'bsd': false,
+    'wos': true,
 }
 
 libc_sources += files(
     'generic/generic.cpp',
+    'generic/entry.cpp',
 )
 
 if not no_headers
-	install_headers(
-		'include/abi-bits/access.h',
+    install_headers(
+        'include/abi-bits/access.h',
         'include/abi-bits/auxv.h',
         'include/abi-bits/blkcnt_t.h',
         'include/abi-bits/blksize_t.h',
@@ -51,9 +52,9 @@ if not no_headers
         'include/abi-bits/utsname.h',
         'include/abi-bits/vm-flags.h',
         'include/abi-bits/wait.h',
-		subdir: 'abi-bits',
-		follow_symlinks: true
-	)
+        subdir: 'abi-bits',
+        follow_symlinks: true,
+    )
 
     install_headers(
         'include/callnums/futex.h',
@@ -68,7 +69,52 @@ if not no_headers
         'include/sys/multiproc.h',
         'include/sys/process.h',
         'include/sys/syscall.h',
-        'include/sys/syslog.h',
+        'include/sys/logging.h',
+        'include/sys/vfs.h',
+        'include/sys/time_calls.h',
+        'include/sys/time_ops.h',
         subdir: 'sys',
+    )
+endif
+
+if not headers_only
+    crt = custom_target(
+        'crt1',
+        build_by_default: true,
+        command: c_compiler.cmd_array() + ['-c', '-o', '@OUTPUT@', '@INPUT@'],
+        input: 'crt-x86_64/crt1.S',
+        output: 'crt1.o',
+        install: true,
+        install_dir: get_option('libdir'),
+    )
+
+    custom_target(
+        'crti',
+        build_by_default: true,
+        command: c_compiler.cmd_array() + ['-c', '-o', '@OUTPUT@', '@INPUT@'],
+        input: 'crt-x86_64/crti.S',
+        output: 'crti.o',
+        install: true,
+        install_dir: get_option('libdir'),
+    )
+
+    custom_target(
+        'crtn',
+        build_by_default: true,
+        command: c_compiler.cmd_array() + ['-c', '-o', '@OUTPUT@', '@INPUT@'],
+        input: 'crt-x86_64/crtn.S',
+        output: 'crtn.o',
+        install: true,
+        install_dir: get_option('libdir'),
+    )
+
+    custom_target(
+        'Scrt1',
+        build_by_default: true,
+        command: c_compiler.cmd_array() + ['-fPIE', '-c', '-o', '@OUTPUT@', '@INPUT@'],
+        input: 'crt-x86_64/Scrt1.S',
+        output: 'Scrt1.o',
+        install: true,
+        install_dir: get_option('libdir'),
     )
 endif
