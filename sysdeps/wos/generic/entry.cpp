@@ -12,8 +12,7 @@ size_t __hwcap;
 
 extern "C" void
 __mlibc_entry(uintptr_t *entry_stack, int (*main_fn)(int argc, char *argv[], char *env[])) {
-	// TODO: support for dynamic linker
-	// __dlapi_enter(entry_stack);
+	__dlapi_enter(entry_stack);
 	// TODO: syscall for hardware capabilities for now just set to 0
 	__hwcap = 0;
 	// __hwcap = getauxval(AT_HWCAP);
