@@ -1,10 +1,13 @@
 
 #include <elf.h>
 #include <link.h>
+#include <mlibc-config.h>
 
 #include <frg/manual_box.hpp>
 #include <frg/small_vector.hpp>
 
+#include "elf.hpp"
+#include "linker.hpp"
 #include <abi-bits/auxv.h>
 #include <internal-config.h>
 #include <mlibc/debug.hpp>
@@ -12,11 +15,8 @@
 #include <mlibc/rtld-config.hpp>
 #include <mlibc/rtld-sysdeps.hpp>
 #include <mlibc/stack_protector.hpp>
-
-#include "elf.hpp"
-#include "linker.hpp"
-
 #if __MLIBC_POSIX_OPTION
+#define _GNU_SOURCE
 #include <dlfcn.h>
 #endif
 

@@ -297,13 +297,29 @@ linux_option = get_option('linux_option').require(sysdep_supported_options.get('
 glibc_option = get_option('glibc_option').require(sysdep_supported_options.get('glibc')).allowed()
 bsd_option = get_option('bsd_option').require(sysdep_supported_options.get('bsd')).allowed()
 wos_option = get_option('wos_option').require(sysdep_supported_options.get('wos')).allowed()
-
 mlibc_conf.set10('__MLIBC_POSIX_OPTION', posix_option)
 mlibc_conf.set10('__MLIBC_LINUX_OPTION', linux_option)
 mlibc_conf.set10('__MLIBC_GLIBC_OPTION', glibc_option)
 mlibc_conf.set10('__MLIBC_BSD_OPTION', bsd_option)
 mlibc_conf.set10('__MLIBC_WOS_OPTION', wos_option)
 mlibc_conf.set10('__MLIBC_SYSDEP_HAS_BITS_SYSCALL_H', provides_bits_syscall_h)
+
+# Print which options are allowed
+if posix_option
+    message('POSIX option is allowed')
+endif
+if linux_option
+    message('Linux option is allowed')
+endif
+if glibc_option
+    message('glibc option is allowed')
+endif
+if bsd_option
+    message('BSD option is allowed')
+endif
+if wos_option
+    message('WOS option is allowed')
+endif
 
 rtld_include_dirs += include_directories('options/ansi/include')
 libc_include_dirs += include_directories('options/ansi/include')

@@ -2,7 +2,7 @@ sysdep_supported_options = {
     'posix': true,
     'linux': false,
     'glibc': true,
-    'bsd': false,
+    'bsd': true,
     'wos': true,
 }
 
@@ -52,6 +52,7 @@ if not no_headers
         'include/abi-bits/utsname.h',
         'include/abi-bits/vm-flags.h',
         'include/abi-bits/wait.h',
+        'include/abi-bits/utmp-defines.h',
         subdir: 'abi-bits',
         follow_symlinks: true,
     )

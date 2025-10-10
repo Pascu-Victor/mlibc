@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include <dlfcn.h>
 #include <execinfo.h>
 #include <inttypes.h>

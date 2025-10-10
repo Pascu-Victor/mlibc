@@ -1,5 +1,6 @@
 
 #include <bits/ensure.h>
+#define _GNU_SOURCE
 #include <dlfcn.h>
 
 #include <mlibc/debug.hpp>

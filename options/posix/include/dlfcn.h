@@ -32,7 +32,8 @@ void *dlopen(const char *__name, int __flags);
 void *dlsym(void *__restrict __handle, const char *__restrict __name);
 
 #if defined(_GNU_SOURCE)
-void *dlvsym(void *__restrict __handle, const char *__restrict __name, const char *__restrict __version);
+void *
+dlvsym(void *__restrict __handle, const char *__restrict __name, const char *__restrict __version);
 #endif
 
 #endif /* !__MLIBC_ABI_ONLY */
@@ -102,4 +103,3 @@ int _dl_find_object(void *__address, struct dl_find_object *__result);
 #endif
 
 #endif /* _DLFCN_H */
-
