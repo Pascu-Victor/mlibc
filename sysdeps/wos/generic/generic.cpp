@@ -14,6 +14,8 @@
 #include <sys/time_calls.h>
 #include <sys/time_ops.h>
 #include <sys/types.h>
+#include <sys/vfs.h>
+#include <sys/vmem.h>
 
 // SafeStack support: This variable is accessed by the compiler-generated code
 // It needs to be in TLS storage and properly initialized
@@ -52,10 +54,14 @@ int sys_futex_wait(int *, int, timespec const *) {
 	sys_libc_log("sys_futex_wait not supported");
 	sys_libc_panic();
 }
-int sys_open(char const *, int, unsigned int, int *) {
-	// no open support for now just panic
-	sys_libc_log("sys_open not supported");
-	sys_libc_panic();
+int sys_open(char const *path, int flags, unsigned int mode, int *fd) {
+	int result = ker::abi::vfs::open(path, flags, mode);
+	if (result < 0) {
+		// Return positive errno on error
+		return -result;
+	}
+	*fd = result;
+	return 0;
 }
 
 // Set FS_BASE to pointer
@@ -66,10 +72,13 @@ int sys_tcb_set(void *tcb) {
 	return ker::multiproc::setTCB(tcb);
 }
 
-int sys_close(int) {
-	// no close support for now just panic
-	sys_libc_log("sys_close not supported");
-	sys_libc_panic();
+int sys_close(int fd) {
+	int result = ker::abi::vfs::close(fd);
+	if (result < 0) {
+		// Return positive errno on error
+		return -result;
+	}
+	return 0;
 }
 int sys_clock_get(int clock_id, long *seconds, long *nanoseconds) {
 	(void)clock_id;
@@ -98,30 +107,54 @@ int sys_gettimeofday(struct timeval *tv, void *tz) {
 	tv->tv_usec = tmp.tv_usec;
 	return 0;
 }
-int sys_anon_free(void *, unsigned long) {
-	// no anon free support for now just panic
-	sys_libc_log("sys_anon_free not supported");
-	sys_libc_panic();
+int sys_anon_free(void *addr, unsigned long size) {
+	// Use the vmem syscall to free virtual memory
+	int64_t result = ker::vmem::free(addr, size);
+
+	if (result < 0) {
+		// Convert kernel error code to positive errno
+		return (int)(-result);
+	}
+
+	return 0; // Success
 }
-int sys_seek(int, long, int, long *) {
-	// no seek support for now just panic
-	sys_libc_log("sys_seek not supported");
-	sys_libc_panic();
+int sys_seek(int fd, long offset, int whence, long *new_offset) {
+	off_t result = ker::abi::vfs::lseek(fd, offset, whence);
+	if (result < 0) {
+		// Return positive errno on error
+		return (int)(-result);
+	}
+	if (new_offset) {
+		*new_offset = result;
+	}
+	return 0;
 }
-int sys_read(int, void *, unsigned long, long *) {
-	// no read support for now just panic
-	sys_libc_log("sys_read not supported");
-	sys_libc_panic();
+int sys_read(int fd, void *buf, unsigned long count, long *bytes_read) {
+	ssize_t result = ker::abi::vfs::read(fd, buf, count);
+	if (result < 0) {
+		// Return positive errno on error
+		return (int)(-result);
+	}
+	if (bytes_read) {
+		*bytes_read = result;
+	}
+	return 0;
 }
 int sys_vm_map(void *, unsigned long, int, int, int, long, void **) {
 	// no vm map support for now just panic
 	sys_libc_log("sys_vm_map not supported");
 	sys_libc_panic();
 }
-int sys_write(int, void const *, unsigned long, long *) {
-	// no write support for now just panic
-	sys_libc_log("sys_write not supported");
-	sys_libc_panic();
+int sys_write(int fd, void const *buf, unsigned long count, long *bytes_written) {
+	ssize_t result = ker::abi::vfs::write(fd, buf, count);
+	if (result < 0) {
+		// Return positive errno on error
+		return (int)(-result);
+	}
+	if (bytes_written) {
+		*bytes_written = result;
+	}
+	return 0;
 }
 
 #ifndef MLIBC_BUILDING_RTLD
@@ -135,9 +168,21 @@ int sys_write(int, void const *, unsigned long, long *) {
 #endif
 
 int sys_anon_allocate(size_t size, void **pointer) {
-	// create syscall for virtual memory allocation
-	*pointer = malloc(size); // Temporary implementation
-	return (*pointer) ? 0 : ENOMEM;
+	// Use the vmem syscall for proper virtual memory allocation
+	int64_t result = ker::vmem::allocate(
+	    pointer,
+	    size,
+	    PROT_READ | PROT_WRITE,      // Read-write by default
+	    MAP_PRIVATE | MAP_ANONYMOUS, // Private anonymous mapping
+	    nullptr                      // No hint, let kernel choose address
+	);
+
+	if (result < 0) {
+		// Convert kernel error code to positive errno
+		return (int)(-result);
+	}
+
+	return 0; // Success
 }
 
 int sys_prepare_stack(
