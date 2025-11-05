@@ -25,7 +25,7 @@ __thread void *__safestack_unsafe_stack_ptr = nullptr;
 namespace mlibc {
 
 void sys_libc_log(const char *message) {
-	ker::logging::log(message, strlen(message), ker::abi::sys_log::sys_log_device::vga);
+	ker::logging::log(message, strlen(message), ker::abi::sys_log::sys_log_device::serial);
 }
 
 void sys_libc_panic() {

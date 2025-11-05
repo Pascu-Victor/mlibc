@@ -23,6 +23,10 @@ int sys_read(int fd, void *buf, size_t count, ssize_t *bytes_read);
 int sys_write(int fd, const void *buf, size_t count, ssize_t *bytes_written);
 int sys_ioctl(int fd, unsigned long request, void *arg, int *result);
 
+// Process management
+void sys_exit(int status);
+int sys_execve(const char *path, char *const argv[], char *const envp[]);
+
 [[gnu::weak]] int sys_dup2(int fd, int flags, int newfd);
 [[gnu::weak]] int sys_fork(pid_t *child);
 [[gnu::weak]] int sys_inotify_create(int flags, int *fd);

@@ -5,6 +5,7 @@ libc_sources += files(
 	'generic/ifaddrs.cpp',
 	'generic/sched.cpp',
 	'generic/vfs.cpp',
+	'generic/process.cpp',
 )
 
 if not no_headers
