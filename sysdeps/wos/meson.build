@@ -9,6 +9,7 @@ sysdep_supported_options = {
 libc_sources += files(
     'generic/generic.cpp',
     'generic/entry.cpp',
+    'sys/logging.cpp',
 )
 
 if not no_headers
