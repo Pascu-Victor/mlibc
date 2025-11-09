@@ -17,6 +17,7 @@ enum class ops : uint64_t {
 	write,
 	close,
 	lseek,
+	isatty,
 };
 
 // Thin syscall veneers (similar to sys/logging.h) so userspace can
@@ -70,6 +71,13 @@ static inline off_t lseek(int fd, off_t offset, int whence) {
 	    static_cast<uint64_t>(whence)
 	);
 	return static_cast<off_t>((int64_t)r);
+}
+
+static inline bool isatty(int fd) {
+	uint64_t r = syscall(
+	    ker::abi::callnums::vfs, static_cast<uint64_t>(ops::isatty), static_cast<uint64_t>(fd)
+	);
+	return r != 0;
 }
 
 } // namespace ker::abi::vfs

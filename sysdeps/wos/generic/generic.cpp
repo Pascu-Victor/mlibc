@@ -1,3 +1,4 @@
+#include "mlibc/ansi-sysdeps.hpp"
 #include <errno.h>
 #include <limits.h>
 #include <mlibc/all-sysdeps.hpp>
@@ -156,7 +157,10 @@ int sys_write(int fd, void const *buf, unsigned long count, long *bytes_written)
 	}
 	return 0;
 }
-
+int sys_isatty(int fd) {
+	bool is_tty = ker::abi::vfs::isatty(fd);
+	return is_tty ? 0 : ENOTTY;
+}
 #ifndef MLIBC_BUILDING_RTLD
 
 [[noreturn]] void sys_thread_exit() {
