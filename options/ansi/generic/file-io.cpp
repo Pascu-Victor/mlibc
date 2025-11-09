@@ -593,7 +593,12 @@ mlibc::fd_file stdout_file{1};
 mlibc::fd_file stderr_file{2, nullptr, true};
 
 struct stdio_guard {
-	stdio_guard() {}
+	stdio_guard() = default;
+
+	stdio_guard(const stdio_guard &) = delete;
+	stdio_guard(stdio_guard &&) = delete;
+	stdio_guard &operator=(const stdio_guard &) = delete;
+	stdio_guard &operator=(stdio_guard &&) = delete;
 
 	~stdio_guard() {
 		// Only flush the files but do not close them.
