@@ -18,6 +18,7 @@ enum class ops : uint64_t {
 	close,
 	lseek,
 	isatty,
+	read_dir_entries,
 };
 
 // Thin syscall veneers (similar to sys/logging.h) so userspace can
@@ -78,6 +79,17 @@ static inline bool isatty(int fd) {
 	    ker::abi::callnums::vfs, static_cast<uint64_t>(ops::isatty), static_cast<uint64_t>(fd)
 	);
 	return r != 0;
+}
+
+static inline ssize_t read_dir_entries(int fd, void *buffer, size_t max_size) {
+	uint64_t r = syscall(
+	    ker::abi::callnums::vfs,
+	    static_cast<uint64_t>(ops::read_dir_entries),
+	    static_cast<uint64_t>(fd),
+	    reinterpret_cast<uint64_t>(buffer),
+	    static_cast<uint64_t>(max_size)
+	);
+	return static_cast<ssize_t>((int64_t)r);
 }
 
 } // namespace ker::abi::vfs

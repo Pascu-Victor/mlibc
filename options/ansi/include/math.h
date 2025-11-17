@@ -7,20 +7,20 @@
 #include <bits/inline-definition.h>
 
 #if defined(_DEFAULT_SOURCE) || __MLIBC_XOPEN
-#define M_E             2.7182818284590452354
-#define M_LOG2E         1.4426950408889634074
-#define M_LOG10E        0.43429448190325182765
-#define M_LN2           0.69314718055994530942
-#define M_LN10          2.30258509299404568402
-#define M_PI            3.14159265358979323846
-#define M_PIl           3.141592653589793238462643383279502884L
-#define M_PI_2          1.57079632679489661923
-#define M_PI_4          0.78539816339744830962
-#define M_1_PI          0.31830988618379067154
-#define M_2_PI          0.63661977236758134308
-#define M_2_SQRTPI      1.12837916709551257390
-#define M_SQRT2         1.41421356237309504880
-#define M_SQRT1_2       0.70710678118654752440
+#define M_E 2.7182818284590452354
+#define M_LOG2E 1.4426950408889634074
+#define M_LOG10E 0.43429448190325182765
+#define M_LN2 0.69314718055994530942
+#define M_LN10 2.30258509299404568402
+#define M_PI 3.14159265358979323846
+#define M_PIl 3.141592653589793238462643383279502884L
+#define M_PI_2 1.57079632679489661923
+#define M_PI_4 0.78539816339744830962
+#define M_1_PI 0.31830988618379067154
+#define M_2_PI 0.63661977236758134308
+#define M_2_SQRTPI 1.12837916709551257390
+#define M_SQRT2 1.41421356237309504880
+#define M_SQRT1_2 0.70710678118654752440
 #endif
 
 /* The following two definitions are from musl. */
@@ -62,11 +62,12 @@ int __fpclassify(double __x);
 int __fpclassifyf(float __x);
 int __fpclassifyl(long double __x);
 
-#define fpclassify(x) \
-	(sizeof(x) == sizeof(double) ? __fpclassify(x) : \
-	(sizeof(x) == sizeof(float) ? __fpclassifyf(x) : \
-	(sizeof(x) == sizeof(long double) ? __fpclassifyl(x) : \
-	0)))
+#define fpclassify(x)                                                                              \
+	(sizeof(x) == sizeof(double)                                                                   \
+	     ? __fpclassify(x)                                                                         \
+	     : (sizeof(x) == sizeof(float)                                                             \
+	            ? __fpclassifyf(x)                                                                 \
+	            : (sizeof(x) == sizeof(long double) ? __fpclassifyl(x) : 0)))
 
 #define isfinite(x) (fpclassify(x) & (FP_NORMAL | FP_SUBNORMAL | FP_ZERO))
 #define isnan(x) (fpclassify(x) == FP_NAN)
@@ -77,29 +78,59 @@ int __fpclassifyl(long double __x);
 #define signbit(x) (__builtin_signbit(x))
 
 /* [C11/7.12.14 Comparison macros] */
-#define isunordered(x,y) (isnan((x)) ? ((void)(y),1) : isnan((y)))
+#define isunordered(x, y) (isnan((x)) ? ((void)(y), 1) : isnan((y)))
 
-__MLIBC_INLINE_DEFINITION int __mlibc_isless(double_t __x, double_t __y) { return !isunordered(__x, __y) && __x < __y; }
-__MLIBC_INLINE_DEFINITION int __mlibc_islessf(float_t __x, float_t __y) { return !isunordered(__x, __y) && __x < __y; }
-__MLIBC_INLINE_DEFINITION int __mlibc_islessl(long double __x, long double __y) { return !isunordered(__x, __y) && __x < __y; }
-__MLIBC_INLINE_DEFINITION int __mlibc_islessequal(double_t __x, double_t __y) { return !isunordered(__x, __y) && __x <= __y; }
-__MLIBC_INLINE_DEFINITION int __mlibc_islessequalf(float_t __x, float_t __y) { return !isunordered(__x, __y) && __x <= __y; }
-__MLIBC_INLINE_DEFINITION int __mlibc_islessequall(long double __x, long double __y) { return !isunordered(__x, __y) && __x <= __y; }
-__MLIBC_INLINE_DEFINITION int __mlibc_islessgreater(double_t __x, double_t __y) { return !isunordered(__x, __y) && __x != __y; }
-__MLIBC_INLINE_DEFINITION int __mlibc_islessgreaterf(float_t __x, float_t __y) { return !isunordered(__x, __y) && __x != __y; }
-__MLIBC_INLINE_DEFINITION int __mlibc_islessgreaterl(long double __x, long double __y) { return !isunordered(__x, __y) && __x != __y; }
-__MLIBC_INLINE_DEFINITION int __mlibc_isgreater(double_t __x, double_t __y) { return !isunordered(__x, __y) && __x > __y; }
-__MLIBC_INLINE_DEFINITION int __mlibc_isgreaterf(float_t __x, float_t __y) { return !isunordered(__x, __y) && __x > __y; }
-__MLIBC_INLINE_DEFINITION int __mlibc_isgreaterl(long double __x, long double __y) { return !isunordered(__x, __y) && __x > __y; }
-__MLIBC_INLINE_DEFINITION int __mlibc_isgreaterequal(double_t __x, double_t __y) { return !isunordered(__x, __y) && __x >= __y; }
-__MLIBC_INLINE_DEFINITION int __mlibc_isgreaterequalf(float_t __x, float_t __y) { return !isunordered(__x, __y) && __x >= __y; }
-__MLIBC_INLINE_DEFINITION int __mlibc_isgreaterequall(long double __x, long double __y) { return !isunordered(__x, __y) && __x >= __y; }
+__MLIBC_INLINE_DEFINITION int __mlibc_isless(double_t __x, double_t __y) {
+	return !isunordered(__x, __y) && __x < __y;
+}
+__MLIBC_INLINE_DEFINITION int __mlibc_islessf(float_t __x, float_t __y) {
+	return !isunordered(__x, __y) && __x < __y;
+}
+__MLIBC_INLINE_DEFINITION int __mlibc_islessl(long double __x, long double __y) {
+	return !isunordered(__x, __y) && __x < __y;
+}
+__MLIBC_INLINE_DEFINITION int __mlibc_islessequal(double_t __x, double_t __y) {
+	return !isunordered(__x, __y) && __x <= __y;
+}
+__MLIBC_INLINE_DEFINITION int __mlibc_islessequalf(float_t __x, float_t __y) {
+	return !isunordered(__x, __y) && __x <= __y;
+}
+__MLIBC_INLINE_DEFINITION int __mlibc_islessequall(long double __x, long double __y) {
+	return !isunordered(__x, __y) && __x <= __y;
+}
+__MLIBC_INLINE_DEFINITION int __mlibc_islessgreater(double_t __x, double_t __y) {
+	return !isunordered(__x, __y) && __x != __y;
+}
+__MLIBC_INLINE_DEFINITION int __mlibc_islessgreaterf(float_t __x, float_t __y) {
+	return !isunordered(__x, __y) && __x != __y;
+}
+__MLIBC_INLINE_DEFINITION int __mlibc_islessgreaterl(long double __x, long double __y) {
+	return !isunordered(__x, __y) && __x != __y;
+}
+__MLIBC_INLINE_DEFINITION int __mlibc_isgreater(double_t __x, double_t __y) {
+	return !isunordered(__x, __y) && __x > __y;
+}
+__MLIBC_INLINE_DEFINITION int __mlibc_isgreaterf(float_t __x, float_t __y) {
+	return !isunordered(__x, __y) && __x > __y;
+}
+__MLIBC_INLINE_DEFINITION int __mlibc_isgreaterl(long double __x, long double __y) {
+	return !isunordered(__x, __y) && __x > __y;
+}
+__MLIBC_INLINE_DEFINITION int __mlibc_isgreaterequal(double_t __x, double_t __y) {
+	return !isunordered(__x, __y) && __x >= __y;
+}
+__MLIBC_INLINE_DEFINITION int __mlibc_isgreaterequalf(float_t __x, float_t __y) {
+	return !isunordered(__x, __y) && __x >= __y;
+}
+__MLIBC_INLINE_DEFINITION int __mlibc_isgreaterequall(long double __x, long double __y) {
+	return !isunordered(__x, __y) && __x >= __y;
+}
 
 /* TODO: We chould use _Generic here but that does not work in C++ code. */
-#define __MLIBC_CHOOSE_COMPARISON(x, y, p) ( \
-	sizeof((x)+(y)) == sizeof(float) ? p##f(x, y) : \
-	sizeof((x)+(y)) == sizeof(double) ? p(x, y) : \
-	p##l(x, y) )
+#define __MLIBC_CHOOSE_COMPARISON(x, y, p)                                                         \
+	(sizeof((x) + (y)) == sizeof(float)    ? p##f(x, y)                                            \
+	 : sizeof((x) + (y)) == sizeof(double) ? p(x, y)                                               \
+	                                       : p##l(x, y))
 
 #define isless(x, y) __MLIBC_CHOOSE_COMPARISON(x, y, __mlibc_isless)
 #define islessequal(x, y) __MLIBC_CHOOSE_COMPARISON(x, y, __mlibc_islessequal)
@@ -378,7 +409,32 @@ extern int signgam;
 /* BSD floating-point classification functions - obsolete */
 int finite(double __x);
 int finitef(float __x);
-#endif
+
+/* Bessel functions */
+
+double j0(double __x);
+float j0f(float __x);
+long double j0l(long double __x);
+
+double j1(double __x);
+float j1f(float __x);
+long double j1l(long double __x);
+
+double jn(int __n, double __x);
+float jnf(int __n, float __x);
+long double jnl(int __n, long double __x);
+
+double y0(double __x);
+float y0f(float __x);
+long double y0l(long double __x);
+
+double y1(double __x);
+float y1f(float __x);
+long double y1l(long double __x);
+
+double yn(int __n, double __x);
+float ynf(int __n, float __x);
+long double ynl(int __n, long double __x);
 
 #endif /* !__MLIBC_ABI_ONLY */
 
@@ -387,4 +443,3 @@ int finitef(float __x);
 #endif
 
 #endif /* _MATH_H */
-

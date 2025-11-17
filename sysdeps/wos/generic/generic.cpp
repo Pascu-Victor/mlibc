@@ -21,7 +21,6 @@
 // SafeStack support: This variable is accessed by the compiler-generated code
 // It needs to be in TLS storage and properly initialized
 // The actual initialization will be done by the kernel when setting up TLS
-__thread void *__safestack_unsafe_stack_ptr = nullptr;
 
 namespace mlibc {
 
@@ -62,6 +61,18 @@ int sys_open(char const *path, int flags, unsigned int mode, int *fd) {
 		return -result;
 	}
 	*fd = result;
+	return 0;
+}
+
+int sys_open_dir(const char *path, int *fd) { return sys_open(path, O_DIRECTORY, 0, fd); }
+
+int sys_read_entries(int handle, void *buffer, size_t max_size, size_t *bytes_read) {
+	ssize_t result = ker::abi::vfs::read_dir_entries(handle, buffer, max_size);
+	if (result < 0) {
+		// Return positive errno on error
+		return -result;
+	}
+	*bytes_read = result;
 	return 0;
 }
 
@@ -141,10 +152,21 @@ int sys_read(int fd, void *buf, unsigned long count, long *bytes_read) {
 	}
 	return 0;
 }
-int sys_vm_map(void *, unsigned long, int, int, int, long, void **) {
-	// no vm map support for now just panic
-	sys_libc_log("sys_vm_map not supported");
-	sys_libc_panic();
+int sys_vm_map(void *hint, size_t size, int prot, int flags, int fd, long offset, void **addr) {
+	int64_t result = ker::vmem::map(addr, size, prot, flags, fd, offset, hint);
+	if (result < 0) {
+		// Convert kernel error code to positive errno
+		return (int)(-result);
+	}
+	return 0; // Success
+}
+int sys_vm_unmap(void *addr, size_t size) {
+	int result = (int)ker::vmem::free(addr, size);
+	if (result < 0) {
+		// Convert kernel error code to positive errno
+		return (-result);
+	}
+	return 0; // Success
 }
 int sys_write(int fd, void const *buf, unsigned long count, long *bytes_written) {
 	ssize_t result = ker::abi::vfs::write(fd, buf, count);
@@ -228,3 +250,9 @@ int sys_clone(void *tcb, pid_t *tid_out, void *stack) {
 }
 
 } // namespace mlibc
+
+__attribute__((visibility("default"))) extern "C" void frg_panic(const char *mstr) {
+	//	mlibc::sys_libc_log("mlibc: Call to frg_panic");
+	mlibc::sys_libc_log(mstr);
+	mlibc::sys_libc_panic();
+}

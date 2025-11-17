@@ -17,8 +17,8 @@
 #include <sys/syscall.h>
 
 namespace ker {
-namespace abi {
-namespace vmem {
+
+namespace abi::vmem {
 
 // Operations
 enum class ops : uint64_t {
@@ -26,8 +26,7 @@ enum class ops : uint64_t {
 	anon_free = 1,
 };
 
-} // namespace vmem
-} // namespace abi
+} // namespace abi::vmem
 
 // Userspace wrapper functions
 namespace vmem {
@@ -55,7 +54,7 @@ allocate(void **addr, uint64_t size, uint64_t prot, uint64_t flags, void *hint =
 	return 0; // Success
 }
 
-// Free anonymous memory
+// Free mapped memory
 // Returns 0 on success, or negative error code on failure
 static inline int64_t free(void *addr, uint64_t size) {
 	uint64_t result = syscall(
@@ -68,6 +67,36 @@ static inline int64_t free(void *addr, uint64_t size) {
 	);
 
 	return static_cast<int64_t>(result);
+}
+
+// Map memory
+static inline int64_t
+map(void **addr,
+    uint64_t size,
+    uint64_t prot,
+    uint64_t flags,
+    int fd,
+    uint64_t offset,
+    void *hint = nullptr) {
+	uint64_t result = syscall(
+	    abi::callnums::vmem_map,
+	    reinterpret_cast<uint64_t>(hint),
+	    size,
+	    prot,
+	    flags,
+	    static_cast<uint64_t>(fd),
+	    offset
+	);
+
+	// Check if result is an error (negative when cast to int64_t)
+	auto signed_result = static_cast<int64_t>(result);
+	if (signed_result < 0) {
+		return signed_result; // Return error code
+	}
+
+	*addr = reinterpret_cast<void *>(result); // NOLINT
+
+	return 0; // Success
 }
 
 } // namespace vmem

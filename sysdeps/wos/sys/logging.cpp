@@ -6,7 +6,7 @@ uint64_t log(const char *str, uint64_t len, abi::sys_log::sys_log_device device)
 	    ker::abi::callnums::sys_log,
 	    (uint64_t)abi::sys_log::sys_log_ops::log,
 	    (uint64_t)str,
-	    (uint64_t)len,
+	    len,
 	    (uint64_t)device
 	);
 }
@@ -16,7 +16,7 @@ uint64_t logLine(const char *str, uint64_t len, abi::sys_log::sys_log_device dev
 	    ker::abi::callnums::sys_log,
 	    (uint64_t)abi::sys_log::sys_log_ops::logLine,
 	    (uint64_t)str,
-	    (uint64_t)len,
+	    len,
 	    (uint64_t)device
 	);
 }
