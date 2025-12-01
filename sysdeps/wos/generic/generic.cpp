@@ -39,11 +39,6 @@ int sys_futex_tid() {
 	return tid;
 }
 
-void sys_exit(int status) {
-	ker::process::exit(status);
-	__builtin_unreachable();
-}
-
 int sys_futex_wake(int *) {
 	// no futex support for now just panic
 	sys_libc_log("sys_futex_wake not supported");
@@ -53,15 +48,6 @@ int sys_futex_wait(int *, int, timespec const *) {
 	// no futex support for now just panic
 	sys_libc_log("sys_futex_wait not supported");
 	sys_libc_panic();
-}
-int sys_open(char const *path, int flags, unsigned int mode, int *fd) {
-	int result = ker::abi::vfs::open(path, flags, mode);
-	if (result < 0) {
-		// Return positive errno on error
-		return -result;
-	}
-	*fd = result;
-	return 0;
 }
 
 int sys_open_dir(const char *path, int *fd) { return sys_open(path, O_DIRECTORY, 0, fd); }
@@ -84,14 +70,6 @@ int sys_tcb_set(void *tcb) {
 	return ker::multiproc::setTCB(tcb);
 }
 
-int sys_close(int fd) {
-	int result = ker::abi::vfs::close(fd);
-	if (result < 0) {
-		// Return positive errno on error
-		return -result;
-	}
-	return 0;
-}
 int sys_clock_get(int clock_id, long *seconds, long *nanoseconds) {
 	(void)clock_id;
 	struct timespec ts;
@@ -130,36 +108,6 @@ int sys_anon_free(void *addr, unsigned long size) {
 
 	return 0; // Success
 }
-int sys_seek(int fd, long offset, int whence, long *new_offset) {
-	off_t result = ker::abi::vfs::lseek(fd, offset, whence);
-	if (result < 0) {
-		// Return positive errno on error
-		return (int)(-result);
-	}
-	if (new_offset) {
-		*new_offset = result;
-	}
-	return 0;
-}
-int sys_read(int fd, void *buf, unsigned long count, long *bytes_read) {
-	ssize_t result = ker::abi::vfs::read(fd, buf, count);
-	if (result < 0) {
-		// Return positive errno on error
-		return (int)(-result);
-	}
-	if (bytes_read) {
-		*bytes_read = result;
-	}
-	return 0;
-}
-int sys_vm_map(void *hint, size_t size, int prot, int flags, int fd, long offset, void **addr) {
-	int64_t result = ker::vmem::map(addr, size, prot, flags, fd, offset, hint);
-	if (result < 0) {
-		// Convert kernel error code to positive errno
-		return (int)(-result);
-	}
-	return 0; // Success
-}
 int sys_vm_unmap(void *addr, size_t size) {
 	int result = (int)ker::vmem::free(addr, size);
 	if (result < 0) {
@@ -168,16 +116,14 @@ int sys_vm_unmap(void *addr, size_t size) {
 	}
 	return 0; // Success
 }
-int sys_write(int fd, void const *buf, unsigned long count, long *bytes_written) {
-	ssize_t result = ker::abi::vfs::write(fd, buf, count);
+
+int sys_vm_map(void *hint, size_t size, int prot, int flags, int fd, long offset, void **addr) {
+	int64_t result = ker::vmem::map(addr, size, prot, flags, fd, offset, hint);
 	if (result < 0) {
-		// Return positive errno on error
+		// Convert kernel error code to positive errno
 		return (int)(-result);
 	}
-	if (bytes_written) {
-		*bytes_written = result;
-	}
-	return 0;
+	return 0; // Success
 }
 int sys_isatty(int fd) {
 	bool is_tty = ker::abi::vfs::isatty(fd);
@@ -210,6 +156,8 @@ int sys_anon_allocate(size_t size, void **pointer) {
 
 	return 0; // Success
 }
+
+#ifndef MLIBC_BUILDING_RTLD
 
 int sys_prepare_stack(
     void **stack,
@@ -248,6 +196,8 @@ int sys_clone(void *tcb, pid_t *tid_out, void *stack) {
 	sys_libc_log("sys_clone not yet implemented");
 	return ENOSYS;
 }
+
+#endif
 
 } // namespace mlibc
 

@@ -29,6 +29,8 @@
 #include <mlibc/linux-sysdeps.hpp>
 #endif
 
+extern char **environ;
+
 namespace {
 
 constexpr bool logExecvpeTries = false;

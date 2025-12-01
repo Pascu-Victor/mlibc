@@ -6,6 +6,11 @@ sysdep_supported_options = {
     'wos': true,
 }
 
+rtld_sources += files(
+	'generic/generic.cpp',
+    'sys/logging.cpp',
+)
+
 libc_sources += files(
     'generic/generic.cpp',
     'generic/entry.cpp',
@@ -54,6 +59,9 @@ if not no_headers
         'include/abi-bits/vm-flags.h',
         'include/abi-bits/wait.h',
         'include/abi-bits/utmp-defines.h',
+		'include/abi-bits/fd_set.h',
+		'include/abi-bits/sa_family_t.h',
+		'include/abi-bits/sem.h',
         subdir: 'abi-bits',
         follow_symlinks: true,
     )

@@ -436,6 +436,8 @@ double yn(int __n, double __x);
 float ynf(int __n, float __x);
 long double ynl(int __n, long double __x);
 
+#endif
+
 #endif /* !__MLIBC_ABI_ONLY */
 
 #ifdef __cplusplus

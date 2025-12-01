@@ -280,6 +280,7 @@ elif host_machine.system() == 'nyaux'
 elif host_machine.system() == 'wos'
 	rtld_include_dirs += include_directories('sysdeps/wos/include')
 	libc_include_dirs += include_directories('sysdeps/wos/include')
+	add_project_arguments('-D_GNU_SOURCE', language: ['c', 'cpp'])
 	subdir('sysdeps/wos')
 elif host_machine.system() == 'demo'
 	subdir('sysdeps/demo')
@@ -303,6 +304,7 @@ mlibc_conf.set10('__MLIBC_GLIBC_OPTION', glibc_option)
 mlibc_conf.set10('__MLIBC_BSD_OPTION', bsd_option)
 mlibc_conf.set10('__MLIBC_WOS_OPTION', wos_option)
 mlibc_conf.set10('__MLIBC_SYSDEP_HAS_BITS_SYSCALL_H', provides_bits_syscall_h)
+
 
 # Print which options are allowed
 if posix_option
@@ -478,6 +480,14 @@ subdir('options/glibc')
 subdir('options/linux')
 subdir('options/bsd')
 subdir('options/wos')
+
+# Add WOS-specific option files to RTLD sources
+if host_machine.system() == 'wos'
+	rtld_sources += files(
+		'options/wos/generic/vfs.cpp',
+		'options/wos/generic/process.cpp',
+	)
+endif
 
 rtlib_deps = []
 

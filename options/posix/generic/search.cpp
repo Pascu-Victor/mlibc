@@ -50,53 +50,14 @@ int balance_tree(struct node **nodep) {
 	struct node *node = *nodep;
 	int height_a = height(static_cast<struct node *>(node->a[0]));
 	int height_b = height(static_cast<struct node *>(node->a[1]));
-	if (height_a - height_b < 2) {
+	if (abs(height_a - height_b) < 2) {
 		int old = node->h;
 		node->h = height_a < height_b ? height_b + 1 : height_a + 1;
 		return node->h - old;
 	}
 
-	int rotate(struct node * *nodep, int side) {
-		struct node *node = *nodep;
-		struct node *x = static_cast<struct node *>(node->a[side]);
-		struct node *y = static_cast<struct node *>(x->a[!side]);
-		struct node *z = static_cast<struct node *>(x->a[side]);
-
-		int height_node = node->h;
-		int height_y = height(y);
-		if (height_y > height(z)) {
-			// Perform double rotation
-			node->a[side] = y->a[!side];
-			x->a[!side] = y->a[side];
-			y->a[!side] = node;
-			y->a[side] = x;
-			node->h = height_y;
-			x->h = height_y;
-			y->h = height_y + 1;
-		} else {
-			// Perform single rotation
-			node->a[side] = y;
-			x->a[!side] = node;
-			node->h = height_y + 1;
-			x->h = height_y + 2;
-			y = x;
-		}
-		*nodep = y;
-		return y->h - height_node;
-	}
-
-	int balance_tree(struct node * *nodep) {
-		struct node *node = *nodep;
-		int height_a = height(static_cast<struct node *>(node->a[0]));
-		int height_b = height(static_cast<struct node *>(node->a[1]));
-		if (abs(height_a - height_b) < 2) {
-			int old = node->h;
-			node->h = height_a < height_b ? height_b + 1 : height_a + 1;
-			return node->h - old;
-		}
-
-		return rotate(nodep, height_a < height_b);
-	}
+	return rotate(nodep, height_a < height_b);
+}
 } // namespace
 
 void *tsearch(const void *key, void **rootp, int (*compar)(const void *, const void *)) {

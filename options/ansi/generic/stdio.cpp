@@ -2,6 +2,7 @@
 #include <errno.h>
 #include <limits.h>
 #include <math.h>
+#include <stdlib.h>
 
 #include <abi-bits/fcntl.h>
 
@@ -33,6 +34,7 @@ struct PrintfAgent {
 	operator()(char t, frg::format_options opts, frg::printf_size_mod szmod) {
 		switch (t) {
 			case 'c':
+#ifdef _GLIBCXX_USE_WCHAR_T
 				if (szmod == frg::printf_size_mod::long_size) {
 					char c_buf[MB_LEN_MAX];
 					auto c = static_cast<wchar_t>(frg::pop_arg<wint_t>(_vsp, &opts));
@@ -43,6 +45,7 @@ struct PrintfAgent {
 					_formatter->append(c_buf, res);
 					break;
 				}
+#endif
 				frg::do_printf_chars(*_formatter, t, opts, szmod, _vsp);
 				break;
 			case 'p':
@@ -1396,6 +1399,7 @@ int puts(const char *string) {
 	return 1;
 }
 
+#ifdef _GLIBCXX_USE_WCHAR_T
 wint_t fgetwc(FILE *) { MLIBC_STUB_BODY; }
 wchar_t *fgetws(wchar_t *__restrict, int, FILE *__restrict) { MLIBC_STUB_BODY; }
 wint_t fputwc(wchar_t, FILE *) { MLIBC_STUB_BODY; }
@@ -1406,6 +1410,7 @@ wint_t getwchar(void) { MLIBC_STUB_BODY; }
 wint_t putwc(wchar_t, FILE *) { MLIBC_STUB_BODY; }
 wint_t putwchar(wchar_t) { MLIBC_STUB_BODY; }
 wint_t ungetwc(wint_t, FILE *) { MLIBC_STUB_BODY; }
+#endif
 
 size_t fread(void *buffer, size_t size, size_t count, FILE *file_base) {
 	auto file = static_cast<mlibc::abstract_file *>(file_base);
