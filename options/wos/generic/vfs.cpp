@@ -39,12 +39,11 @@ int sys_read(int fd, void *buf, size_t count, ssize_t *bytes_read) {
 	    static_cast<uint64_t>(ker::abi::vfs::ops::read),
 	    static_cast<uint64_t>(fd),
 	    reinterpret_cast<uint64_t>(buf),
-	    static_cast<uint64_t>(count)
+	    static_cast<uint64_t>(count),
+	    reinterpret_cast<uint64_t>(bytes_read)
 	);
 	if (static_cast<int64_t>(r) < 0)
 		return static_cast<int>(-static_cast<int64_t>(r));
-	if (bytes_read)
-		*bytes_read = static_cast<ssize_t>(r);
 	return 0;
 }
 
@@ -54,12 +53,11 @@ int sys_write(int fd, const void *buf, size_t count, ssize_t *bytes_written) {
 	    static_cast<uint64_t>(ker::abi::vfs::ops::write),
 	    static_cast<uint64_t>(fd),
 	    reinterpret_cast<uint64_t>(buf),
-	    static_cast<uint64_t>(count)
+	    static_cast<uint64_t>(count),
+	    reinterpret_cast<uint64_t>(bytes_written)
 	);
 	if (static_cast<int64_t>(r) < 0)
 		return static_cast<int>(-static_cast<int64_t>(r));
-	if (bytes_written)
-		*bytes_written = static_cast<ssize_t>(r);
 	return 0;
 }
 
@@ -69,12 +67,11 @@ int sys_seek(int fd, long offset, int whence, long *new_offset) {
 	    static_cast<uint64_t>(ker::abi::vfs::ops::lseek),
 	    static_cast<uint64_t>(fd),
 	    static_cast<uint64_t>(offset),
-	    static_cast<uint64_t>(whence)
+	    static_cast<uint64_t>(whence),
+	    reinterpret_cast<uint64_t>(new_offset)
 	);
 	if (static_cast<int64_t>(r) < 0)
 		return static_cast<int>(-static_cast<int64_t>(r));
-	if (new_offset)
-		*new_offset = static_cast<long>(r);
 	return 0;
 }
 
