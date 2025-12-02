@@ -129,6 +129,27 @@ int sys_isatty(int fd) {
 	bool is_tty = ker::abi::vfs::isatty(fd);
 	return is_tty ? 0 : ENOTTY;
 }
+
+int sys_waitpid(pid_t pid, int *status, int options, pid_t *ret_pid) {
+	int64_t result = ker::process::waitpid(pid, status, options);
+	if (result < 0) {
+		// Convert kernel error code to positive errno
+		return (int)(-result);
+	}
+	if (ret_pid)
+		*ret_pid = (pid_t)result;
+	return 0; // Success
+}
+
+int sys_getpid(pid_t *pid) {
+	uint64_t result = ker::process::getpid();
+	if (result == 0) {
+		return EINVAL; // Invalid PID
+	}
+	*pid = (pid_t)result;
+	return 0; // Success
+}
+
 #ifndef MLIBC_BUILDING_RTLD
 
 [[noreturn]] void sys_thread_exit() {
