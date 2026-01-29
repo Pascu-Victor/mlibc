@@ -19,6 +19,10 @@ enum class ops : uint64_t {
 	lseek,
 	isatty,
 	read_dir_entries,
+	mount,
+	mkdir,
+	readlink,
+	symlink,
 };
 
 // Thin syscall veneers (similar to sys/logging.h) so userspace can
@@ -90,6 +94,48 @@ static inline ssize_t read_dir_entries(int fd, void *buffer, size_t max_size) {
 	    static_cast<uint64_t>(max_size)
 	);
 	return static_cast<ssize_t>((int64_t)r);
+}
+
+static inline int mount(const char *source, const char *target, const char *fstype) {
+	uint64_t r = syscall(
+	    ker::abi::callnums::vfs,
+	    static_cast<uint64_t>(ops::mount),
+	    reinterpret_cast<uint64_t>(source),
+	    reinterpret_cast<uint64_t>(target),
+	    reinterpret_cast<uint64_t>(fstype)
+	);
+	return static_cast<int>((int64_t)r);
+}
+
+static inline int mkdir(const char *path, int mode) {
+	uint64_t r = syscall(
+	    ker::abi::callnums::vfs,
+	    static_cast<uint64_t>(ops::mkdir),
+	    reinterpret_cast<uint64_t>(path),
+	    static_cast<uint64_t>(mode)
+	);
+	return static_cast<int>((int64_t)r);
+}
+
+static inline ssize_t readlink(const char *path, char *buf, size_t bufsize) {
+	uint64_t r = syscall(
+	    ker::abi::callnums::vfs,
+	    static_cast<uint64_t>(ops::readlink),
+	    reinterpret_cast<uint64_t>(path),
+	    reinterpret_cast<uint64_t>(buf),
+	    static_cast<uint64_t>(bufsize)
+	);
+	return static_cast<ssize_t>((int64_t)r);
+}
+
+static inline int symlink(const char *target, const char *linkpath) {
+	uint64_t r = syscall(
+	    ker::abi::callnums::vfs,
+	    static_cast<uint64_t>(ops::symlink),
+	    reinterpret_cast<uint64_t>(target),
+	    reinterpret_cast<uint64_t>(linkpath)
+	);
+	return static_cast<int>((int64_t)r);
 }
 
 } // namespace ker::abi::vfs

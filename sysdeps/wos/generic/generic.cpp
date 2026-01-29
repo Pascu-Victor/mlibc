@@ -53,7 +53,7 @@ int sys_futex_wait(int *, int, timespec const *) {
 int sys_open_dir(const char *path, int *fd) { return sys_open(path, O_DIRECTORY, 0, fd); }
 
 int sys_read_entries(int handle, void *buffer, size_t max_size, size_t *bytes_read) {
-	ssize_t result = ker::abi::vfs::read_dir_entries(handle, buffer, max_size);
+	ssize_t result = ::ker::abi::vfs::read_dir_entries(handle, buffer, max_size);
 	if (result < 0) {
 		// Return positive errno on error
 		return -result;
