@@ -22,6 +22,12 @@ uint64_t setTCB(void *ptr) {
 	return syscall(
 	    abi::callnums::threading, (uint64_t)abi::multiproc::threadControlOps::setTCB, (uint64_t)ptr
 	);
-} // namespace ker::multiproc
+}
+[[gnu::weak]]
+uint64_t yield() {
+	return syscall(
+	    abi::callnums::threading, (uint64_t)abi::multiproc::threadControlOps::yield
+	);
+}
 
 } // namespace ker::multiproc

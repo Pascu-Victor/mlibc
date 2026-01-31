@@ -9,7 +9,10 @@
 #include <sys/callnums.h>
 #include <sys/logging.h>
 #include <sys/multiproc.h>
+#include <sys/net.h>
+#include <sys/poll.h>
 #include <sys/process.h>
+#include <sys/socket.h>
 #include <sys/syscall.h>
 #include <sys/time.h>
 #include <sys/time_calls.h>
@@ -21,6 +24,8 @@
 // SafeStack support: This variable is accessed by the compiler-generated code
 // It needs to be in TLS storage and properly initialized
 // The actual initialization will be done by the kernel when setting up TLS
+extern "C" __attribute__((visibility("default"))) __thread void *__safestack_unsafe_stack_ptr =
+    nullptr;
 
 namespace mlibc {
 
@@ -69,6 +74,8 @@ int sys_tcb_set(void *tcb) {
 		return -1;
 	return ker::multiproc::setTCB(tcb);
 }
+
+void sys_yield() { ker::multiproc::yield(); }
 
 int sys_clock_get(int clock_id, long *seconds, long *nanoseconds) {
 	(void)clock_id;
@@ -219,6 +226,244 @@ int sys_clone(void *tcb, pid_t *tid_out, void *stack) {
 }
 
 #endif
+
+// ── Socket sysdeps ──────────────────────────────────────────────────
+
+int sys_socket(int family, int type, int protocol, int *fd) {
+	int64_t r = ker::abi::net::socket(family, type & 0xFF, protocol);
+	if (r < 0)
+		return (int)(-r);
+	*fd = (int)r;
+	return 0;
+}
+
+int sys_bind(int fd, const struct sockaddr *addr_ptr, socklen_t addr_length) {
+	int64_t r = ker::abi::net::bind(fd, addr_ptr, addr_length);
+	if (r < 0)
+		return (int)(-r);
+	return 0;
+}
+
+int sys_listen(int fd, int backlog) {
+	int64_t r = ker::abi::net::listen(fd, backlog);
+	if (r < 0)
+		return (int)(-r);
+	return 0;
+}
+
+int sys_accept(int fd, int *newfd, struct sockaddr *addr_ptr, socklen_t *addr_length, int flags) {
+	(void)flags;
+	size_t alen = addr_length ? *addr_length : 0;
+	for (;;) {
+		int64_t r = ker::abi::net::accept(fd, addr_ptr, &alen);
+		if (r == -EAGAIN)
+			continue; // deferred, retry after wake
+		if (r < 0)
+			return (int)(-r);
+		if (addr_length)
+			*addr_length = (socklen_t)alen;
+		*newfd = (int)r;
+		return 0;
+	}
+}
+
+int sys_connect(int fd, const struct sockaddr *addr_ptr, socklen_t addr_length) {
+	for (;;) {
+		int64_t r = ker::abi::net::connect(fd, addr_ptr, addr_length);
+		if (r == -EAGAIN || r == -EINPROGRESS)
+			continue; // deferred, retry after wake
+		if (r < 0)
+			return (int)(-r);
+		return 0;
+	}
+}
+
+int sys_msg_send(int fd, const struct msghdr *hdr, int flags, ssize_t *length) {
+	if (!hdr || hdr->msg_iovlen == 0 || !hdr->msg_iov)
+		return EINVAL;
+	// Send the first iovec; simple single-buffer path
+	const struct iovec *iov = &hdr->msg_iov[0];
+	if (hdr->msg_name) {
+		// sendto path (has destination address)
+		for (;;) {
+			ssize_t r =
+			    ker::abi::net::sendto(fd, iov->iov_base, iov->iov_len, flags, hdr->msg_name);
+			if (r == -EAGAIN)
+				continue;
+			if (r < 0) {
+				return (int)(-r);
+			}
+			*length = r;
+			return 0;
+		}
+	}
+	// send path (connected socket)
+	for (;;) {
+		ssize_t r = ker::abi::net::send(fd, iov->iov_base, iov->iov_len, flags);
+		if (r == -EAGAIN)
+			continue;
+		if (r < 0)
+			return (int)(-r);
+		*length = r;
+		return 0;
+	}
+}
+
+int sys_msg_recv(int fd, struct msghdr *hdr, int flags, ssize_t *length) {
+	if (!hdr || hdr->msg_iovlen == 0 || !hdr->msg_iov)
+		return EINVAL;
+	const struct iovec *iov = &hdr->msg_iov[0];
+	if (hdr->msg_name) {
+		// recvfrom path
+		for (;;) {
+			ssize_t r =
+			    ker::abi::net::recvfrom(fd, iov->iov_base, iov->iov_len, flags, hdr->msg_name);
+			if (r == -EAGAIN)
+				continue;
+			if (r < 0)
+				return (int)(-r);
+			*length = r;
+			return 0;
+		}
+	}
+	// recv path
+	for (;;) {
+		ssize_t r = ker::abi::net::recv(fd, iov->iov_base, iov->iov_len, flags);
+		if (r == -EAGAIN)
+			continue;
+		if (r < 0)
+			return (int)(-r);
+		*length = r;
+		return 0;
+	}
+}
+
+ssize_t sys_sendto(
+    int fd,
+    const void *buffer,
+    size_t size,
+    int flags,
+    const struct sockaddr *sock_addr,
+    socklen_t addr_length,
+    ssize_t *length
+) {
+	(void)addr_length; // kernel infers from socket domain
+	for (;;) {
+		ssize_t r;
+		if (sock_addr) {
+			r = ker::abi::net::sendto(fd, buffer, size, flags, sock_addr);
+		} else {
+			r = ker::abi::net::send(fd, buffer, size, flags);
+		}
+		if (r == -EAGAIN)
+			continue;
+		if (r < 0)
+			return (int)(-r);
+		*length = r;
+		return 0;
+	}
+}
+
+ssize_t sys_recvfrom(
+    int fd,
+    void *buffer,
+    size_t size,
+    int flags,
+    struct sockaddr *sock_addr,
+    socklen_t *addr_length,
+    ssize_t *length
+) {
+	(void)addr_length; // kernel fills based on socket domain
+	for (;;) {
+		ssize_t r;
+		if (sock_addr) {
+			r = ker::abi::net::recvfrom(fd, buffer, size, flags, sock_addr);
+		} else {
+			r = ker::abi::net::recv(fd, buffer, size, flags);
+		}
+		if (r == -EAGAIN)
+			continue;
+		if (r < 0)
+			return (int)(-r);
+		*length = r;
+		return 0;
+	}
+}
+
+int sys_setsockopt(int fd, int layer, int number, const void *buffer, socklen_t size) {
+	int64_t r = ker::abi::net::setsockopt(fd, layer, number, buffer, size);
+	if (r < 0)
+		return (int)(-r);
+	return 0;
+}
+
+int
+sys_getsockopt(int fd, int layer, int number, void *__restrict buffer, socklen_t *__restrict size) {
+	size_t ksize = size ? *size : 0;
+	int64_t r = ker::abi::net::getsockopt(fd, layer, number, buffer, &ksize);
+	if (r < 0)
+		return (int)(-r);
+	if (size)
+		*size = (socklen_t)ksize;
+	return 0;
+}
+
+int sys_shutdown(int sockfd, int how) {
+	int64_t r = ker::abi::net::shutdown(sockfd, how);
+	if (r < 0)
+		return (int)(-r);
+	return 0;
+}
+
+int sys_sockname(
+    int fd, struct sockaddr *addr_ptr, socklen_t max_addr_length, socklen_t *actual_length
+) {
+	size_t alen = max_addr_length;
+	int64_t r = ker::abi::net::getsockname(fd, addr_ptr, &alen);
+	if (r < 0)
+		return (int)(-r);
+	if (actual_length)
+		*actual_length = (socklen_t)alen;
+	return 0;
+}
+
+int sys_peername(
+    int fd, struct sockaddr *addr_ptr, socklen_t max_addr_length, socklen_t *actual_length
+) {
+	size_t alen = max_addr_length;
+	int64_t r = ker::abi::net::getpeername(fd, addr_ptr, &alen);
+	if (r < 0)
+		return (int)(-r);
+	if (actual_length)
+		*actual_length = (socklen_t)alen;
+	return 0;
+}
+
+int sys_poll(struct pollfd *fds, nfds_t count, int timeout, int *num_events) {
+	for (;;) {
+		int r = ker::abi::net::poll(fds, count, timeout);
+		if (r == -EAGAIN)
+			continue;
+		if (r < 0)
+			return -r;
+		*num_events = r;
+		return 0;
+	}
+}
+
+int sys_ioctl(int fd, unsigned long request, void *arg, int *result) {
+	(void)fd;
+	// Route network ioctls (SIOC* range 0x8900-0x89FF) through net syscall
+	if (request >= 0x8900 && request <= 0x89FF) {
+		int r = ker::abi::net::ioctl_net(request, arg);
+		if (r < 0)
+			return -r;
+		if (result)
+			*result = 0;
+		return 0;
+	}
+	return ENOSYS;
+}
 
 } // namespace mlibc
 

@@ -62,6 +62,8 @@ if not no_headers
 		'include/abi-bits/fd_set.h',
 		'include/abi-bits/sa_family_t.h',
 		'include/abi-bits/sem.h',
+		'include/abi-bits/ioctls.h',
+		'include/abi-bits/route.h',
         subdir: 'abi-bits',
         follow_symlinks: true,
     )
@@ -77,6 +79,7 @@ if not no_headers
     install_headers(
         'include/sys/callnums.h',
         'include/sys/multiproc.h',
+        'include/sys/net.h',
         'include/sys/process.h',
         'include/sys/syscall.h',
         'include/sys/logging.h',
