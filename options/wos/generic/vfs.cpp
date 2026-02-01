@@ -75,4 +75,20 @@ int sys_seek(int fd, long offset, int whence, long *new_offset) {
 	return 0;
 }
 
+int sys_sendfile(int outfd, int infd, off_t *offset, size_t count, ssize_t *out) {
+	uint64_t r = syscall(
+	    ker::abi::callnums::vfs,
+	    static_cast<uint64_t>(ker::abi::vfs::ops::sendfile),
+	    static_cast<uint64_t>(outfd),
+	    static_cast<uint64_t>(infd),
+	    reinterpret_cast<uint64_t>(offset),
+	    static_cast<uint64_t>(count)
+	);
+	if (static_cast<int64_t>(r) < 0)
+		return static_cast<int>(-static_cast<int64_t>(r));
+	if (out)
+		*out = static_cast<ssize_t>(r);
+	return 0;
+}
+
 } // namespace mlibc

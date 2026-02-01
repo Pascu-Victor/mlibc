@@ -257,3 +257,59 @@ size_t wcsnrtombs(
 		return n;
 	}
 }
+
+// Wide character I/O functions (stub implementations)
+wint_t fgetwc(FILE *stream) {
+	// Stub: read a byte and convert to wchar_t
+	if (!stream)
+		return WEOF;
+	int c = fgetc(stream);
+	if (c == EOF)
+		return WEOF;
+	return (wint_t)c;
+}
+
+wint_t getwc(FILE *stream) {
+	// Stub: same as fgetwc
+	if (!stream)
+		return WEOF;
+	int c = fgetc(stream);
+	if (c == EOF)
+		return WEOF;
+	return (wint_t)c;
+}
+
+wint_t ungetwc(wint_t wc, FILE *stream) {
+	// Stub: just return the character for now (no actual unget implementation)
+	if (wc == WEOF)
+		return WEOF;
+	return wc;
+}
+
+wint_t fputwc(wchar_t wc, FILE *stream) {
+	// Stub: convert to char and write
+	if (!stream)
+		return WEOF;
+	char c = (char)wc;
+	if (fputc(c, stream) == EOF)
+		return WEOF;
+	return (wint_t)wc;
+}
+
+int swprintf(wchar_t *__restrict buffer, size_t max_size, const wchar_t *__restrict format, ...) {
+	// Stub: minimal implementation - just copy format string as-is
+	if (!buffer || max_size == 0)
+		return -1;
+
+	// Very basic: just copy the format string (no format specifier support)
+	const wchar_t *src = format;
+	wchar_t *dst = buffer;
+	size_t count = 0;
+
+	while (*src && count < max_size - 1) {
+		*dst++ = *src++;
+		count++;
+	}
+	*dst = L'\0';
+	return count;
+}

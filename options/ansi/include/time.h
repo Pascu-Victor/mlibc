@@ -3,10 +3,11 @@
 
 #include <mlibc-config.h>
 
-#include <bits/null.h>
-#include <bits/size_t.h>
 #include <bits/ansi/time_t.h>
 #include <bits/ansi/timespec.h>
+#include <bits/null.h>
+#include <bits/posix/locale_t.h>
+#include <bits/size_t.h>
 
 /* [7.27.1] Components of time */
 
@@ -67,8 +68,19 @@ char *ctime(const time_t *__timer);
 struct tm *gmtime(const time_t *__timer);
 struct tm *gmtime_r(const time_t *__restrict __timer, struct tm *__restrict __result);
 struct tm *localtime(const time_t *__timer);
-size_t strftime(char *__restrict __dest, size_t __max_size,
-		const char *__restrict __format, const struct tm *__restrict __ptr);
+size_t strftime(
+    char *__restrict __dest,
+    size_t __max_size,
+    const char *__restrict __format,
+    const struct tm *__restrict __ptr
+);
+size_t strftime_l(
+    char *__restrict __dest,
+    size_t __max_size,
+    const char *__restrict __format,
+    const struct tm *__restrict __ptr,
+    locale_t __locale
+);
 
 #if defined(_DEFAULT_SOURCE) || __MLIBC_POSIX1
 void tzset(void);
@@ -83,8 +95,8 @@ void tzset(void);
 /* POSIX extensions. */
 
 #if __MLIBC_POSIX_OPTION
-#	include <bits/posix/posix_time.h>
-#	include <bits/posix/timer_t.h>
+#include <bits/posix/posix_time.h>
+#include <bits/posix/timer_t.h>
 #endif /* __MLIBC_POSIX_OPTION */
 
 #include <abi-bits/clockid_t.h>
@@ -110,7 +122,9 @@ int nanosleep(const struct timespec *__req, struct timespec *__rem);
 
 int clock_getres(clockid_t __clockid, struct timespec *__res);
 int clock_gettime(clockid_t __clockid, struct timespec *__res);
-int clock_nanosleep(clockid_t __clockid, int __flags, const struct timespec *__req, struct timespec *__rem);
+int clock_nanosleep(
+    clockid_t __clockid, int __flags, const struct timespec *__req, struct timespec *__rem
+);
 int clock_settime(clockid_t __clockid, const struct timespec *__time);
 
 struct tm *localtime_r(const time_t *__timer, struct tm *__buf);
@@ -122,8 +136,8 @@ char *ctime_r(const time_t *__timer, char *__buf);
 
 #if __MLIBC_POSIX_OPTION
 #if __MLIBC_XOPEN
-char *strptime(const char *__restrict __buf, const char *__restrict __format,
-		struct tm *__restrict __tm);
+char *
+strptime(const char *__restrict __buf, const char *__restrict __format, struct tm *__restrict __tm);
 #endif /* __MLIBC_XOPEN */
 
 #include <abi-bits/pid_t.h>

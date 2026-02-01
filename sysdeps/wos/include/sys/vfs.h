@@ -23,6 +23,9 @@ enum class ops : uint64_t {
 	mkdir,
 	readlink,
 	symlink,
+	sendfile,
+	stat,
+	fstat,
 };
 
 // Thin syscall veneers (similar to sys/logging.h) so userspace can
@@ -134,6 +137,26 @@ static inline int symlink(const char *target, const char *linkpath) {
 	    static_cast<uint64_t>(ops::symlink),
 	    reinterpret_cast<uint64_t>(target),
 	    reinterpret_cast<uint64_t>(linkpath)
+	);
+	return static_cast<int>((int64_t)r);
+}
+
+static inline int stat_path(const char *path, void *statbuf) {
+	uint64_t r = syscall(
+	    ker::abi::callnums::vfs,
+	    static_cast<uint64_t>(ops::stat),
+	    reinterpret_cast<uint64_t>(path),
+	    reinterpret_cast<uint64_t>(statbuf)
+	);
+	return static_cast<int>((int64_t)r);
+}
+
+static inline int fstat_fd(int fd, void *statbuf) {
+	uint64_t r = syscall(
+	    ker::abi::callnums::vfs,
+	    static_cast<uint64_t>(ops::fstat),
+	    static_cast<uint64_t>(fd),
+	    reinterpret_cast<uint64_t>(statbuf)
 	);
 	return static_cast<int>((int64_t)r);
 }

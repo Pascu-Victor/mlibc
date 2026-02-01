@@ -174,7 +174,7 @@ void *memmem(const void *hs, size_t haystackLen, const void *nd, size_t needleLe
 			}
 		}
 
-		if(found)
+		if (found)
 			return const_cast<char *>(&haystack[i]);
 	}
 
@@ -201,4 +201,14 @@ size_t strlcat(char *d, const char *s, size_t n) {
 		return l + strlen(s);
 	}
 	return l + strlcpy(d + l, s, n - l);
+}
+
+size_t strxfrm_l(char *dest, const char *src, size_t n, locale_t locale) {
+	// Stub implementation: just copy the string as-is (no locale-specific transformation)
+	size_t len = strlen(src);
+	if (n > 0) {
+		strncpy(dest, src, n - 1);
+		dest[n - 1] = '\0';
+	}
+	return len;
 }

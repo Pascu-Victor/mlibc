@@ -6,6 +6,7 @@ libc_sources += files(
 	'generic/sched.cpp',
 	'generic/vfs.cpp',
 	'generic/process.cpp',
+	'generic/sys-sendfile.cpp',
 )
 
 if not no_headers

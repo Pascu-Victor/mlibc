@@ -18,6 +18,7 @@ libc_sources += files(
 	'generic/posix_ctype.cpp',
 	'generic/posix-file-io.cpp',
 	'generic/posix_locale.cpp',
+	'generic/posix_nl_types.cpp',
 	'generic/posix_signal.cpp',
 	'generic/posix_stdio.cpp',
 	'generic/posix_stdlib.cpp',

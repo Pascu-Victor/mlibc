@@ -3,16 +3,19 @@
 #include <limits.h>
 #include <mlibc/all-sysdeps.hpp>
 #include <mlibc/debug.hpp>
+#include <mlibc/fsfd_target.hpp>
 #include <mlibc/tcb.hpp>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/callnums.h>
+#include <sys/futex.h>
 #include <sys/logging.h>
 #include <sys/multiproc.h>
 #include <sys/net.h>
 #include <sys/poll.h>
 #include <sys/process.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <sys/syscall.h>
 #include <sys/time.h>
 #include <sys/time_calls.h>
@@ -44,15 +47,20 @@ int sys_futex_tid() {
 	return tid;
 }
 
-int sys_futex_wake(int *) {
-	// no futex support for now just panic
-	sys_libc_log("sys_futex_wake not supported");
-	sys_libc_panic();
+int sys_futex_wake(int *pointer) {
+	int64_t result = ker::futex::wake(pointer);
+	if (result < 0) {
+		return static_cast<int>(-result); // Return positive errno
+	}
+	return 0;
 }
-int sys_futex_wait(int *, int, timespec const *) {
-	// no futex support for now just panic
-	sys_libc_log("sys_futex_wait not supported");
-	sys_libc_panic();
+
+int sys_futex_wait(int *pointer, int expected, timespec const *timeout) {
+	int64_t result = ker::futex::wait(pointer, expected, timeout);
+	if (result < 0) {
+		return static_cast<int>(-result); // Return positive errno
+	}
+	return 0;
 }
 
 int sys_open_dir(const char *path, int *fd) { return sys_open(path, O_DIRECTORY, 0, fd); }
@@ -463,6 +471,30 @@ int sys_ioctl(int fd, unsigned long request, void *arg, int *result) {
 		return 0;
 	}
 	return ENOSYS;
+}
+
+int sys_stat(fsfd_target fsfdt, int fd, const char *path, int flags, struct stat *statbuf) {
+	(void)flags; // AT_SYMLINK_NOFOLLOW not yet implemented
+	int r = 0;
+	switch (fsfdt) {
+		case fsfd_target::path:
+			r = ker::abi::vfs::stat_path(path, statbuf);
+			break;
+		case fsfd_target::fd:
+			r = ker::abi::vfs::fstat_fd(fd, statbuf);
+			break;
+		case fsfd_target::fd_path:
+			// For fd_path with AT_FDCWD, treat as path-based stat
+			// TODO: Proper fstatat implementation with dirfd
+			r = ker::abi::vfs::stat_path(path, statbuf);
+			break;
+		default:
+			return EINVAL;
+	}
+	if (r < 0) {
+		return -r; // Convert negative error to positive errno
+	}
+	return 0;
 }
 
 } // namespace mlibc

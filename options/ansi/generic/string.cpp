@@ -1,5 +1,6 @@
 #undef _GNU_SOURCE
 
+#include <bits/posix/locale_t.h>
 #include <errno.h>
 #include <string.h>
 #include <wchar.h>
@@ -290,6 +291,32 @@ int wcscmp(const wchar_t *l, const wchar_t *r) {
 int wcscoll(const wchar_t *, const wchar_t *) { MLIBC_STUB_BODY; }
 int wcsncmp(const wchar_t *, const wchar_t *, size_t) { MLIBC_STUB_BODY; }
 size_t wcsxfrm(wchar_t *__restrict, const wchar_t *__restrict, size_t) { MLIBC_STUB_BODY; }
+
+// Locale-aware versions (stub implementations - no locale transformation)
+int wcscoll_l(const wchar_t *a, const wchar_t *b, locale_t locale) {
+	// Stub: ignore locale and use regular wcscoll behavior (simple comparison)
+	for (; *a == *b && *a && *b; a++, b++)
+		;
+	return *a - *b;
+}
+
+size_t
+wcsxfrm_l(wchar_t *__restrict dest, const wchar_t *__restrict src, size_t n, locale_t locale) {
+	// Stub: ignore locale and just copy the string
+	size_t len = 0;
+	while (*src && len < n) {
+		dest[len] = *src;
+		src++;
+		len++;
+	}
+	if (n > 0)
+		dest[len] = L'\0';
+	while (*src) {
+		src++;
+		len++;
+	}
+	return len;
+}
 
 int wmemcmp(const wchar_t *a, const wchar_t *b, size_t size) {
 	for (size_t i = 0; i < size; i++) {

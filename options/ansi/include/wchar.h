@@ -1,13 +1,13 @@
 #ifndef _WCHAR_H
 #define _WCHAR_H
 
+#include <bits/file.h>
+#include <bits/mbstate.h>
 #include <bits/null.h>
 #include <bits/size_t.h>
-#include <bits/wchar_t.h>
 #include <bits/wchar.h>
+#include <bits/wchar_t.h>
 #include <bits/wint_t.h>
-#include <bits/mbstate.h>
-#include <bits/file.h>
 #include <mlibc-config.h>
 
 #define WEOF 0xffffffffU
@@ -24,13 +24,23 @@ extern "C" {
 
 int fwprintf(FILE *__restrict __stream, const wchar_t *__restrict __format, ...);
 int fwscanf(FILE *__restrict __stream, const wchar_t *__restrict __format, ...);
-int vfwprintf(FILE *__restrict __stream, const wchar_t *__restrict __format, __builtin_va_list __args);
-int vfwscanf(FILE *__restrict __stream, const wchar_t *__restrict __format, __builtin_va_list __args);
+int
+vfwprintf(FILE *__restrict __stream, const wchar_t *__restrict __format, __builtin_va_list __args);
+int
+vfwscanf(FILE *__restrict __stream, const wchar_t *__restrict __format, __builtin_va_list __args);
 
-int swprintf(wchar_t *__restrict __buffer, size_t __max_size, const wchar_t *__restrict __format, ...);
+int
+swprintf(wchar_t *__restrict __buffer, size_t __max_size, const wchar_t *__restrict __format, ...);
 int swscanf(wchar_t *__restrict __buffer, const wchar_t *__restrict __format, ...);
-int vswprintf(wchar_t *__restrict __buffer, size_t __max_size, const wchar_t *__restrict __format, __builtin_va_list __args);
-int vswscanf(wchar_t *__restrict __buffer, const wchar_t *__restrict __format, __builtin_va_list __args);
+int vswprintf(
+    wchar_t *__restrict __buffer,
+    size_t __max_size,
+    const wchar_t *__restrict __format,
+    __builtin_va_list __args
+);
+int vswscanf(
+    wchar_t *__restrict __buffer, const wchar_t *__restrict __format, __builtin_va_list __args
+);
 
 int wprintf(const wchar_t *__restrict __format, ...);
 int wscanf(const wchar_t *__restrict __format, ...);
@@ -59,7 +69,8 @@ long double wcstold(const wchar_t *__restrict __nptr, wchar_t **__restrict __end
 long wcstol(const wchar_t *__restrict __nptr, wchar_t **__restrict __endptr, int __base);
 long long wcstoll(const wchar_t *__restrict __nptr, wchar_t **__restrict __endptr, int __base);
 unsigned long wcstoul(const wchar_t *__restrict __nptr, wchar_t **__restrict __endptr, int __base);
-unsigned long long wcstoull(const wchar_t *__restrict __nptr, wchar_t **__restrict __endptr, int __base);
+unsigned long long
+wcstoull(const wchar_t *__restrict __nptr, wchar_t **__restrict __endptr, int __base);
 
 wchar_t *wcscpy(wchar_t *__restrict __dest, const wchar_t *__restrict __src);
 wchar_t *wcsncpy(wchar_t *__restrict __dest, const wchar_t *__restrict __src, size_t __size);
@@ -75,13 +86,21 @@ int wcsncmp(const wchar_t *__a, const wchar_t *__b, size_t __size);
 size_t wcsxfrm(wchar_t *__restrict __dest, const wchar_t *__restrict __src, size_t __size);
 int wmemcmp(const wchar_t *__a, const wchar_t *__b, size_t __size);
 
+/* Locale-aware wide string functions */
+#include <bits/posix/locale_t.h>
+int wcscoll_l(const wchar_t *__a, const wchar_t *__b, locale_t __locale);
+size_t wcsxfrm_l(
+    wchar_t *__restrict __dest, const wchar_t *__restrict __src, size_t __size, locale_t __locale
+);
+
 wchar_t *wcschr(const wchar_t *__s, wchar_t __wc);
 size_t wcscspn(const wchar_t *__dest, const wchar_t *__wchrs);
 wchar_t *wcspbrk(const wchar_t *__s, const wchar_t *__wchrs);
 wchar_t *wcsrchr(const wchar_t *__s, wchar_t __wc);
 size_t wcsspn(const wchar_t *__s, const wchar_t *__wchrs);
 wchar_t *wcsstr(const wchar_t *__s, const wchar_t *__b);
-wchar_t *wcstok(wchar_t *__restrict __s, const wchar_t *__restrict __delimiter, wchar_t **__restrict __ptr);
+wchar_t *
+wcstok(wchar_t *__restrict __s, const wchar_t *__restrict __delimiter, wchar_t **__restrict __ptr);
 wchar_t *wmemchr(const wchar_t *__s, wchar_t __wc, size_t __size);
 
 size_t wcslen(const wchar_t *__s);
@@ -93,8 +112,12 @@ wchar_t *wmemset(wchar_t *__dest, wchar_t __wc, size_t __size);
  * The tag tm is declared as naming an incomplete structure type, the contents of which are
  * described in the header <time.h>. */
 struct tm;
-size_t wcsftime(wchar_t *__restrict __buffer, size_t __max_size, const wchar_t *__restrict __format,
-		const struct tm *__restrict __time);
+size_t wcsftime(
+    wchar_t *__restrict __buffer,
+    size_t __max_size,
+    const wchar_t *__restrict __format,
+    const struct tm *__restrict __time
+);
 
 /* [7.28.6] Wide conversion functions */
 
@@ -103,14 +126,39 @@ int wctob(wint_t __wc);
 
 int mbsinit(const mbstate_t *__state);
 size_t mbrlen(const char *__restrict __mbs, size_t __mbs_limit, mbstate_t *__restrict __stp);
-size_t mbrtowc(wchar_t *__restrict __wcp, const char *__restrict __mbs, size_t __mbs_limit, mbstate_t *__restrict __stp);
+size_t mbrtowc(
+    wchar_t *__restrict __wcp,
+    const char *__restrict __mbs,
+    size_t __mbs_limit,
+    mbstate_t *__restrict __stp
+);
 size_t wcrtomb(char *__restrict __mbs, wchar_t __wc, mbstate_t *__restrict __stp);
-size_t mbsrtowcs(wchar_t *__restrict __wcs, const char **__restrict __mbs, size_t __mb_limit, mbstate_t *__restrict __stp);
-size_t mbsnrtowcs(wchar_t *__restrict __wcs, const char **__restrict __mbs, size_t __mb_limit, size_t __wc_limit,
-		mbstate_t *__restrict __stp);
-size_t wcsrtombs(char *__restrict __mbs, const wchar_t **__restrict __wcs, size_t __mb_limit, mbstate_t *__restrict __stp);
-size_t wcsnrtombs(char *__restrict __mbs, const wchar_t **__restrict __wcs, size_t __mb_limit, size_t __wc_limit,
-		mbstate_t *__restrict __stp);
+size_t mbsrtowcs(
+    wchar_t *__restrict __wcs,
+    const char **__restrict __mbs,
+    size_t __mb_limit,
+    mbstate_t *__restrict __stp
+);
+size_t mbsnrtowcs(
+    wchar_t *__restrict __wcs,
+    const char **__restrict __mbs,
+    size_t __mb_limit,
+    size_t __wc_limit,
+    mbstate_t *__restrict __stp
+);
+size_t wcsrtombs(
+    char *__restrict __mbs,
+    const wchar_t **__restrict __wcs,
+    size_t __mb_limit,
+    mbstate_t *__restrict __stp
+);
+size_t wcsnrtombs(
+    char *__restrict __mbs,
+    const wchar_t **__restrict __wcs,
+    size_t __mb_limit,
+    size_t __wc_limit,
+    mbstate_t *__restrict __stp
+);
 
 /* POSIX extensions */
 #if __MLIBC_XOPEN
