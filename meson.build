@@ -518,13 +518,27 @@ if not headers_only
 				compiler_rt = meson.get_compiler('c').find_library(compiler_rt_name,
 					required: false,
 					dirs: [clang_lib_dir])
-
+				
 				# Try without architecture suffix if not found
 				if not compiler_rt.found()
 					compiler_rt_name = 'libclang_rt.builtins'
 					compiler_rt = meson.get_compiler('c').find_library(compiler_rt_name,
 						required: false,
 						dirs: [clang_lib_dir])
+				endif
+
+				# If find_library still failed, check if the .a file exists directly
+				if not compiler_rt.found()
+					fs = import('fs')
+					builtins_path = clang_lib_dir / 'libclang_rt.builtins.a'
+					if fs.exists(builtins_path)
+						message('Found compiler-rt directly at: ' + builtins_path)
+						compiler_rt = declare_dependency(
+							link_args: [builtins_path]
+						)
+					else
+						message('Could not find libclang_rt.builtins.a at: ' + builtins_path)
+					endif
 				endif
 			endif
 		endif
