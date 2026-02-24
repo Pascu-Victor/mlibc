@@ -7,14 +7,16 @@ sysdep_supported_options = {
 }
 
 rtld_sources += files(
-	'generic/generic.cpp',
+    'generic/generic.cpp',
     'sys/logging.cpp',
+    'crt-x86_64' / host_machine.cpu_family() / 'signals.S',
 )
 
 libc_sources += files(
     'generic/generic.cpp',
     'generic/entry.cpp',
     'sys/logging.cpp',
+    'crt-x86_64' / host_machine.cpu_family() / 'signals.S',
 )
 
 if not no_headers
@@ -50,6 +52,7 @@ if not no_headers
         'include/abi-bits/socket.h',
         'include/abi-bits/socklen_t.h',
         'include/abi-bits/stat.h',
+        'include/abi-bits/statfs.h',
         'include/abi-bits/statvfs.h',
         'include/abi-bits/suseconds_t.h',
         'include/abi-bits/termios.h',
@@ -59,11 +62,11 @@ if not no_headers
         'include/abi-bits/vm-flags.h',
         'include/abi-bits/wait.h',
         'include/abi-bits/utmp-defines.h',
-		'include/abi-bits/fd_set.h',
-		'include/abi-bits/sa_family_t.h',
-		'include/abi-bits/sem.h',
-		'include/abi-bits/ioctls.h',
-		'include/abi-bits/route.h',
+        'include/abi-bits/fd_set.h',
+        'include/abi-bits/sa_family_t.h',
+        'include/abi-bits/sem.h',
+        'include/abi-bits/ioctls.h',
+        'include/abi-bits/route.h',
         subdir: 'abi-bits',
         follow_symlinks: true,
     )
@@ -87,6 +90,11 @@ if not no_headers
         'include/sys/time_calls.h',
         'include/sys/time_ops.h',
         subdir: 'sys',
+    )
+
+    install_headers(
+        'include/asm/ioctl.h',
+        subdir: 'asm',
     )
 endif
 
@@ -124,7 +132,8 @@ if not headers_only
     custom_target(
         'Scrt1',
         build_by_default: true,
-        command: c_compiler.cmd_array() + ['-fPIE', '-c', '-o', '@OUTPUT@', '@INPUT@'],
+        command: c_compiler.cmd_array()
+        + ['-fPIE', '-c', '-o', '@OUTPUT@', '@INPUT@'],
         input: 'crt-x86_64/Scrt1.S',
         output: 'Scrt1.o',
         install: true,

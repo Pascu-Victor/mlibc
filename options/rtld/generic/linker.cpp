@@ -255,6 +255,15 @@ SharedObject *ObjectRepository::injectStaticObject(
 	);
 	_fetchFromPhdrs(object, phdr_pointer, phdr_entry_size, num_phdrs, entry_pointer);
 
+	// Even in static builds, the executable may have a .dynamic section with
+	// DT_SYMTAB, DT_STRTAB, DT_HASH etc. We must parse it so that any
+	// symbol-referencing relocations (e.g. R_X86_64_GLOB_DAT for weak
+	// undefined symbols) can be resolved during linkObjects().
+	if (object->dynamic) {
+		_parseDynamic(object);
+		_parseVerdef(object);
+	}
+
 #if MLIBC_STATIC_BUILD
 	object->initArray = reinterpret_cast<InitFuncPtr *>(__init_array_start);
 	object->initArraySize =

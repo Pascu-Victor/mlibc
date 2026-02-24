@@ -3,7 +3,12 @@ if not wos_option
 endif
 libc_sources += files(
 	'generic/ifaddrs.cpp',
+	'generic/mntent.cpp',
+	'generic/reboot.cpp',
+	'generic/mount.cpp',
+	'generic/klog.cpp',
 	'generic/sched.cpp',
+	'generic/sys-statfs.cpp',
 	'generic/vfs.cpp',
 	'generic/process.cpp',
 	'generic/sys-sendfile.cpp',
@@ -16,6 +21,7 @@ if not no_headers
 	install_headers(
 		'include/ifaddrs.h',
 		'include/malloc.h',
+		'include/mntent.h',
 	)
 	install_headers(
 		'include/bits/wos/wos_unistd.h',
@@ -36,23 +42,29 @@ if not no_headers
 	# 	subdir: 'scsi'
 	# )
 	install_headers(
+		'include/wos/kd.h',
+		'include/wos/vt.h',
+		subdir: 'wos',
+	)
+	install_headers(
 		'include/sys/epoll.h',
 		# 'include/sys/inotify.h',
-		# 'include/sys/mount.h',
+		'include/sys/mount.h',
 		# 'include/sys/prctl.h',
 		# 'include/sys/ptrace.h',
 		# 'include/sys/random.h',
 		'include/sys/hcf.h',
+		'include/sys/reboot.h',
 		'include/sys/sendfile.h',
+		'include/sys/sysmacros.h',
 		# 'include/sys/signalfd.h',
 		# 'include/sys/sysmacros.h',
 		# 'include/sys/timerfd.h',
 		# 'include/sys/eventfd.h',
-		# 'include/sys/reboot.h',
 		# 'include/sys/fsuid.h',
 		# 'include/sys/vt.h',
 		'include/sys/sysinfo.h',
-		# 'include/sys/klog.h',
+		'include/sys/klog.h',
 		# 'include/sys/xattr.h',
 		# 'include/sys/quota.h',
 		# 'include/sys/swap.h',

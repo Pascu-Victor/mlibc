@@ -2,6 +2,7 @@
 #define _SYS_IOCTL_H
 
 #include <abi-bits/ioctls.h>
+#include <asm/ioctl.h>
 #include <mlibc-config.h>
 
 /* On Linux, sys/ioctl.h includes the termios ioctls. */

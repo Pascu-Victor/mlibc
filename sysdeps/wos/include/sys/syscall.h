@@ -1,4 +1,7 @@
 #pragma once
+#include <stdint.h>
+
+#ifdef __cplusplus
 #include <sys/callnums.h>
 
 static inline uint64_t syscall(
@@ -55,3 +58,4 @@ syscall(long callnum, T1 a1 = 0, T2 a2 = 0, T3 a3 = 0, T4 a4 = 0, T5 a5 = 0, T6 
 	);
 	return result;
 }
+#endif /* __cplusplus */

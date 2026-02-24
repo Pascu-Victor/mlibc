@@ -10,6 +10,10 @@ extern "C" {
 #define RUSAGE_SELF 0
 #define RUSAGE_CHILDREN -1
 
+#define PRIO_PROCESS 0
+#define PRIO_PGRP 1
+#define PRIO_USER 2
+
 #define RLIMIT_CPU 0
 #define RLIMIT_FSIZE 1
 #define RLIMIT_DATA 2

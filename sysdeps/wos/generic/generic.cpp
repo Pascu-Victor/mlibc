@@ -1,13 +1,17 @@
 #include "mlibc/ansi-sysdeps.hpp"
+#include <abi-bits/pid_t.h>
 #include <errno.h>
 #include <limits.h>
 #include <mlibc/all-sysdeps.hpp>
 #include <mlibc/debug.hpp>
 #include <mlibc/fsfd_target.hpp>
 #include <mlibc/tcb.hpp>
+#include <signal.h>
+#include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/callnums.h>
+#include <sys/epoll.h>
 #include <sys/futex.h>
 #include <sys/logging.h>
 #include <sys/multiproc.h>
@@ -21,6 +25,7 @@
 #include <sys/time_calls.h>
 #include <sys/time_ops.h>
 #include <sys/types.h>
+#include <sys/utsname.h>
 #include <sys/vfs.h>
 #include <sys/vmem.h>
 
@@ -156,14 +161,7 @@ int sys_waitpid(pid_t pid, int *status, int options, pid_t *ret_pid) {
 	return 0; // Success
 }
 
-int sys_getpid(pid_t *pid) {
-	uint64_t result = ker::process::getpid();
-	if (result == 0) {
-		return EINVAL; // Invalid PID
-	}
-	*pid = (pid_t)result;
-	return 0; // Success
-}
+pid_t sys_getpid() { return ker::process::getpid(); }
 
 #ifndef MLIBC_BUILDING_RTLD
 
@@ -235,7 +233,7 @@ int sys_clone(void *tcb, pid_t *tid_out, void *stack) {
 
 #endif
 
-// ── Socket sysdeps ──────────────────────────────────────────────────
+// -- Socket sysdeps --------------------------------------------------
 
 int sys_socket(int family, int type, int protocol, int *fd) {
 	int64_t r = ker::abi::net::socket(family, type & 0xFF, protocol);
@@ -495,6 +493,319 @@ int sys_stat(fsfd_target fsfdt, int fd, const char *path, int flags, struct stat
 		return -r; // Convert negative error to positive errno
 	}
 	return 0;
+}
+
+// --- New POSIX sysdeps for busybox applet support ---
+
+pid_t sys_getppid() { return (pid_t)ker::process::getppid(); }
+
+int sys_getcwd(char *buffer, size_t size) {
+	int r = ker::abi::vfs::getcwd(buffer, size);
+	if (r < 0)
+		return -r;
+	return 0;
+}
+
+int sys_chdir(const char *path) {
+	int r = ker::abi::vfs::chdir(path);
+	if (r < 0)
+		return -r;
+	return 0;
+}
+
+int sys_access(const char *path, int mode) {
+	int r = ker::abi::vfs::access(path, mode);
+	if (r < 0)
+		return -r;
+	return 0;
+}
+
+int sys_faccessat(int dirfd, const char *pathname, int mode, int flags) {
+	(void)flags;
+	int r = ker::abi::vfs::faccessat(dirfd, pathname, mode, flags);
+	if (r < 0)
+		return -r;
+	return 0;
+}
+
+int sys_dup(int fd, int flags, int *newfd) {
+	(void)flags;
+	int r = ker::abi::vfs::dup(fd);
+	if (r < 0)
+		return -r;
+	*newfd = r;
+	return 0;
+}
+
+int sys_dup2(int fd, int flags, int newfd) {
+	(void)flags;
+	int r = ker::abi::vfs::dup2(fd, newfd);
+	if (r < 0)
+		return -r;
+	return 0;
+}
+
+int sys_pipe(int *fds, int flags) {
+	(void)flags; // O_CLOEXEC etc not yet supported
+	int r = ker::abi::vfs::pipe(fds);
+	if (r < 0)
+		return -r;
+	return 0;
+}
+
+int sys_fcntl(int fd, int request, va_list args, int *result) {
+	uint64_t arg = 0;
+	// F_DUPFD=0, F_GETFD=1, F_SETFD=2, F_GETFL=3, F_SETFL=4
+	if (request == 0 || request == 2 || request == 4) {
+		arg = va_arg(args, uint64_t);
+	}
+	int r = ker::abi::vfs::fcntl(fd, request, arg);
+	if (r < 0) {
+		return -r;
+	}
+	if (result)
+		*result = r;
+	return 0;
+}
+
+int sys_unlinkat(int fd, const char *path, int flags) {
+	int r = ker::abi::vfs::unlinkat(fd, path, flags);
+	if (r < 0)
+		return -r;
+	return 0;
+}
+
+int sys_rmdir(const char *path) {
+	int r = ker::abi::vfs::rmdir(path);
+	if (r < 0)
+		return -r;
+	return 0;
+}
+
+int sys_renameat(int olddirfd, const char *old_path, int newdirfd, const char *new_path) {
+	int r = ker::abi::vfs::renameat(olddirfd, old_path, newdirfd, new_path);
+	if (r < 0)
+		return -r;
+	return 0;
+}
+
+int sys_ftruncate(int fd, size_t size) {
+	int r = ker::abi::vfs::truncate(fd, (off_t)size);
+	if (r < 0)
+		return -r;
+	return 0;
+}
+
+int sys_fchmod(int fd, mode_t mode) {
+	int r = ker::abi::vfs::fchmod(fd, mode);
+	if (r < 0)
+		return -r;
+	return 0;
+}
+
+int sys_chmod(const char *pathname, mode_t mode) {
+	int r = ker::abi::vfs::chmod(pathname, mode);
+	if (r < 0)
+		return -r;
+	return 0;
+}
+
+int sys_fchownat(int dirfd, const char *pathname, uid_t owner, gid_t group, int flags) {
+	(void)flags;
+	if (dirfd == AT_FDCWD || dirfd == -100) {
+		// Absolute or cwd-relative path
+		int r = ker::abi::vfs::chown(pathname, owner, group);
+		if (r < 0)
+			return -r;
+		return 0;
+	}
+	// AT_EMPTY_PATH means operate on fd itself
+	if (flags & 0x1000 /* AT_EMPTY_PATH */) {
+		int r = ker::abi::vfs::fchown(dirfd, owner, group);
+		if (r < 0)
+			return -r;
+		return 0;
+	}
+	// dirfd-relative path — use chown for now, kernel will resolve dirfd
+	int r = ker::abi::vfs::chown(pathname, owner, group);
+	if (r < 0)
+		return -r;
+	return 0;
+}
+
+int sys_pread(int fd, void *buf, size_t n, off_t off, ssize_t *bytes_read) {
+	ssize_t r = ker::abi::vfs::pread(fd, buf, n, off);
+	if (r < 0)
+		return (int)(-r);
+	if (bytes_read)
+		*bytes_read = r;
+	return 0;
+}
+
+int sys_sleep(time_t *secs, long *nanos) {
+	struct timespec req;
+	req.tv_sec = secs ? *secs : 0;
+	req.tv_nsec = nanos ? *nanos : 0;
+	struct timespec rem = {0, 0};
+
+	uint64_t r = syscall(
+	    ker::abi::callnums::time,
+	    static_cast<uint64_t>(ker::abi::sys_time_ops::nanosleep),
+	    reinterpret_cast<uint64_t>(&req),
+	    reinterpret_cast<uint64_t>(&rem)
+	);
+	if ((int64_t)r < 0)
+		return (int)(-(int64_t)r);
+	if (secs)
+		*secs = rem.tv_sec;
+	if (nanos)
+		*nanos = rem.tv_nsec;
+	return 0;
+}
+
+int sys_fork(pid_t *child) {
+	int64_t r = ker::process::fork();
+	if (r < 0)
+		return (int)(-r);
+	*child = (pid_t)r;
+	return 0;
+}
+
+extern "C" void __mlibc_signal_restore();
+extern "C" void __mlibc_signal_restore_rt();
+
+int sys_sigaction(
+    int signum, const struct sigaction *__restrict act, struct sigaction *__restrict oldact
+) {
+
+	struct sigaction modified_act;
+	const struct sigaction *act_ptr = act;
+	if (act) {
+		modified_act = *act;
+		modified_act.sa_flags |= SA_RESTORER;
+		modified_act.sa_restorer =
+		    (act->sa_flags & SA_SIGINFO) ? __mlibc_signal_restore_rt : __mlibc_signal_restore;
+		act_ptr = &modified_act;
+	}
+
+	int64_t r = ker::process::sigaction(signum, (const void *)act_ptr, (void *)oldact);
+	if (r < 0)
+		return (int)(-r);
+	return 0;
+}
+
+int sys_sigprocmask(int how, const sigset_t *__restrict set, sigset_t *__restrict retrieve) {
+	int64_t r = ker::process::sigprocmask(how, (const void *)set, (void *)retrieve);
+	if (r < 0)
+		return (int)(-r);
+	return 0;
+}
+
+int sys_kill(int pid, int sig) {
+	int64_t r = ker::process::kill((int64_t)pid, sig);
+	if (r < 0)
+		return (int)(-r);
+	return 0;
+}
+
+int sys_umount2(const char *target, int flags) {
+	(void)flags;
+	int r = ker::abi::vfs::umount(target);
+	if (r < 0)
+		return -r;
+	return 0;
+}
+
+int sys_mount(
+    const char *source,
+    const char *target,
+    const char *fstype,
+    unsigned long flags,
+    const void *data
+) {
+	(void)flags;
+	(void)data;
+	int r = ker::abi::vfs::mount(source, target, fstype);
+	if (r < 0)
+		return -r;
+	return 0;
+}
+
+uid_t sys_getuid() { return static_cast<uid_t>(ker::process::getuid()); }
+uid_t sys_geteuid() { return static_cast<uid_t>(ker::process::geteuid()); }
+gid_t sys_getgid() { return static_cast<gid_t>(ker::process::getgid()); }
+gid_t sys_getegid() { return static_cast<gid_t>(ker::process::getegid()); }
+
+int sys_setuid(uid_t uid) {
+	int64_t r = ker::process::setuid(uid);
+	if (r < 0)
+		return static_cast<int>(-r);
+	return 0;
+}
+
+int sys_seteuid(uid_t euid) {
+	int64_t r = ker::process::seteuid(euid);
+	if (r < 0)
+		return static_cast<int>(-r);
+	return 0;
+}
+
+int sys_setgid(gid_t gid) {
+	int64_t r = ker::process::setgid(gid);
+	if (r < 0)
+		return static_cast<int>(-r);
+	return 0;
+}
+
+int sys_setegid(gid_t egid) {
+	int64_t r = ker::process::setegid(egid);
+	if (r < 0)
+		return static_cast<int>(-r);
+	return 0;
+}
+
+int sys_uname(struct utsname *buf) {
+	if (!buf)
+		return EINVAL;
+	memset(buf, 0, sizeof(*buf));
+	memcpy(buf->sysname, "WOS", 3);
+	memcpy(buf->nodename, "wos", 3);
+	memcpy(buf->release, "0.1.0", 5);
+	memcpy(buf->version, "0.1.0", 5);
+	memcpy(buf->machine, "x86_64", 6);
+	return 0;
+}
+
+int sys_epoll_create(int flags, int *fd) {
+	int r = ker::abi::vfs::epoll_create_vfs(flags);
+	if (r < 0)
+		return -r;
+	if (fd)
+		*fd = r;
+	return 0;
+}
+
+int sys_epoll_ctl(int epfd, int mode, int fd, struct epoll_event *ev) {
+	int r = ker::abi::vfs::epoll_ctl_vfs(epfd, mode, fd, ev);
+	if (r < 0)
+		return -r;
+	return 0;
+}
+
+int sys_epoll_pwait(
+    int epfd, struct epoll_event *ev, int n, int timeout, const sigset_t *sigmask, int *raised
+) {
+	(void)sigmask; // signal mask not yet supported
+	for (;;) {
+		int r = ker::abi::vfs::epoll_pwait_vfs(epfd, ev, n, timeout);
+		if (r == -EAGAIN)
+			continue;
+		if (r < 0)
+			return -r;
+		if (raised)
+			*raised = r;
+		return 0;
+	}
 }
 
 } // namespace mlibc

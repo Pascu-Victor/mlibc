@@ -3,8 +3,8 @@
 
 #include <bits/ether_addr.h>
 #include <bits/types.h>
-#include <stdint.h>
 #include <mlibc-config.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -14,9 +14,11 @@ extern "C" {
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wvariadic-macros"
 #pragma GCC diagnostic ignored "-Wpedantic"
-#	include <linux/if_ether.h>
+#include <linux/if_ether.h>
 #pragma GCC diagnostic pop
 #else
+#define ETH_ALEN 6
+#define ETH_HLEN 14
 #define ETH_FRAME_LEN 1514
 #endif /* __MLIBC_LINUX_OPTION */
 
