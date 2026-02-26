@@ -3,6 +3,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <limits.h>
+#include <locale.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -498,9 +499,12 @@ size_t strftime_l(
     const struct tm *__restrict tm,
     locale_t locale
 ) {
-	// TODO: Stub implementation: ignore locale and call regular strftime
-	//  In a full implementation, this would use locale-specific formatting
-	return strftime(dest, max_size, format, tm);
+	// Use the requested locale by temporarily installing it as the thread locale.
+	// This makes strftime()'s calls to mlibc::nl_langinfo() return locale-aware data.
+	locale_t prev = uselocale(locale);
+	size_t result = strftime(dest, max_size, format, tm);
+	uselocale(prev);
+	return result;
 }
 
 size_t

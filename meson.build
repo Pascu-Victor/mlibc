@@ -23,16 +23,16 @@ libc_include_dirs = [
 	include_directories('options/lsb/include'),
 	include_directories('options/rtld/include'),
 	include_directories('options/rtld' / host_machine.cpu_family()),
-	include_directories('options/internal' / host_machine.cpu_family() + '-include')
+	include_directories('options/internal' / host_machine.cpu_family() + '-include'),
 ]
 
-rtld_sources = [ ]
-rtld_dso_sources = [ ]
-libc_sources = [ ]
-libc_sublibs = [ ]
+rtld_sources = []
+rtld_dso_sources = []
+libc_sources = []
+libc_sublibs = []
 
-libc_deps = [ ]
-rtld_deps = [ ]
+libc_deps = []
+rtld_deps = []
 
 headers_only = get_option('headers_only')
 no_headers = get_option('no_headers')
@@ -50,8 +50,7 @@ if not headers_only
 	cpp_compiler = meson.get_compiler('cpp')
 
 	target_triple = run_command(c_compiler.cmd_array(), '-dumpmachine', check: true).stdout()
-	use_freestnd_hdrs = get_option('use_freestnd_hdrs').disable_auto_if(
-			target_triple.to_lower().contains('mlibc'))
+	use_freestnd_hdrs = get_option('use_freestnd_hdrs').disable_auto_if(target_triple.to_lower().contains('mlibc'))
 
 	freestnd_c_hdrs_dep = dependency(
 		'freestnd-c-hdrs-' + host_machine.cpu_family(),
@@ -71,10 +70,7 @@ if not headers_only
 
 	frigg_dep = dependency(
 		'frigg',
-		default_options: [
-                  'frigg_no_install=true',
-                  'build_tests=disabled'
-                ],
+		default_options: ['frigg_no_install=true', 'build_tests=disabled'],
 		fallback: ['frigg', 'frigg_dep'],
 	)
 	libc_deps += frigg_dep
@@ -86,12 +82,11 @@ if not headers_only
 	add_project_link_arguments('-nostdlib', language: ['c', 'cpp'])
 
 	if get_option('buildtype').startswith('debug')
-		add_project_arguments('-D__MLIBC_DEBUG', language : ['c', 'cpp'])
+		add_project_arguments('-D__MLIBC_DEBUG', language: ['c', 'cpp'])
 	endif
 
 	if not freestnd_c_hdrs_dep.found()
-		searchdirs = run_command(c_compiler.cmd_array(), '-print-search-dirs',
-					check: true).stdout()
+		searchdirs = run_command(c_compiler.cmd_array(), '-print-search-dirs', check: true).stdout()
 		searchdirs_arr = searchdirs.split('\n')
 		searchline = 'install: '
 		ccdir = ''
@@ -118,15 +113,29 @@ if not headers_only
 	if not freestnd_cxx_hdrs_dep.found()
 		cplusplus_include_path = []
 
-		c_output = run_command(c_compiler.cmd_array(), '-E', '-v', '-x', 'c',
-					'/dev/null', '-o', '-',
-					capture: true,
-					check: true).stderr().split('\n')
+		c_output = run_command(
+			c_compiler.cmd_array(),
+			'-E',
+			'-v',
+			'-x', 'c',
+			'/dev/null',
+			'-o',
+			'-',
+			capture: true,
+			check: true,
+		).stderr().split('\n')
 
-		cpp_output = run_command(cpp_compiler.cmd_array(), '-E', '-v', '-x',
-					'c++', '/dev/null', '-o', '-',
-					capture: true,
-					check: true).stderr().split('\n')
+		cpp_output = run_command(
+			cpp_compiler.cmd_array(),
+			'-E',
+			'-v',
+			'-x', 'c++',
+			'/dev/null',
+			'-o',
+			'-',
+			capture: true,
+			check: true,
+		).stderr().split('\n')
 
 		c_relevant_lines = []
 
@@ -284,7 +293,7 @@ elif host_machine.system() == 'wos'
 	subdir('sysdeps/wos')
 elif host_machine.system() == 'demo'
 	subdir('sysdeps/demo')
-# ANCHOR_END: demo-sysdeps
+	# ANCHOR_END: demo-sysdeps
 else
 	error('No sysdeps defined for OS: ' + host_machine.system())
 endif
@@ -305,22 +314,21 @@ mlibc_conf.set10('__MLIBC_BSD_OPTION', bsd_option)
 mlibc_conf.set10('__MLIBC_WOS_OPTION', wos_option)
 mlibc_conf.set10('__MLIBC_SYSDEP_HAS_BITS_SYSCALL_H', provides_bits_syscall_h)
 
-
 # Print which options are allowed
 if posix_option
-    message('POSIX option is allowed')
+	message('POSIX option is allowed')
 endif
 if linux_option
-    message('Linux option is allowed')
+	message('Linux option is allowed')
 endif
 if glibc_option
-    message('glibc option is allowed')
+	message('glibc option is allowed')
 endif
 if bsd_option
-    message('BSD option is allowed')
+	message('BSD option is allowed')
 endif
 if wos_option
-    message('WOS option is allowed')
+	message('WOS option is allowed')
 endif
 
 rtld_include_dirs += include_directories('options/ansi/include')
@@ -372,15 +380,19 @@ libc_include_dirs += include_directories('.')
 
 #----------------------------------------------------------------------------------------
 
-configure_file(input: 'internal-config.h.in',
+configure_file(
+	input: 'internal-config.h.in',
 	output: 'internal-config.h',
-	configuration: internal_conf)
+	configuration: internal_conf,
+)
 
-configure_file(input: 'mlibc-config.h.in',
+configure_file(
+	input: 'mlibc-config.h.in',
 	output: 'mlibc-config.h',
 	configuration: mlibc_conf,
 	install: not no_headers,
-	install_dir: get_option('includedir'))
+	install_dir: get_option('includedir'),
+)
 
 internal_sources = [
 	'options/internal/generic/allocator.cpp',
@@ -394,6 +406,7 @@ internal_sources = [
 	'options/internal/generic/global-config.cpp',
 	'options/internal/generic/inline-emitter.cpp',
 	'options/internal/generic/locale.cpp',
+	'options/internal/generic/wos-tz.cpp',
 	'options/internal/generic/sigset.cpp',
 	'options/internal/generic/strings.cpp',
 	'options/internal/generic/ubsan.cpp',
@@ -413,15 +426,10 @@ if host_machine.cpu_family() == 'riscv64'
 endif
 
 if not no_headers
-	install_headers(
-		'options/internal/include/stdint.h'
-	)
+	install_headers('options/internal/include/stdint.h')
 
 	if host_machine.cpu_family() == 'riscv64'
-		install_headers(
-			'options/internal/riscv64-include/sys/hwprobe.h',
-			subdir: 'sys'
-		)
+		install_headers('options/internal/riscv64-include/sys/hwprobe.h', subdir: 'sys')
 	endif
 
 	install_headers(
@@ -451,7 +459,7 @@ if not no_headers
 		'options/internal/include/bits/search.h',
 		'options/internal/include/bits/getopt.h',
 		'options/internal/include/bits/reclen_t.h',
-		subdir: 'bits'
+		subdir: 'bits',
 	)
 endif
 
@@ -467,7 +475,7 @@ rtld_sources += [
 	'options/internal/generic/ubsan.cpp',
 	'options/rtld/generic/main.cpp',
 	'options/rtld/generic/linker.cpp',
-	'options/rtld' / host_machine.cpu_family() / 'runtime.S'
+	'options/rtld' / host_machine.cpu_family() / 'runtime.S',
 ]
 
 rtld_dso_sources += ['options/rtld' / host_machine.cpu_family() / 'entry.S']
@@ -484,8 +492,8 @@ subdir('options/wos')
 # Add WOS-specific option files to RTLD sources
 if host_machine.system() == 'wos'
 	rtld_sources += files(
-		'options/wos/generic/vfs.cpp',
 		'options/wos/generic/process.cpp',
+		'options/wos/generic/vfs.cpp',
 	)
 endif
 
@@ -495,7 +503,7 @@ if not headers_only
 	if libgcc_dependency
 		libgcc = meson.get_compiler('c').find_library('gcc', required: false)
 		compiler_rt_name = 'libclang_rt.builtins-' + host_machine.cpu_family()
-        message('compiler_rt ' + compiler_rt_name)
+		message('compiler_rt ' + compiler_rt_name)
 
 		# Try to find compiler-rt library in standard locations first
 		compiler_rt = meson.get_compiler('c').find_library(compiler_rt_name, required: false)
@@ -515,16 +523,12 @@ if not headers_only
 
 				# Try with architecture suffix first
 				compiler_rt_name = 'libclang_rt.builtins-' + host_machine.cpu_family()
-				compiler_rt = meson.get_compiler('c').find_library(compiler_rt_name,
-					required: false,
-					dirs: [clang_lib_dir])
-				
+				compiler_rt = meson.get_compiler('c').find_library(compiler_rt_name, required: false, dirs: [clang_lib_dir])
+
 				# Try without architecture suffix if not found
 				if not compiler_rt.found()
 					compiler_rt_name = 'libclang_rt.builtins'
-					compiler_rt = meson.get_compiler('c').find_library(compiler_rt_name,
-						required: false,
-						dirs: [clang_lib_dir])
+					compiler_rt = meson.get_compiler('c').find_library(compiler_rt_name, required: false, dirs: [clang_lib_dir])
 				endif
 
 				# If find_library still failed, check if the .a file exists directly
@@ -533,9 +537,7 @@ if not headers_only
 					builtins_path = clang_lib_dir / 'libclang_rt.builtins.a'
 					if fs.exists(builtins_path)
 						message('Found compiler-rt directly at: ' + builtins_path)
-						compiler_rt = declare_dependency(
-							link_args: [builtins_path]
-						)
+						compiler_rt = declare_dependency(link_args: [builtins_path])
 					else
 						message('Could not find libclang_rt.builtins.a at: ' + builtins_path)
 					endif
@@ -586,40 +588,46 @@ if not headers_only
 	# libc_include_dirs = [custom_include] + libc_include_dirs
 	# rtld_include_dirs = [custom_include] + rtld_include_dirs
 
-
 	# Our library have different behaviour when built as static and shared libraries.
 	# Hence we need to rebuild the object files with a different define for each mode.
 	if library_type in ['static', 'both']
 		static_cpp_args = [
 			'-DMLIBC_STATIC_BUILD',
 		]
-		ld_static_lib = static_library(ld_library_name, rtld_sources,
+		ld_static_lib = static_library(
+			ld_library_name,
+			rtld_sources,
 			name_prefix: '',
 			cpp_args: ld_cpp_args + static_cpp_args,
 			include_directories: rtld_include_dirs,
 			dependencies: rtld_deps + rtlib_deps,
-			install: false
+			install: false,
 		)
-		libc_static = static_library('c', libc_all_sources,
+		libc_static = static_library(
+			'c',
+			libc_all_sources,
 			cpp_args: static_cpp_args + ['-fno-stack-protector', libc_cpp_args],
 			include_directories: libc_include_dirs,
 			dependencies: libc_deps + rtlib_deps,
 			link_with: [ld_static_lib],
 			link_whole: [libc_sublibs, ld_static_lib],
-			install: true
+			install: true,
 		)
 	endif
 	if library_type in ['shared', 'both']
-		ld_shared_lib = shared_library(ld_library_name, rtld_sources + rtld_dso_sources,
+		ld_shared_lib = shared_library(
+			ld_library_name,
+			rtld_sources + rtld_dso_sources,
 			name_prefix: '',
 			cpp_args: ld_cpp_args,
 			include_directories: rtld_include_dirs,
 			dependencies: rtld_deps + rtlib_deps,
-			install: true
+			install: true,
 		)
-		hide_everything_ld = (meson.current_source_dir()
-				      / 'scripts/hide-everything.ld')
-		libc_shared = shared_library('c', libc_all_sources,
+		hide_everything_ld = (meson.current_source_dir() / 'scripts/hide-everything.ld')
+		libc_shared = shared_library(
+			'c',
+			libc_all_sources,
 			cpp_args: [libc_cpp_args],
 			include_directories: libc_include_dirs,
 			dependencies: libc_deps + rtlib_deps,
@@ -627,18 +635,53 @@ if not headers_only
 			link_whole: libc_sublibs,
 			link_args: ['-Wl,--version-script,' + hide_everything_ld],
 			link_depends: [hide_everything_ld],
-			install: true
+			install: true,
 		)
 	endif
 
-	library('pthread', 'dummy-libs/libpthread/src/dummy.cpp', cpp_args: libc_cpp_args, install: true)
-	library('rt', 'dummy-libs/librt/src/dummy.cpp', cpp_args: libc_cpp_args, install: true)
-	library('util', 'dummy-libs/libutil/src/dummy.cpp', cpp_args: libc_cpp_args, install: true)
+	library(
+		'pthread',
+		'dummy-libs/libpthread/src/dummy.cpp',
+		cpp_args: libc_cpp_args,
+		install: true,
+	)
+	library(
+		'rt',
+		'dummy-libs/librt/src/dummy.cpp',
+		cpp_args: libc_cpp_args,
+		install: true,
+	)
+	library(
+		'util',
+		'dummy-libs/libutil/src/dummy.cpp',
+		cpp_args: libc_cpp_args,
+		install: true,
+	)
 	library('m', 'dummy-libs/libm/src/dummy.cpp', cpp_args: libc_cpp_args, install: true)
-	library('resolv', 'dummy-libs/libresolv/src/dummy.cpp', cpp_args: libc_cpp_args, install: true)
-	library('dl', 'dummy-libs/libdl/src/dummy.cpp', cpp_args: libc_cpp_args, install: true)
-	library('ssp', 'dummy-libs/libssp/src/dummy.cpp', cpp_args: libc_cpp_args, install: true)
-	library('ssp_nonshared', 'dummy-libs/libssp_nonshared/src/dummy.cpp', cpp_args: libc_cpp_args, install: true)
+	library(
+		'resolv',
+		'dummy-libs/libresolv/src/dummy.cpp',
+		cpp_args: libc_cpp_args,
+		install: true,
+	)
+	library(
+		'dl',
+		'dummy-libs/libdl/src/dummy.cpp',
+		cpp_args: libc_cpp_args,
+		install: true,
+	)
+	library(
+		'ssp',
+		'dummy-libs/libssp/src/dummy.cpp',
+		cpp_args: libc_cpp_args,
+		install: true,
+	)
+	library(
+		'ssp_nonshared',
+		'dummy-libs/libssp_nonshared/src/dummy.cpp',
+		cpp_args: libc_cpp_args,
+		install: true,
+	)
 endif
 
 summary_info = {}
@@ -665,9 +708,8 @@ hdoc = find_program('hdoc', required: false)
 conf_data = configuration_data()
 conf_data.set('source_root', meson.global_source_root())
 conf_data.set('build_root', meson.global_build_root())
-configure_file(input: 'scripts/hdoc.toml.in',
-	output: '.hdoc.toml', configuration: conf_data)
+configure_file(input: 'scripts/hdoc.toml.in', output: '.hdoc.toml', configuration: conf_data)
 
 if hdoc.found()
-	run_target('hdoc', command : [hdoc.full_path(), '--verbose'])
+	run_target('hdoc', command: [hdoc.full_path(), '--verbose'])
 endif

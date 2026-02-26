@@ -51,6 +51,9 @@ enum class ops : uint64_t {
 	epoll_create,
 	epoll_ctl,
 	epoll_pwait,
+	ioctl,
+	fsync,
+	link,
 };
 
 // Thin syscall veneers (similar to sys/logging.h) so userspace can
@@ -425,6 +428,34 @@ static inline int epoll_pwait_vfs(int epfd, void *events, int maxevents, int tim
 	    reinterpret_cast<uint64_t>(events),
 	    static_cast<uint64_t>(maxevents),
 	    static_cast<uint64_t>(timeout)
+	);
+	return static_cast<int>((int64_t)r);
+}
+
+static inline int ioctl_vfs(int fd, unsigned long cmd, unsigned long arg) {
+	uint64_t r = syscall(
+	    ker::abi::callnums::vfs,
+	    static_cast<uint64_t>(ops::ioctl),
+	    static_cast<uint64_t>(fd),
+	    static_cast<uint64_t>(cmd),
+	    static_cast<uint64_t>(arg)
+	);
+	return static_cast<int>((int64_t)r);
+}
+
+static inline int fsync_vfs(int fd) {
+	uint64_t r = syscall(
+	    ker::abi::callnums::vfs, static_cast<uint64_t>(ops::fsync), static_cast<uint64_t>(fd)
+	);
+	return static_cast<int>((int64_t)r);
+}
+
+static inline int link_vfs(const char *oldpath, const char *newpath) {
+	uint64_t r = syscall(
+	    ker::abi::callnums::vfs,
+	    static_cast<uint64_t>(ops::link),
+	    reinterpret_cast<uint64_t>(oldpath),
+	    reinterpret_cast<uint64_t>(newpath)
 	);
 	return static_cast<int>((int64_t)r);
 }

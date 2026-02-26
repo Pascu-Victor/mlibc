@@ -18,8 +18,8 @@ int alphasort(const struct dirent **a, const struct dirent **b) {
 }
 
 int closedir(DIR *dir) {
-	// TODO: Deallocate the dir structure.
 	close(dir->__handle);
+	frg::destruct(getAllocator(), dir);
 	return 0;
 }
 int dirfd(DIR *dir) { return dir->__handle; }

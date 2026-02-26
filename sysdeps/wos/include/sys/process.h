@@ -130,4 +130,39 @@ inline uint64_t setumask(uint64_t mask) {
 	return syscall(abi::callnums::process, (uint64_t)abi::process::procmgmt_ops::setumask, mask);
 }
 
+inline int64_t setsid() {
+	return (int64_t)syscall(abi::callnums::process, (uint64_t)abi::process::procmgmt_ops::setsid);
+}
+
+inline int64_t getsid(int64_t pid) {
+	return (int64_t)syscall(
+	    abi::callnums::process, (uint64_t)abi::process::procmgmt_ops::getsid, (uint64_t)pid
+	);
+}
+
+inline int64_t setpgid(int64_t pid, int64_t pgid) {
+	return (int64_t)syscall(
+	    abi::callnums::process,
+	    (uint64_t)abi::process::procmgmt_ops::setpgid,
+	    (uint64_t)pid,
+	    (uint64_t)pgid
+	);
+}
+
+inline int64_t getpgid(int64_t pid) {
+	return (int64_t)syscall(
+	    abi::callnums::process, (uint64_t)abi::process::procmgmt_ops::getpgid, (uint64_t)pid
+	);
+}
+
+inline int64_t execve(const char *path, const char *const argv[], const char *const envp[]) {
+	return (int64_t)syscall(
+	    abi::callnums::process,
+	    (uint64_t)abi::process::procmgmt_ops::execve,
+	    (uint64_t)(uintptr_t)path,
+	    (uint64_t)(uintptr_t)argv,
+	    (uint64_t)(uintptr_t)envp
+	);
+}
+
 } // namespace ker::process

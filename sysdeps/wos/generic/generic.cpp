@@ -1,5 +1,6 @@
 #include "mlibc/ansi-sysdeps.hpp"
 #include <abi-bits/pid_t.h>
+#include <algorithm>
 #include <errno.h>
 #include <limits.h>
 #include <mlibc/all-sysdeps.hpp>
@@ -18,6 +19,7 @@
 #include <sys/net.h>
 #include <sys/poll.h>
 #include <sys/process.h>
+#include <sys/resource.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/syscall.h>
@@ -28,6 +30,7 @@
 #include <sys/utsname.h>
 #include <sys/vfs.h>
 #include <sys/vmem.h>
+#include <termios.h>
 
 // SafeStack support: This variable is accessed by the compiler-generated code
 // It needs to be in TLS storage and properly initialized
@@ -35,7 +38,7 @@
 extern "C" __attribute__((visibility("default"))) __thread void *__safestack_unsafe_stack_ptr =
     nullptr;
 
-namespace mlibc {
+namespace [[gnu::visibility("hidden")]] mlibc {
 
 void sys_libc_log(const char *message) {
 	ker::logging::log(message, strlen(message), ker::abi::sys_log::sys_log_device::serial);
@@ -92,7 +95,7 @@ void sys_yield() { ker::multiproc::yield(); }
 
 int sys_clock_get(int clock_id, long *seconds, long *nanoseconds) {
 	(void)clock_id;
-	struct timespec ts;
+	timespec ts;
 	uint64_t res = ker::time::clock_gettime(&ts);
 	if ((int64_t)res < 0) {
 		return (int)(-(int64_t)res);
@@ -104,11 +107,11 @@ int sys_clock_get(int clock_id, long *seconds, long *nanoseconds) {
 	return 0;
 }
 
-int sys_gettimeofday(struct timeval *tv, void *tz) {
+int sys_gettimeofday(timeval *tv, void *tz) {
 	(void)tz;
 	if (!tv)
 		return EINVAL;
-	struct timeval tmp;
+	timeval tmp;
 	uint64_t res = ker::time::gettimeofday(&tmp);
 	if ((int64_t)res < 0) {
 		return (int)(-(int64_t)res);
@@ -150,8 +153,9 @@ int sys_isatty(int fd) {
 	return is_tty ? 0 : ENOTTY;
 }
 
-int sys_waitpid(pid_t pid, int *status, int options, pid_t *ret_pid) {
-	int64_t result = ker::process::waitpid(pid, status, options);
+int sys_waitpid(pid_t pid, int *status, int flags, rusage *ru, pid_t *ret_pid) {
+	(void)ru; // WOS doesn't fill rusage yet
+	int64_t result = ker::process::waitpid(pid, status, flags);
 	if (result < 0) {
 		// Convert kernel error code to positive errno
 		return (int)(-result);
@@ -243,7 +247,7 @@ int sys_socket(int family, int type, int protocol, int *fd) {
 	return 0;
 }
 
-int sys_bind(int fd, const struct sockaddr *addr_ptr, socklen_t addr_length) {
+int sys_bind(int fd, const sockaddr *addr_ptr, socklen_t addr_length) {
 	int64_t r = ker::abi::net::bind(fd, addr_ptr, addr_length);
 	if (r < 0)
 		return (int)(-r);
@@ -257,7 +261,7 @@ int sys_listen(int fd, int backlog) {
 	return 0;
 }
 
-int sys_accept(int fd, int *newfd, struct sockaddr *addr_ptr, socklen_t *addr_length, int flags) {
+int sys_accept(int fd, int *newfd, sockaddr *addr_ptr, socklen_t *addr_length, int flags) {
 	(void)flags;
 	size_t alen = addr_length ? *addr_length : 0;
 	for (;;) {
@@ -273,7 +277,7 @@ int sys_accept(int fd, int *newfd, struct sockaddr *addr_ptr, socklen_t *addr_le
 	}
 }
 
-int sys_connect(int fd, const struct sockaddr *addr_ptr, socklen_t addr_length) {
+int sys_connect(int fd, const sockaddr *addr_ptr, socklen_t addr_length) {
 	for (;;) {
 		int64_t r = ker::abi::net::connect(fd, addr_ptr, addr_length);
 		if (r == -EAGAIN || r == -EINPROGRESS)
@@ -284,11 +288,11 @@ int sys_connect(int fd, const struct sockaddr *addr_ptr, socklen_t addr_length) 
 	}
 }
 
-int sys_msg_send(int fd, const struct msghdr *hdr, int flags, ssize_t *length) {
+int sys_msg_send(int fd, const msghdr *hdr, int flags, ssize_t *length) {
 	if (!hdr || hdr->msg_iovlen == 0 || !hdr->msg_iov)
 		return EINVAL;
 	// Send the first iovec; simple single-buffer path
-	const struct iovec *iov = &hdr->msg_iov[0];
+	const iovec *iov = &hdr->msg_iov[0];
 	if (hdr->msg_name) {
 		// sendto path (has destination address)
 		for (;;) {
@@ -315,10 +319,10 @@ int sys_msg_send(int fd, const struct msghdr *hdr, int flags, ssize_t *length) {
 	}
 }
 
-int sys_msg_recv(int fd, struct msghdr *hdr, int flags, ssize_t *length) {
+int sys_msg_recv(int fd, msghdr *hdr, int flags, ssize_t *length) {
 	if (!hdr || hdr->msg_iovlen == 0 || !hdr->msg_iov)
 		return EINVAL;
-	const struct iovec *iov = &hdr->msg_iov[0];
+	const iovec *iov = &hdr->msg_iov[0];
 	if (hdr->msg_name) {
 		// recvfrom path
 		for (;;) {
@@ -349,7 +353,7 @@ ssize_t sys_sendto(
     const void *buffer,
     size_t size,
     int flags,
-    const struct sockaddr *sock_addr,
+    const sockaddr *sock_addr,
     socklen_t addr_length,
     ssize_t *length
 ) {
@@ -375,7 +379,7 @@ ssize_t sys_recvfrom(
     void *buffer,
     size_t size,
     int flags,
-    struct sockaddr *sock_addr,
+    sockaddr *sock_addr,
     socklen_t *addr_length,
     ssize_t *length
 ) {
@@ -421,9 +425,7 @@ int sys_shutdown(int sockfd, int how) {
 	return 0;
 }
 
-int sys_sockname(
-    int fd, struct sockaddr *addr_ptr, socklen_t max_addr_length, socklen_t *actual_length
-) {
+int sys_sockname(int fd, sockaddr *addr_ptr, socklen_t max_addr_length, socklen_t *actual_length) {
 	size_t alen = max_addr_length;
 	int64_t r = ker::abi::net::getsockname(fd, addr_ptr, &alen);
 	if (r < 0)
@@ -433,9 +435,7 @@ int sys_sockname(
 	return 0;
 }
 
-int sys_peername(
-    int fd, struct sockaddr *addr_ptr, socklen_t max_addr_length, socklen_t *actual_length
-) {
+int sys_peername(int fd, sockaddr *addr_ptr, socklen_t max_addr_length, socklen_t *actual_length) {
 	size_t alen = max_addr_length;
 	int64_t r = ker::abi::net::getpeername(fd, addr_ptr, &alen);
 	if (r < 0)
@@ -445,7 +445,7 @@ int sys_peername(
 	return 0;
 }
 
-int sys_poll(struct pollfd *fds, nfds_t count, int timeout, int *num_events) {
+int sys_poll(pollfd *fds, nfds_t count, int timeout, int *num_events) {
 	for (;;) {
 		int r = ker::abi::net::poll(fds, count, timeout);
 		if (r == -EAGAIN)
@@ -458,7 +458,6 @@ int sys_poll(struct pollfd *fds, nfds_t count, int timeout, int *num_events) {
 }
 
 int sys_ioctl(int fd, unsigned long request, void *arg, int *result) {
-	(void)fd;
 	// Route network ioctls (SIOC* range 0x8900-0x89FF) through net syscall
 	if (request >= 0x8900 && request <= 0x89FF) {
 		int r = ker::abi::net::ioctl_net(request, arg);
@@ -468,23 +467,101 @@ int sys_ioctl(int fd, unsigned long request, void *arg, int *result) {
 			*result = 0;
 		return 0;
 	}
-	return ENOSYS;
+	// Route all other ioctls through VFS (device ioctl)
+	int r = ker::abi::vfs::ioctl_vfs(fd, request, reinterpret_cast<unsigned long>(arg));
+	if (r < 0)
+		return -r;
+	if (result)
+		*result = r;
+	return 0;
 }
 
 int sys_stat(fsfd_target fsfdt, int fd, const char *path, int flags, struct stat *statbuf) {
-	(void)flags; // AT_SYMLINK_NOFOLLOW not yet implemented
 	int r = 0;
+	// AT_SYMLINK_NOFOLLOW = 0x100 — when set, do NOT follow symlinks (lstat)
+	bool follow_symlinks = !(flags & 0x100);
 	switch (fsfdt) {
 		case fsfd_target::path:
-			r = ker::abi::vfs::stat_path(path, statbuf);
+			if (follow_symlinks) {
+				// stat() — follow symlinks by resolving the path first
+				char resolved[512];
+				size_t plen = 0;
+				while (path[plen] != '\0' && plen < 511) {
+					resolved[plen] = path[plen];
+					plen++;
+				}
+				resolved[plen] = '\0';
+				// Try to resolve symlinks via readlink loop
+				for (int depth = 0; depth < 8; depth++) {
+					char target[512];
+					ssize_t lr = ker::abi::vfs::readlink(resolved, target, 511);
+					if (lr <= 0)
+						break; // Not a symlink or error
+					target[lr] = '\0';
+					if (target[0] == '/') {
+						// Absolute target
+						for (size_t i = 0; i <= (size_t)lr; i++)
+							resolved[i] = target[i];
+					} else {
+						// Relative target: replace last component
+						size_t last_slash = 0;
+						bool found = false;
+						for (size_t i = 0; resolved[i]; i++) {
+							if (resolved[i] == '/') {
+								last_slash = i;
+								found = true;
+							}
+						}
+						size_t prefix = found ? last_slash + 1 : 0;
+						for (size_t i = 0; i <= (size_t)lr; i++)
+							resolved[prefix + i] = target[i];
+					}
+				}
+				r = ker::abi::vfs::stat_path(resolved, statbuf);
+			} else {
+				// lstat() — do not follow symlinks
+				r = ker::abi::vfs::stat_path(path, statbuf);
+			}
 			break;
 		case fsfd_target::fd:
 			r = ker::abi::vfs::fstat_fd(fd, statbuf);
 			break;
 		case fsfd_target::fd_path:
-			// For fd_path with AT_FDCWD, treat as path-based stat
-			// TODO: Proper fstatat implementation with dirfd
-			r = ker::abi::vfs::stat_path(path, statbuf);
+			if (follow_symlinks) {
+				char resolved[512];
+				size_t plen = 0;
+				while (path[plen] != '\0' && plen < 511) {
+					resolved[plen] = path[plen];
+					plen++;
+				}
+				resolved[plen] = '\0';
+				for (int depth = 0; depth < 8; depth++) {
+					char target[512];
+					ssize_t lr = ker::abi::vfs::readlink(resolved, target, 511);
+					if (lr <= 0)
+						break;
+					target[lr] = '\0';
+					if (target[0] == '/') {
+						for (size_t i = 0; i <= (size_t)lr; i++)
+							resolved[i] = target[i];
+					} else {
+						size_t last_slash = 0;
+						bool found = false;
+						for (size_t i = 0; resolved[i]; i++) {
+							if (resolved[i] == '/') {
+								last_slash = i;
+								found = true;
+							}
+						}
+						size_t prefix = found ? last_slash + 1 : 0;
+						for (size_t i = 0; i <= (size_t)lr; i++)
+							resolved[prefix + i] = target[i];
+					}
+				}
+				r = ker::abi::vfs::stat_path(resolved, statbuf);
+			} else {
+				r = ker::abi::vfs::stat_path(path, statbuf);
+			}
 			break;
 		default:
 			return EINVAL;
@@ -555,8 +632,8 @@ int sys_pipe(int *fds, int flags) {
 
 int sys_fcntl(int fd, int request, va_list args, int *result) {
 	uint64_t arg = 0;
-	// F_DUPFD=0, F_GETFD=1, F_SETFD=2, F_GETFL=3, F_SETFL=4
-	if (request == 0 || request == 2 || request == 4) {
+	// F_DUPFD=0, F_GETFD=1, F_SETFD=2, F_GETFL=3, F_SETFL=4, F_DUPFD_CLOEXEC=1030
+	if (request == 0 || request == 2 || request == 4 || request == 1030) {
 		arg = va_arg(args, uint64_t);
 	}
 	int r = ker::abi::vfs::fcntl(fd, request, arg);
@@ -643,10 +720,10 @@ int sys_pread(int fd, void *buf, size_t n, off_t off, ssize_t *bytes_read) {
 }
 
 int sys_sleep(time_t *secs, long *nanos) {
-	struct timespec req;
+	timespec req;
 	req.tv_sec = secs ? *secs : 0;
 	req.tv_nsec = nanos ? *nanos : 0;
-	struct timespec rem = {0, 0};
+	timespec rem = {0, 0};
 
 	uint64_t r = syscall(
 	    ker::abi::callnums::time,
@@ -764,7 +841,7 @@ int sys_setegid(gid_t egid) {
 	return 0;
 }
 
-int sys_uname(struct utsname *buf) {
+int sys_uname(utsname *buf) {
 	if (!buf)
 		return EINVAL;
 	memset(buf, 0, sizeof(*buf));
@@ -785,7 +862,7 @@ int sys_epoll_create(int flags, int *fd) {
 	return 0;
 }
 
-int sys_epoll_ctl(int epfd, int mode, int fd, struct epoll_event *ev) {
+int sys_epoll_ctl(int epfd, int mode, int fd, epoll_event *ev) {
 	int r = ker::abi::vfs::epoll_ctl_vfs(epfd, mode, fd, ev);
 	if (r < 0)
 		return -r;
@@ -793,7 +870,7 @@ int sys_epoll_ctl(int epfd, int mode, int fd, struct epoll_event *ev) {
 }
 
 int sys_epoll_pwait(
-    int epfd, struct epoll_event *ev, int n, int timeout, const sigset_t *sigmask, int *raised
+    int epfd, epoll_event *ev, int n, int timeout, const sigset_t *sigmask, int *raised
 ) {
 	(void)sigmask; // signal mask not yet supported
 	for (;;) {
@@ -806,6 +883,465 @@ int sys_epoll_pwait(
 			*raised = r;
 		return 0;
 	}
+}
+
+// --- Dropbear SSH required sysdeps ---
+
+int sys_execve(const char *path, char *const argv[], char *const envp[]) {
+	int64_t r = ker::process::execve(
+	    path, const_cast<const char *const *>(argv), const_cast<const char *const *>(envp)
+	);
+	if (r < 0)
+		return static_cast<int>(-r);
+	// On success execve does not return, but if kernel returned 0 it means
+	// the context switch will happen on return from syscall
+	return 0;
+}
+
+int sys_setsid(pid_t *sid) {
+	int64_t r = ker::process::setsid();
+	if (r < 0)
+		return static_cast<int>(-r);
+	if (sid)
+		*sid = static_cast<pid_t>(r);
+	return 0;
+}
+
+int sys_setpgid(pid_t pid, pid_t pgid) {
+	int64_t r = ker::process::setpgid(pid, pgid);
+	if (r < 0)
+		return static_cast<int>(-r);
+	return 0;
+}
+
+int sys_getpgid(pid_t pid, pid_t *pgid) {
+	int64_t r = ker::process::getpgid(pid);
+	if (r < 0)
+		return static_cast<int>(-r);
+	if (pgid)
+		*pgid = static_cast<pid_t>(r);
+	return 0;
+}
+
+int sys_getsid(pid_t pid, pid_t *sid) {
+	int64_t r = ker::process::getsid(pid);
+	if (r < 0)
+		return static_cast<int>(-r);
+	if (sid)
+		*sid = static_cast<pid_t>(r);
+	return 0;
+}
+
+int sys_openpt(int oflags, int *fd) {
+	(void)oflags;
+	// Open /dev/ptmx to allocate a new PTY pair
+	int r = ker::abi::vfs::open("/dev/ptmx", 2 /* O_RDWR */, 0);
+	if (r < 0)
+		return -r;
+	if (fd)
+		*fd = r;
+	return 0;
+}
+
+int sys_ptsname(int masterfd, char *buffer, size_t length) {
+	// Get the PTY number via TIOCGPTN ioctl
+	int pty_num = -1;
+	int r = ker::abi::vfs::ioctl_vfs(
+	    masterfd, 0x80045430 /* TIOCGPTN */, reinterpret_cast<unsigned long>(&pty_num)
+	);
+	if (r < 0)
+		return -r;
+
+	// Build the slave name: "/dev/pts/<N>"
+	char name[32];
+	int pos = 0;
+	const char *prefix = "/dev/pts/";
+	while (*prefix)
+		name[pos++] = *prefix++;
+	// Convert number to string
+	if (pty_num < 10) {
+		name[pos++] = '0' + static_cast<char>(pty_num);
+	} else {
+		name[pos++] = '0' + static_cast<char>(pty_num / 10);
+		name[pos++] = '0' + static_cast<char>(pty_num % 10);
+	}
+	name[pos] = '\0';
+
+	if (static_cast<size_t>(pos) + 1 > length)
+		return ERANGE;
+	memcpy(buffer, name, static_cast<size_t>(pos) + 1);
+	return 0;
+}
+
+int sys_ttyname(int fd, char *buf, size_t size) {
+	// Check if it's a TTY first
+	if (!ker::abi::vfs::isatty(fd))
+		return ENOTTY;
+
+	// Try TIOCGPTN ioctl to see if it's a PTY (master or slave)
+	int pty_num = -1;
+	int r = ker::abi::vfs::ioctl_vfs(
+	    fd, 0x80045430 /* TIOCGPTN */, reinterpret_cast<unsigned long>(&pty_num)
+	);
+	if (r >= 0 && pty_num >= 0) {
+		// It's a PTY — format "/dev/pts/<N>"
+		char name[32];
+		int pos = 0;
+		const char *prefix = "/dev/pts/";
+		while (*prefix)
+			name[pos++] = *prefix++;
+		if (pty_num < 10) {
+			name[pos++] = '0' + static_cast<char>(pty_num);
+		} else {
+			name[pos++] = '0' + static_cast<char>(pty_num / 10);
+			name[pos++] = '0' + static_cast<char>(pty_num % 10);
+		}
+		name[pos] = '\0';
+		if (static_cast<size_t>(pos) + 1 > size)
+			return ERANGE;
+		memcpy(buf, name, static_cast<size_t>(pos) + 1);
+		return 0;
+	}
+
+	// Not a PTY — try known console/serial devices
+	static const char *known_ttys[] = {"/dev/console", "/dev/tty0", "/dev/ttyS0"};
+	for (const char *path : known_ttys) {
+		size_t len = 0;
+		const char *p = path;
+		while (*p) {
+			len++;
+			p++;
+		}
+		if (len + 1 > size)
+			continue;
+		// Try to open and compare — simple heuristic
+		int tfd = ker::abi::vfs::open(path, 0 /* O_RDONLY */, 0);
+		if (tfd >= 0) {
+			ker::abi::vfs::close(tfd);
+			memcpy(buf, path, len + 1);
+			return 0;
+		}
+	}
+
+	return ENOTTY;
+}
+
+int sys_unlockpt(int fd) {
+	// Unlock the slave side via TIOCSPTLCK ioctl (value 0 = unlock)
+	int unlock = 0;
+	int r = ker::abi::vfs::ioctl_vfs(
+	    fd, 0x40045431 /* TIOCSPTLCK */, reinterpret_cast<unsigned long>(&unlock)
+	);
+	if (r < 0)
+		return -r;
+	return 0;
+}
+
+int sys_getentropy(void *buffer, size_t length) {
+	// Read from /dev/urandom
+	int fd = ker::abi::vfs::open("/dev/urandom", 0 /* O_RDONLY */, 0);
+	if (fd < 0)
+		return EIO;
+	size_t total = 0;
+	while (total < length) {
+		ssize_t r = ker::abi::vfs::read(fd, static_cast<char *>(buffer) + total, length - total);
+		if (r <= 0) {
+			ker::abi::vfs::close(fd);
+			return EIO;
+		}
+		total += static_cast<size_t>(r);
+	}
+	ker::abi::vfs::close(fd);
+	return 0;
+}
+
+int sys_tcgetattr(int fd, termios *attr) {
+	if (!attr)
+		return EINVAL;
+	// Use TCGETS ioctl (0x5401) to get termios from kernel PTY
+	int r = ker::abi::vfs::ioctl_vfs(fd, 0x5401, reinterpret_cast<unsigned long>(attr));
+	if (r < 0)
+		return -r;
+	return 0;
+}
+
+int sys_tcsetattr(int fd, int optional_actions, const termios *attr) {
+	if (!attr)
+		return EINVAL;
+	unsigned long cmd;
+	switch (optional_actions) {
+		case TCSANOW:
+			cmd = 0x5402;
+			break; // TCSETS
+		case TCSADRAIN:
+			cmd = 0x5403;
+			break; // TCSETSW
+		case TCSAFLUSH:
+			cmd = 0x5404;
+			break; // TCSETSF
+		default:
+			return EINVAL;
+	}
+	int r = ker::abi::vfs::ioctl_vfs(
+	    fd, cmd, reinterpret_cast<unsigned long>(const_cast<termios *>(attr))
+	);
+	if (r < 0)
+		return -r;
+	return 0;
+}
+
+int sys_tcflush(int fd, int queue) {
+	int r = ker::abi::vfs::ioctl_vfs(fd, 0x540B /* TCFLSH */, static_cast<unsigned long>(queue));
+	if (r < 0)
+		return -r;
+	return 0;
+}
+
+int sys_tcdrain(int fd) {
+	// No-op for our PTY — data is immediately available, no hardware buffer to drain
+	(void)fd;
+	return 0;
+}
+
+int sys_fsync(int fd) {
+	int r = ker::abi::vfs::fsync_vfs(fd);
+	if (r < 0)
+		return -r;
+	return 0;
+}
+
+int sys_link(const char *old_path, const char *new_path) {
+	int r = ker::abi::vfs::link_vfs(old_path, new_path);
+	if (r < 0)
+		return -r;
+	return 0;
+}
+
+int sys_gethostname(char *buffer, size_t bufsize) {
+	const char *name = "wos";
+	size_t len = 3; // strlen("wos")
+	if (len + 1 > bufsize)
+		return ENAMETOOLONG;
+	memcpy(buffer, name, len + 1);
+	return 0;
+}
+
+int sys_getrlimit(int resource, rlimit *limit) {
+	// Return permissive defaults — WOS has no resource limits
+	(void)resource;
+	if (limit) {
+		limit->rlim_cur = RLIM_INFINITY;
+		limit->rlim_max = RLIM_INFINITY;
+	}
+	return 0;
+}
+
+int sys_setrlimit(int resource, const rlimit *limit) {
+	// No-op stub — WOS doesn't enforce resource limits
+	(void)resource;
+	(void)limit;
+	return 0;
+}
+
+int sys_umask(mode_t mode, mode_t *old) {
+	uint64_t prev = ker::process::setumask(static_cast<uint64_t>(mode & 0777));
+	if (old)
+		*old = static_cast<mode_t>(prev);
+	return 0;
+}
+
+int sys_pselect(
+    int num_fds,
+    fd_set *read_set,
+    fd_set *write_set,
+    fd_set *except_set,
+    const timespec *timeout,
+    const sigset_t *sigmask,
+    int *num_events
+) {
+	(void)sigmask;
+
+	// Inline fd_set bit helpers (fds_bits is uint8_t[128] in mlibc)
+	auto fd_is_set = [](int fd, fd_set *s) -> bool {
+		return (s->fds_bits[fd / 8] >> (fd % 8)) & 1;
+	};
+	auto fd_set_bit = [](int fd, fd_set *s) {
+		s->fds_bits[fd / 8] |= static_cast<unsigned char>(1 << (fd % 8));
+	};
+	auto fd_zero = [](fd_set *s) { memset(s->fds_bits, 0, sizeof(fd_set)); };
+
+	// Convert timeout to epoll milliseconds
+	int timeout_ms = -1;
+	if (timeout) {
+		timeout_ms = static_cast<int>((timeout->tv_sec * 1000) + (timeout->tv_nsec / 1000000));
+		timeout_ms = std::max(timeout_ms, 0);
+	}
+
+	// Create an epoll instance
+	int epfd = ker::abi::vfs::epoll_create_vfs(0);
+	if (epfd < 0)
+		return ENOMEM;
+
+	// Register all fds from the fd_sets into epoll
+	for (int fd = 0; fd < num_fds; fd++) {
+		uint32_t events = 0;
+		if (read_set && fd_is_set(fd, read_set))
+			events |= EPOLLIN;
+		if (write_set && fd_is_set(fd, write_set))
+			events |= EPOLLOUT;
+		if (except_set && fd_is_set(fd, except_set))
+			events |= EPOLLERR | EPOLLHUP;
+		if (events == 0)
+			continue;
+
+		epoll_event ev;
+		ev.events = events;
+		ev.data.fd = fd;
+		ker::abi::vfs::epoll_ctl_vfs(epfd, EPOLL_CTL_ADD, fd, &ev);
+	}
+
+	// Wait for events (retry on EAGAIN, like sys_epoll_pwait)
+	epoll_event out_events[64];
+	int max = num_fds < 64 ? num_fds : 64;
+	int ready;
+	for (;;) {
+		ready = ker::abi::vfs::epoll_pwait_vfs(epfd, out_events, max, timeout_ms);
+		if (ready != -EAGAIN)
+			break;
+	}
+
+	// Clear the input sets — we'll only set bits that are ready
+	if (read_set)
+		fd_zero(read_set);
+	if (write_set)
+		fd_zero(write_set);
+	if (except_set)
+		fd_zero(except_set);
+
+	int count = 0;
+	if (ready > 0) {
+		for (int i = 0; i < ready; i++) {
+			int fd = out_events[i].data.fd;
+			if (read_set && (out_events[i].events & (EPOLLIN | EPOLLHUP | EPOLLERR)))
+				fd_set_bit(fd, read_set);
+			if (write_set && (out_events[i].events & EPOLLOUT))
+				fd_set_bit(fd, write_set);
+			if (except_set && (out_events[i].events & (EPOLLERR | EPOLLHUP)))
+				fd_set_bit(fd, except_set);
+			count++;
+		}
+	}
+
+	ker::abi::vfs::close(epfd);
+	*num_events = count;
+	return 0;
+}
+
+// --- Additional POSIX sysdeps for ash/busybox ---
+
+int sys_openat(int dirfd, const char *path, int flags, mode_t mode, int *fd) {
+	// For AT_FDCWD (-100) or absolute paths, delegate to regular open
+	if (dirfd == -100 || (path && path[0] == '/')) {
+		return sys_open(path, flags, mode, fd);
+	}
+	// Non-AT_FDCWD relative opens are not yet supported
+	return ENOSYS;
+}
+
+int sys_mkdirat(int dirfd, const char *path, mode_t mode) {
+	if (dirfd == -100 || (path && path[0] == '/')) {
+		int r = ker::abi::vfs::mkdir(path, static_cast<int>(mode));
+		if (r < 0)
+			return -r;
+		return 0;
+	}
+	return ENOSYS;
+}
+
+int sys_readlink(const char *path, void *buffer, size_t max_size, ssize_t *length) {
+	ssize_t r = ker::abi::vfs::readlink(path, static_cast<char *>(buffer), max_size);
+	if (r < 0)
+		return static_cast<int>(-r);
+	if (length)
+		*length = r;
+	return 0;
+}
+
+int sys_readlinkat(int dirfd, const char *path, void *buffer, size_t max_size, ssize_t *length) {
+	if (dirfd == -100 || (path && path[0] == '/')) {
+		return sys_readlink(path, buffer, max_size, length);
+	}
+	return ENOSYS;
+}
+
+int sys_symlinkat(const char *target, int dirfd, const char *linkpath) {
+	if (dirfd == -100 || (linkpath && linkpath[0] == '/')) {
+		int r = ker::abi::vfs::symlink(target, linkpath);
+		if (r < 0)
+			return -r;
+		return 0;
+	}
+	return ENOSYS;
+}
+
+int sys_fchdir(int fd) {
+	// Attempt to get the path for this fd via /proc/self/fd/<N> readlink
+	// For now, if fd refers to a directory that was opened, we need
+	// kernel support. Return success as a stub since most shells can cope.
+	(void)fd;
+	return 0;
+}
+
+int sys_socketpair(int domain, int type_and_flags, int proto, int *fds) {
+	(void)domain;
+	(void)type_and_flags;
+	(void)proto;
+	// Use pipe as a unidirectional fallback — sufficient for many ash uses
+	// (here-documents, command substitution internal fds).
+	// A proper Unix domain socketpair would require kernel support.
+	int r = ker::abi::vfs::pipe(fds);
+	if (r < 0)
+		return -r;
+	return 0;
+}
+
+int sys_sigsuspend(const sigset_t *set) {
+	// Atomically replace signal mask and wait for a signal.
+	// Simplified: set the mask and spin-yield until a signal is delivered.
+	sigset_t old;
+	int r = sys_sigprocmask(SIG_SETMASK, set, &old);
+	if (r)
+		return r;
+	// Yield repeatedly — the kernel will deliver pending signals on syscall return
+	for (int i = 0; i < 10000; i++) {
+		ker::multiproc::yield();
+	}
+	// Restore old mask
+	sys_sigprocmask(SIG_SETMASK, &old, nullptr);
+	return EINTR; // sigsuspend always returns EINTR
+}
+
+int sys_tcflow(int fd, int action) {
+	// No-op — WOS PTY doesn't implement XON/XOFF flow control
+	(void)fd;
+	(void)action;
+	return 0;
+}
+
+int sys_getgroups(size_t size, const gid_t *list, int *retval) {
+	(void)list;
+	// WOS doesn't support supplementary groups yet
+	if (retval)
+		*retval = 0;
+	(void)size;
+	return 0;
+}
+
+int sys_setgroups(size_t size, const gid_t *list) {
+	(void)size;
+	(void)list;
+	// No-op stub
+	return 0;
 }
 
 } // namespace mlibc

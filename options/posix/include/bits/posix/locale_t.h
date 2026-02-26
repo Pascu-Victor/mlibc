@@ -5,7 +5,8 @@
 extern "C" {
 #endif
 
-typedef void *locale_t;
+struct __mlibc_locale_struct;
+typedef struct __mlibc_locale_struct *locale_t;
 
 #ifdef __cplusplus
 }
