@@ -26,6 +26,7 @@
 #include <sys/time.h>
 #include <sys/time_calls.h>
 #include <sys/time_ops.h>
+#include <sys/times.h>
 #include <sys/types.h>
 #include <sys/utsname.h>
 #include <sys/vfs.h>
@@ -120,6 +121,17 @@ int sys_gettimeofday(timeval *tv, void *tz) {
 	tv->tv_usec = tmp.tv_usec;
 	return 0;
 }
+
+int sys_times(struct tms *tms, clock_t *out) {
+	clock_t ret;
+	uint64_t res = ker::time::times((void *)tms, (void *)&ret);
+	if ((int64_t)res < 0) {
+		return (int)(-(int64_t)res);
+	}
+	*out = ret;
+	return 0;
+}
+
 int sys_anon_free(void *addr, unsigned long size) {
 	// Use the vmem syscall to free virtual memory
 	int64_t result = ker::vmem::free(addr, size);
@@ -325,27 +337,19 @@ int sys_msg_recv(int fd, msghdr *hdr, int flags, ssize_t *length) {
 	const iovec *iov = &hdr->msg_iov[0];
 	if (hdr->msg_name) {
 		// recvfrom path
-		for (;;) {
-			ssize_t r =
-			    ker::abi::net::recvfrom(fd, iov->iov_base, iov->iov_len, flags, hdr->msg_name);
-			if (r == -EAGAIN)
-				continue;
-			if (r < 0)
-				return (int)(-r);
-			*length = r;
-			return 0;
-		}
-	}
-	// recv path
-	for (;;) {
-		ssize_t r = ker::abi::net::recv(fd, iov->iov_base, iov->iov_len, flags);
-		if (r == -EAGAIN)
-			continue;
+		ssize_t r =
+		    ker::abi::net::recvfrom(fd, iov->iov_base, iov->iov_len, flags, hdr->msg_name);
 		if (r < 0)
 			return (int)(-r);
 		*length = r;
 		return 0;
 	}
+	// recv path
+	ssize_t r = ker::abi::net::recv(fd, iov->iov_base, iov->iov_len, flags);
+	if (r < 0)
+		return (int)(-r);
+	*length = r;
+	return 0;
 }
 
 ssize_t sys_sendto(
@@ -384,20 +388,16 @@ ssize_t sys_recvfrom(
     ssize_t *length
 ) {
 	(void)addr_length; // kernel fills based on socket domain
-	for (;;) {
-		ssize_t r;
-		if (sock_addr) {
-			r = ker::abi::net::recvfrom(fd, buffer, size, flags, sock_addr);
-		} else {
-			r = ker::abi::net::recv(fd, buffer, size, flags);
-		}
-		if (r == -EAGAIN)
-			continue;
-		if (r < 0)
-			return (int)(-r);
-		*length = r;
-		return 0;
+	ssize_t r;
+	if (sock_addr) {
+		r = ker::abi::net::recvfrom(fd, buffer, size, flags, sock_addr);
+	} else {
+		r = ker::abi::net::recv(fd, buffer, size, flags);
 	}
+	if (r < 0)
+		return (int)(-r);
+	*length = r;
+	return 0;
 }
 
 int sys_setsockopt(int fd, int layer, int number, const void *buffer, socklen_t size) {
@@ -446,10 +446,15 @@ int sys_peername(int fd, sockaddr *addr_ptr, socklen_t max_addr_length, socklen_
 }
 
 int sys_poll(pollfd *fds, nfds_t count, int timeout, int *num_events) {
+	static constexpr int WOS_ERESTARTSYS = 512;
 	for (;;) {
 		int r = ker::abi::net::poll(fds, count, timeout);
-		if (r == -EAGAIN)
+		if (r == -WOS_ERESTARTSYS)
 			continue;
+		if (r == -EINTR) {
+			*num_events = 0;
+			return EINTR;
+		}
 		if (r < 0)
 			return -r;
 		*num_events = r;
@@ -654,6 +659,13 @@ int sys_unlinkat(int fd, const char *path, int flags) {
 
 int sys_rmdir(const char *path) {
 	int r = ker::abi::vfs::rmdir(path);
+	if (r < 0)
+		return -r;
+	return 0;
+}
+
+int sys_rename(const char *old_path, const char *new_path) {
+	int r = ker::abi::vfs::rename(old_path, new_path);
 	if (r < 0)
 		return -r;
 	return 0;
@@ -873,10 +885,15 @@ int sys_epoll_pwait(
     int epfd, epoll_event *ev, int n, int timeout, const sigset_t *sigmask, int *raised
 ) {
 	(void)sigmask; // signal mask not yet supported
+	static constexpr int WOS_ERESTARTSYS = 512;
 	for (;;) {
 		int r = ker::abi::vfs::epoll_pwait_vfs(epfd, ev, n, timeout);
-		if (r == -EAGAIN)
+		if (r == -WOS_ERESTARTSYS)
 			continue;
+		if (r == -EINTR) {
+			if (raised) *raised = 0;
+			return EINTR;
+		}
 		if (r < 0)
 			return -r;
 		if (raised)
@@ -1200,14 +1217,26 @@ int sys_pselect(
 		ker::abi::vfs::epoll_ctl_vfs(epfd, EPOLL_CTL_ADD, fd, &ev);
 	}
 
-	// Wait for events (retry on EAGAIN, like sys_epoll_pwait)
+	// WOS_ERESTARTSYS (512) is the kernel-internal "yield and retry" code.
+	// -EINTR means a signal is pending and will be delivered on return.
+	static constexpr int WOS_ERESTARTSYS = 512;
+
+	// Wait for events (retry on WOS_ERESTARTSYS; break on events, timeout, or signal)
 	epoll_event out_events[64];
 	int max = num_fds < 64 ? num_fds : 64;
 	int ready;
 	for (;;) {
 		ready = ker::abi::vfs::epoll_pwait_vfs(epfd, out_events, max, timeout_ms);
-		if (ready != -EAGAIN)
+		if (ready != -WOS_ERESTARTSYS)
 			break;
+	}
+
+	// Handle signal interruption: a signal handler has already run (during
+	// the sysret path).  Return EINTR so the caller knows to re-check.
+	if (ready == -EINTR) {
+		ker::abi::vfs::close(epfd);
+		*num_events = 0;
+		return EINTR;
 	}
 
 	// Clear the input sets — we'll only set bits that are ready

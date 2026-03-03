@@ -36,6 +36,11 @@ int sys_close(int fd) {
 }
 
 int sys_read(int fd, void *buf, size_t count, ssize_t *bytes_read) {
+	// WOS_ERESTARTSYS (512) is a kernel-internal code meaning "device not ready,
+	// yield and retry" (e.g. PTY with no data).  We spin on this code so
+	// blocking device reads work.  True EAGAIN (11) passes through to the
+	// application so non-blocking I/O works correctly.
+	static constexpr int64_t WOS_ERESTARTSYS = 512;
 	for (;;) {
 		uint64_t r = syscall(
 		    ker::abi::callnums::vfs,
@@ -45,7 +50,7 @@ int sys_read(int fd, void *buf, size_t count, ssize_t *bytes_read) {
 		    static_cast<uint64_t>(count),
 		    reinterpret_cast<uint64_t>(bytes_read)
 		);
-		if (static_cast<int64_t>(r) == -EAGAIN)
+		if (static_cast<int64_t>(r) == -WOS_ERESTARTSYS)
 			continue; // Retry: device has no data yet (e.g. PTY with empty buffer)
 		if (static_cast<int64_t>(r) < 0)
 			return static_cast<int>(-static_cast<int64_t>(r));

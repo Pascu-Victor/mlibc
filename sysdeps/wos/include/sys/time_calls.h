@@ -19,4 +19,11 @@ uint64_t clock_gettime(struct timespec *ts) {
 	);
 }
 
+[[gnu::weak]]
+uint64_t times(void *tms, void *out) {
+	return syscall(
+	    (long)abi::callnums::time, (uint64_t)abi::sys_time_ops::times, (uint64_t)tms, (uint64_t)out
+	);
+}
+
 } // namespace ker::time
