@@ -13,6 +13,7 @@ enum class callnums : uint64_t {
 	net,
 	vmem,
 	vmem_map,
+	debug,
 };
 } // namespace ker::abi
 #endif /* __cplusplus */

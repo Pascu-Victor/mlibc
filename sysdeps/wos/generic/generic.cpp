@@ -7,6 +7,7 @@
 #include <mlibc/debug.hpp>
 #include <mlibc/fsfd_target.hpp>
 #include <mlibc/tcb.hpp>
+#include <sched.h>
 #include <signal.h>
 #include <stdarg.h>
 #include <stdlib.h>
@@ -41,6 +42,56 @@ extern "C" __attribute__((visibility("default"))) __thread void *__safestack_uns
 
 namespace [[gnu::visibility("hidden")]] mlibc {
 
+namespace {
+bool cpu_bit_is_set(const cpu_set_t *set, size_t cpusetsize, size_t cpu) {
+	size_t byte_index = cpu / CHAR_BIT;
+	if (byte_index >= cpusetsize) {
+		return false;
+	}
+	auto bytes = reinterpret_cast<const unsigned char *>(set);
+	return (bytes[byte_index] & (1U << (cpu % CHAR_BIT))) != 0;
+}
+
+void cpu_bit_set(cpu_set_t *set, size_t cpusetsize, size_t cpu) {
+	size_t byte_index = cpu / CHAR_BIT;
+	if (byte_index >= cpusetsize) {
+		return;
+	}
+	auto bytes = reinterpret_cast<unsigned char *>(set);
+	bytes[byte_index] |= static_cast<unsigned char>(1U << (cpu % CHAR_BIT));
+}
+
+int cpuset_to_mask(size_t cpusetsize, const cpu_set_t *set, uint64_t *mask) {
+	uint64_t affinity_mask = 0;
+	size_t max_bits = cpusetsize * CHAR_BIT;
+	for (size_t cpu = 0; cpu < max_bits; ++cpu) {
+		if (!cpu_bit_is_set(set, cpusetsize, cpu)) {
+			continue;
+		}
+		if (cpu >= 64) {
+			return ENOTSUP;
+		}
+		affinity_mask |= 1ULL << cpu;
+	}
+	*mask = affinity_mask;
+	return 0;
+}
+
+int mask_to_cpuset(uint64_t mask, size_t cpusetsize, cpu_set_t *set) {
+	memset(set, 0, cpusetsize);
+	for (size_t cpu = 0; cpu < 64; ++cpu) {
+		if ((mask & (1ULL << cpu)) == 0) {
+			continue;
+		}
+		if (cpu >= cpusetsize * CHAR_BIT) {
+			return ERANGE;
+		}
+		cpu_bit_set(set, cpusetsize, cpu);
+	}
+	return 0;
+}
+} // namespace
+
 void sys_libc_log(const char *message) {
 	ker::logging::log(message, strlen(message), ker::abi::sys_log::sys_log_device::serial);
 }
@@ -56,6 +107,45 @@ int sys_futex_tid() {
 	return tid;
 }
 
+int sys_getcpu(int *cpu) {
+	*cpu = (int)ker::multiproc::getCurrentCpu();
+	return 0;
+}
+
+int sys_getaffinity(pid_t, size_t, cpu_set_t *) { return ENOSYS; }
+
+int sys_getthreadaffinity(pid_t tid, size_t cpusetsize, cpu_set_t *mask) {
+	if (!mask || cpusetsize == 0) {
+		return EINVAL;
+	}
+
+	int64_t result = ker::multiproc::getThreadAffinityMask((uint64_t)tid);
+	if (result < 0) {
+		return (int)(-result);
+	}
+
+	return mask_to_cpuset((uint64_t)result, cpusetsize, mask);
+}
+
+int sys_setaffinity(pid_t, size_t, const cpu_set_t *) { return ENOSYS; }
+
+int sys_setthreadaffinity(pid_t tid, size_t cpusetsize, const cpu_set_t *mask) {
+	if (!mask || cpusetsize == 0) {
+		return EINVAL;
+	}
+
+	uint64_t affinity_mask = 0;
+	if (int e = cpuset_to_mask(cpusetsize, mask, &affinity_mask); e) {
+		return e;
+	}
+
+	int64_t result = ker::multiproc::setThreadAffinityMask((uint64_t)tid, affinity_mask);
+	if (result < 0) {
+		return (int)(-result);
+	}
+	return 0;
+}
+
 int sys_futex_wake(int *pointer) {
 	int64_t result = ker::futex::wake(pointer);
 	if (result < 0) {
@@ -65,9 +155,13 @@ int sys_futex_wake(int *pointer) {
 }
 
 int sys_futex_wait(int *pointer, int expected, timespec const *timeout) {
+	static constexpr int WOS_ERESTARTSYS = 512;
 	int64_t result = ker::futex::wait(pointer, expected, timeout);
 	if (result < 0) {
-		return static_cast<int>(-result); // Return positive errno
+		int e = static_cast<int>(-result);
+		if (e == WOS_ERESTARTSYS)
+			return EAGAIN;
+		return e;
 	}
 	return 0;
 }
@@ -95,9 +189,8 @@ int sys_tcb_set(void *tcb) {
 void sys_yield() { ker::multiproc::yield(); }
 
 int sys_clock_get(int clock_id, long *seconds, long *nanoseconds) {
-	(void)clock_id;
 	timespec ts;
-	uint64_t res = ker::time::clock_gettime(&ts);
+	uint64_t res = ker::time::clock_gettime(clock_id, &ts);
 	if ((int64_t)res < 0) {
 		return (int)(-(int64_t)res);
 	}
@@ -129,6 +222,26 @@ int sys_times(struct tms *tms, clock_t *out) {
 		return (int)(-(int64_t)res);
 	}
 	*out = ret;
+	return 0;
+}
+
+int sys_setitimer(int which, const struct itimerval *new_value, struct itimerval *old_value) {
+	// Retrieve old value before overwriting if caller wants it.
+	if (old_value) {
+		uint64_t res = ker::time::getitimer(which, (void *)old_value);
+		if ((int64_t)res < 0)
+			return (int)(-(int64_t)res);
+	}
+	uint64_t res = ker::time::setitimer(which, (const void *)new_value);
+	if ((int64_t)res < 0)
+		return (int)(-(int64_t)res);
+	return 0;
+}
+
+int sys_getitimer(int which, struct itimerval *curr_value) {
+	uint64_t res = ker::time::getitimer(which, (void *)curr_value);
+	if ((int64_t)res < 0)
+		return (int)(-(int64_t)res);
 	return 0;
 }
 
@@ -166,8 +279,7 @@ int sys_isatty(int fd) {
 }
 
 int sys_waitpid(pid_t pid, int *status, int flags, rusage *ru, pid_t *ret_pid) {
-	(void)ru; // WOS doesn't fill rusage yet
-	int64_t result = ker::process::waitpid(pid, status, flags);
+	int64_t result = ker::process::waitpid(pid, status, flags, ru);
 	if (result < 0) {
 		// Convert kernel error code to positive errno
 		return (int)(-result);
@@ -178,16 +290,6 @@ int sys_waitpid(pid_t pid, int *status, int flags, rusage *ru, pid_t *ret_pid) {
 }
 
 pid_t sys_getpid() { return ker::process::getpid(); }
-
-#ifndef MLIBC_BUILDING_RTLD
-
-[[noreturn]] void sys_thread_exit() {
-	for (;;)
-		;
-	__builtin_unreachable();
-}
-
-#endif
 
 int sys_anon_allocate(size_t size, void **pointer) {
 	// Use the vmem syscall for proper virtual memory allocation
@@ -206,48 +308,6 @@ int sys_anon_allocate(size_t size, void **pointer) {
 
 	return 0; // Success
 }
-
-#ifndef MLIBC_BUILDING_RTLD
-
-int sys_prepare_stack(
-    void **stack,
-    void *entry,
-    void *arg,
-    void *tcb,
-    size_t *stack_size,
-    size_t *guard_size,
-    void **stack_base
-) {
-	// For now, use a simple stack preparation
-	// This should be implemented properly for threading support
-	*guard_size = 0x1000; // 4KB guard
-	if (!*stack_size)
-		*stack_size = 0x200000; // 2MB default
-
-	*stack_base = malloc(*stack_size + *guard_size);
-	if (!*stack_base)
-		return ENOMEM;
-
-	*stack = (void *)((char *)*stack_base + *stack_size);
-
-	// Set up the stack for thread entry
-	void **stack_it = (void **)*stack;
-	*--stack_it = arg;
-	*--stack_it = tcb;
-	*--stack_it = entry;
-	*stack = (void *)stack_it;
-
-	return 0;
-}
-
-int sys_clone(void *tcb, pid_t *tid_out, void *stack) {
-	// Basic thread creation - this needs to be implemented properly
-	// For now just return an error since threading isn't fully implemented
-	sys_libc_log("sys_clone not yet implemented");
-	return ENOSYS;
-}
-
-#endif
 
 // -- Socket sysdeps --------------------------------------------------
 
@@ -337,8 +397,7 @@ int sys_msg_recv(int fd, msghdr *hdr, int flags, ssize_t *length) {
 	const iovec *iov = &hdr->msg_iov[0];
 	if (hdr->msg_name) {
 		// recvfrom path
-		ssize_t r =
-		    ker::abi::net::recvfrom(fd, iov->iov_base, iov->iov_len, flags, hdr->msg_name);
+		ssize_t r = ker::abi::net::recvfrom(fd, iov->iov_base, iov->iov_len, flags, hdr->msg_name);
 		if (r < 0)
 			return (int)(-r);
 		*length = r;
@@ -891,7 +950,8 @@ int sys_epoll_pwait(
 		if (r == -WOS_ERESTARTSYS)
 			continue;
 		if (r == -EINTR) {
-			if (raised) *raised = 0;
+			if (raised)
+				*raised = 0;
 			return EINTR;
 		}
 		if (r < 0)
@@ -1371,6 +1431,64 @@ int sys_setgroups(size_t size, const gid_t *list) {
 	(void)list;
 	// No-op stub
 	return 0;
+}
+
+int sys_mkdir(const char *path, mode_t mode) {
+	int r = ker::abi::vfs::mkdir(path, static_cast<int>(mode));
+	if (r < 0)
+		return -r;
+	return 0;
+}
+
+int sys_unlink(const char *path) {
+	int r = ker::abi::vfs::unlink(path);
+	if (r < 0)
+		return -r;
+	return 0;
+}
+
+int sys_symlink(const char *target, const char *linkpath) {
+	int r = ker::abi::vfs::symlink(target, linkpath);
+	if (r < 0)
+		return -r;
+	return 0;
+}
+
+int sys_chown(const char *pathname, uid_t owner, gid_t group) {
+	int r = ker::abi::vfs::chown(pathname, owner, group);
+	if (r < 0)
+		return -r;
+	return 0;
+}
+
+int sys_fchown(int fd, uid_t owner, gid_t group) {
+	int r = ker::abi::vfs::fchown(fd, owner, group);
+	if (r < 0)
+		return -r;
+	return 0;
+}
+
+int sys_linkat(int olddirfd, const char *oldpath, int newdirfd, const char *newpath, int flags) {
+	(void)flags;
+	if ((olddirfd == AT_FDCWD || olddirfd == -100 || (oldpath && oldpath[0] == '/'))
+	    && (newdirfd == AT_FDCWD || newdirfd == -100 || (newpath && newpath[0] == '/'))) {
+		int r = ker::abi::vfs::link_vfs(oldpath, newpath);
+		if (r < 0)
+			return -r;
+		return 0;
+	}
+	return ENOSYS;
+}
+
+int sys_fchmodat(int dirfd, const char *pathname, mode_t mode, int flags) {
+	(void)flags;
+	if (dirfd == AT_FDCWD || dirfd == -100 || (pathname && pathname[0] == '/')) {
+		int r = ker::abi::vfs::chmod(pathname, mode);
+		if (r < 0)
+			return -r;
+		return 0;
+	}
+	return ENOSYS;
 }
 
 } // namespace mlibc

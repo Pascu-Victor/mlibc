@@ -2,6 +2,7 @@
 #include <callnums/process.h>
 #include <stdint.h>
 #include <sys/callnums.h>
+#include <sys/resource.h>
 #include <sys/syscall.h>
 
 namespace ker::process {
@@ -25,13 +26,14 @@ inline uint64_t exec(const char *path, const char *const argv[], const char *con
 	);
 }
 
-inline uint64_t waitpid(int64_t pid, int32_t *status, int32_t options) {
+inline uint64_t waitpid(int64_t pid, int32_t *status, int32_t options, rusage *ru) {
 	return syscall(
 	    abi::callnums::process,
 	    (uint64_t)abi::process::procmgmt_ops::waitpid,
 	    (uint64_t)pid,
 	    (uint64_t)(uintptr_t)status,
-	    (uint64_t)options
+	    (uint64_t)options,
+	    (uint64_t)(uintptr_t)ru
 	);
 }
 

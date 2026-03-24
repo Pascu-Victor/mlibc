@@ -8,12 +8,14 @@ sysdep_supported_options = {
 
 rtld_sources += files(
     'generic/generic.cpp',
+    'generic/thread.cpp',
     'sys/logging.cpp',
     'crt-x86_64' / host_machine.cpu_family() / 'signals.S',
 )
 
 libc_sources += files(
     'generic/generic.cpp',
+    'generic/thread.cpp',
     'generic/entry.cpp',
     'sys/logging.cpp',
     'crt-x86_64' / host_machine.cpu_family() / 'signals.S',

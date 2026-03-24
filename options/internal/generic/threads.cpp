@@ -6,10 +6,22 @@
 #include <mlibc/lock.hpp>
 #include <mlibc/tcb.hpp>
 #include <mlibc/threads.hpp>
+#include <sys/multiproc.h>
 
 extern "C" Tcb *__rtld_allocateTcb();
 
 namespace mlibc {
+
+namespace {
+bool cpu_bit_is_set(const cpu_set_t *set, size_t cpusetsize, size_t cpu) {
+	size_t byte_index = cpu / 8;
+	if (byte_index >= cpusetsize) {
+		return false;
+	}
+	auto bytes = reinterpret_cast<const unsigned char *>(set);
+	return (bytes[byte_index] & (1U << (cpu % 8))) != 0;
+}
+} // namespace
 
 int thread_create(
     struct __mlibc_thread_data **__restrict thread,
@@ -26,10 +38,27 @@ int thread_create(
 	else
 		attr = *attrp;
 
-	if (attr.__mlibc_cpuset)
-		mlibc::infoLogger() << "pthread_create(): cpuset is ignored!" << frg::endlog;
 	if (attr.__mlibc_sigmaskset)
 		mlibc::infoLogger() << "pthread_create(): sigmask is ignored!" << frg::endlog;
+
+	if (attr.__mlibc_cpuset) {
+		size_t cpu_count = ker::multiproc::nativeThreadCount();
+		size_t selected_cpu = cpu_count;
+		size_t selected_count = 0;
+		for (size_t cpu = 0; cpu < attr.__mlibc_cpusetsize * 8; ++cpu) {
+			if (!cpu_bit_is_set(attr.__mlibc_cpuset, attr.__mlibc_cpusetsize, cpu)) {
+				continue;
+			}
+			if (cpu >= cpu_count) {
+				return EINVAL;
+			}
+			selected_cpu = cpu;
+			++selected_count;
+		}
+		if (selected_count != 1 || selected_cpu >= cpu_count) {
+			return ENOTSUP;
+		}
+	}
 
 	// TODO: due to alignment guarantees, the stackaddr and stacksize might change
 	// when the stack is allocated. Currently this isn't propagated to the TCB,
@@ -60,7 +89,20 @@ int thread_create(
 	new_tcb->returnValueType =
 	    (returns_int) ? TcbThreadReturnValue::Integer : TcbThreadReturnValue::Pointer;
 	new_tcb->isJoinable = (attr.__mlibc_detachstate == __MLIBC_THREAD_CREATE_JOINABLE);
-	mlibc::sys_clone(new_tcb, &tid, stack);
+	int clone_result = mlibc::sys_clone(new_tcb, &tid, stack);
+	if (clone_result)
+		return clone_result;
+
+	if (attr.__mlibc_cpuset) {
+		if (!mlibc::sys_setthreadaffinity) {
+			return ENOSYS;
+		}
+		if (int e = mlibc::sys_setthreadaffinity(tid, attr.__mlibc_cpusetsize, attr.__mlibc_cpuset);
+		    e) {
+			return e;
+		}
+	}
+
 	*thread = reinterpret_cast<struct __mlibc_thread_data *>(new_tcb);
 
 	__atomic_store_n(&new_tcb->tid, tid, __ATOMIC_RELAXED);

@@ -94,6 +94,29 @@ sys_statx(int dirfd, const char *pathname, int flags, unsigned int mask, struct 
 [[gnu::weak]] int sys_syncfs(int fd);
 [[gnu::weak]] int sys_unshare(int flags);
 [[gnu::weak]] int sys_setns(int fd, int nstype);
+[[gnu::weak]] int sys_mkdir(const char *pathname, mode_t mode);
+[[gnu::weak]] int sys_mkdirat(int dirfd, const char *pathname, mode_t mode);
+[[gnu::weak]] int sys_rmdir(const char *pathname);
+[[gnu::weak]] int sys_rename(const char *oldpath, const char *newpath);
+[[gnu::weak]] int
+sys_renameat(int olddirfd, const char *oldpath, int newdirfd, const char *newpath);
+[[gnu::weak]] int sys_unlink(const char *pathname);
+[[gnu::weak]] int sys_unlinkat(int dirfd, const char *pathname, int flags);
+[[gnu::weak]] int sys_symlink(const char *target, const char *linkpath);
+[[gnu::weak]] int sys_symlinkat(const char *target, int newdirfd, const char *linkpath);
+[[gnu::weak]] int sys_link(const char *target, const char *linkpath);
+[[gnu::weak]] int
+sys_linkat(int olddirfd, const char *target, int newdirfd, const char *linkpath, int flags);
+[[gnu::weak]] int sys_readlink(const char *pathname, char *buf, size_t bufsize, ssize_t *nread);
+[[gnu::weak]] int
+sys_readlinkat(int dirfd, const char *pathname, char *buf, size_t bufsize, ssize_t *nread);
+[[gnu::weak]] int sys_chmod(const char *pathname, mode_t mode);
+[[gnu::weak]] int sys_fchmod(int fd, mode_t mode);
+[[gnu::weak]] int sys_fchmodat(int dirfd, const char *pathname, mode_t mode, int flags);
+[[gnu::weak]] int sys_chown(const char *pathname, uid_t owner, gid_t group);
+[[gnu::weak]] int sys_fchown(int fd, uid_t owner, gid_t group);
+[[gnu::weak]] int
+sys_fchownat(int dirfd, const char *pathname, uid_t owner, gid_t group, int flags);
 
 } // namespace mlibc
 
