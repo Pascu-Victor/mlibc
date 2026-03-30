@@ -11,24 +11,24 @@ namespace ker::abi::net {
 // Operation codes for the kernel net syscall dispatcher.
 // Must match modules/kern/src/abi/callnums/net.h
 enum class ops : uint64_t {
-	socket,
-	bind,
-	listen,
-	accept,
-	connect,
-	send,
-	recv,
-	close,
-	sendto,
-	recvfrom,
-	setsockopt,
-	getsockopt,
-	shutdown,
-	getpeername,
-	getsockname,
-	select,
-	poll,
-	ioctl_net,
+	SOCKET,
+	BIND,
+	LISTEN,
+	ACCEPT,
+	CONNECT,
+	SEND,
+	RECV,
+	CLOSE,
+	SENDTO,
+	RECVFROM,
+	SETSOCKOPT,
+	GETSOCKOPT,
+	SHUTDOWN,
+	GETPEERNAME,
+	GETSOCKNAME,
+	SELECT,
+	POLL,
+	IOCTL_NET,
 };
 
 // Syscall register layout:
@@ -39,7 +39,7 @@ enum class ops : uint64_t {
 static inline int socket(int domain, int type, int protocol) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::net,
-	    static_cast<uint64_t>(ops::socket),
+	    static_cast<uint64_t>(ops::SOCKET),
 	    static_cast<uint64_t>(domain),
 	    static_cast<uint64_t>(type),
 	    static_cast<uint64_t>(protocol)
@@ -50,7 +50,7 @@ static inline int socket(int domain, int type, int protocol) {
 static inline int bind(int fd, const void *addr, size_t addr_len) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::net,
-	    static_cast<uint64_t>(ops::bind),
+	    static_cast<uint64_t>(ops::BIND),
 	    static_cast<uint64_t>(fd),
 	    reinterpret_cast<uint64_t>(addr),
 	    static_cast<uint64_t>(addr_len)
@@ -61,7 +61,7 @@ static inline int bind(int fd, const void *addr, size_t addr_len) {
 static inline int listen(int fd, int backlog) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::net,
-	    static_cast<uint64_t>(ops::listen),
+	    static_cast<uint64_t>(ops::LISTEN),
 	    static_cast<uint64_t>(fd),
 	    static_cast<uint64_t>(backlog)
 	);
@@ -71,7 +71,7 @@ static inline int listen(int fd, int backlog) {
 static inline int accept(int fd, void *addr, size_t *addr_len) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::net,
-	    static_cast<uint64_t>(ops::accept),
+	    static_cast<uint64_t>(ops::ACCEPT),
 	    static_cast<uint64_t>(fd),
 	    reinterpret_cast<uint64_t>(addr),
 	    reinterpret_cast<uint64_t>(addr_len)
@@ -82,7 +82,7 @@ static inline int accept(int fd, void *addr, size_t *addr_len) {
 static inline int connect(int fd, const void *addr, size_t addr_len) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::net,
-	    static_cast<uint64_t>(ops::connect),
+	    static_cast<uint64_t>(ops::CONNECT),
 	    static_cast<uint64_t>(fd),
 	    reinterpret_cast<uint64_t>(addr),
 	    static_cast<uint64_t>(addr_len)
@@ -93,7 +93,7 @@ static inline int connect(int fd, const void *addr, size_t addr_len) {
 static inline ssize_t send(int fd, const void *buf, size_t len, int flags) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::net,
-	    static_cast<uint64_t>(ops::send),
+	    static_cast<uint64_t>(ops::SEND),
 	    static_cast<uint64_t>(fd),
 	    reinterpret_cast<uint64_t>(buf),
 	    static_cast<uint64_t>(len),
@@ -105,7 +105,7 @@ static inline ssize_t send(int fd, const void *buf, size_t len, int flags) {
 static inline ssize_t recv(int fd, void *buf, size_t len, int flags) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::net,
-	    static_cast<uint64_t>(ops::recv),
+	    static_cast<uint64_t>(ops::RECV),
 	    static_cast<uint64_t>(fd),
 	    reinterpret_cast<uint64_t>(buf),
 	    static_cast<uint64_t>(len),
@@ -116,9 +116,7 @@ static inline ssize_t recv(int fd, void *buf, size_t len, int flags) {
 
 static inline int close(int fd) {
 	uint64_t r = syscall(
-	    ker::abi::callnums::net,
-	    static_cast<uint64_t>(ops::close),
-	    static_cast<uint64_t>(fd)
+	    ker::abi::callnums::net, static_cast<uint64_t>(ops::CLOSE), static_cast<uint64_t>(fd)
 	);
 	return static_cast<int>((int64_t)r);
 }
@@ -126,7 +124,7 @@ static inline int close(int fd) {
 static inline ssize_t sendto(int fd, const void *buf, size_t len, int flags, const void *addr) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::net,
-	    static_cast<uint64_t>(ops::sendto),
+	    static_cast<uint64_t>(ops::SENDTO),
 	    static_cast<uint64_t>(fd),
 	    reinterpret_cast<uint64_t>(buf),
 	    static_cast<uint64_t>(len),
@@ -139,7 +137,7 @@ static inline ssize_t sendto(int fd, const void *buf, size_t len, int flags, con
 static inline ssize_t recvfrom(int fd, void *buf, size_t len, int flags, void *addr) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::net,
-	    static_cast<uint64_t>(ops::recvfrom),
+	    static_cast<uint64_t>(ops::RECVFROM),
 	    static_cast<uint64_t>(fd),
 	    reinterpret_cast<uint64_t>(buf),
 	    static_cast<uint64_t>(len),
@@ -152,7 +150,7 @@ static inline ssize_t recvfrom(int fd, void *buf, size_t len, int flags, void *a
 static inline int setsockopt(int fd, int level, int optname, const void *optval, size_t optlen) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::net,
-	    static_cast<uint64_t>(ops::setsockopt),
+	    static_cast<uint64_t>(ops::SETSOCKOPT),
 	    static_cast<uint64_t>(fd),
 	    static_cast<uint64_t>(level),
 	    static_cast<uint64_t>(optname),
@@ -165,7 +163,7 @@ static inline int setsockopt(int fd, int level, int optname, const void *optval,
 static inline int getsockopt(int fd, int level, int optname, void *optval, size_t *optlen) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::net,
-	    static_cast<uint64_t>(ops::getsockopt),
+	    static_cast<uint64_t>(ops::GETSOCKOPT),
 	    static_cast<uint64_t>(fd),
 	    static_cast<uint64_t>(level),
 	    static_cast<uint64_t>(optname),
@@ -178,7 +176,7 @@ static inline int getsockopt(int fd, int level, int optname, void *optval, size_
 static inline int shutdown(int fd, int how) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::net,
-	    static_cast<uint64_t>(ops::shutdown),
+	    static_cast<uint64_t>(ops::SHUTDOWN),
 	    static_cast<uint64_t>(fd),
 	    static_cast<uint64_t>(how)
 	);
@@ -188,7 +186,7 @@ static inline int shutdown(int fd, int how) {
 static inline int getpeername(int fd, void *addr, size_t *addr_len) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::net,
-	    static_cast<uint64_t>(ops::getpeername),
+	    static_cast<uint64_t>(ops::GETPEERNAME),
 	    static_cast<uint64_t>(fd),
 	    reinterpret_cast<uint64_t>(addr),
 	    reinterpret_cast<uint64_t>(addr_len)
@@ -199,7 +197,7 @@ static inline int getpeername(int fd, void *addr, size_t *addr_len) {
 static inline int getsockname(int fd, void *addr, size_t *addr_len) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::net,
-	    static_cast<uint64_t>(ops::getsockname),
+	    static_cast<uint64_t>(ops::GETSOCKNAME),
 	    static_cast<uint64_t>(fd),
 	    reinterpret_cast<uint64_t>(addr),
 	    reinterpret_cast<uint64_t>(addr_len)
@@ -210,7 +208,7 @@ static inline int getsockname(int fd, void *addr, size_t *addr_len) {
 static inline int poll(void *fds, size_t nfds, int timeout) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::net,
-	    static_cast<uint64_t>(ops::poll),
+	    static_cast<uint64_t>(ops::POLL),
 	    reinterpret_cast<uint64_t>(fds),
 	    static_cast<uint64_t>(nfds),
 	    static_cast<uint64_t>(timeout)
@@ -221,7 +219,7 @@ static inline int poll(void *fds, size_t nfds, int timeout) {
 static inline int ioctl_net(unsigned long request, void *arg) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::net,
-	    static_cast<uint64_t>(ops::ioctl_net),
+	    static_cast<uint64_t>(ops::IOCTL_NET),
 	    static_cast<uint64_t>(request),
 	    reinterpret_cast<uint64_t>(arg)
 	);
