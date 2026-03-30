@@ -10,7 +10,6 @@
 #include <sys/stat.h>
 #include <termios.h>
 #include <unistd.h>
-
 #include <bits/ensure.h>
 #include <mlibc-config.h>
 #include <mlibc/allocator.hpp>

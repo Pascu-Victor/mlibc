@@ -167,4 +167,32 @@ inline int64_t execve(const char *path, const char *const argv[], const char *co
 	);
 }
 
+inline int64_t gethostname(char *buf, uint64_t bufsize) {
+	return (int64_t)syscall(
+	    abi::callnums::process,
+	    (uint64_t)abi::process::procmgmt_ops::gethostname,
+	    (uint64_t)(uintptr_t)buf,
+	    bufsize
+	);
+}
+
+inline int64_t sethostname(const char *name, uint64_t len) {
+	return (int64_t)syscall(
+	    abi::callnums::process,
+	    (uint64_t)abi::process::procmgmt_ops::sethostname,
+	    (uint64_t)(uintptr_t)name,
+	    len
+	);
+}
+
+inline int64_t setpriority(int which, int64_t who, int prio) {
+	return (int64_t)syscall(
+	    abi::callnums::process,
+	    (uint64_t)abi::process::procmgmt_ops::setpriority,
+	    (uint64_t)which,
+	    (uint64_t)who,
+	    (uint64_t)(int64_t)prio
+	);
+}
+
 } // namespace ker::process

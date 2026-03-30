@@ -916,11 +916,11 @@ int sys_uname(utsname *buf) {
 	if (!buf)
 		return EINVAL;
 	memset(buf, 0, sizeof(*buf));
-	memcpy(buf->sysname, "WOS", 3);
-	memcpy(buf->nodename, "wos", 3);
-	memcpy(buf->release, "0.1.0", 5);
-	memcpy(buf->version, "0.1.0", 5);
-	memcpy(buf->machine, "x86_64", 6);
+	memcpy(buf->sysname, "WOS", 4);
+	ker::process::gethostname(buf->nodename, sizeof(buf->nodename));
+	memcpy(buf->release, "0.1.0", 6);
+	memcpy(buf->version, "0.1.0", 6);
+	memcpy(buf->machine, "x86_64", 7);
 	return 0;
 }
 
@@ -1195,11 +1195,9 @@ int sys_link(const char *old_path, const char *new_path) {
 }
 
 int sys_gethostname(char *buffer, size_t bufsize) {
-	const char *name = "wos";
-	size_t len = 3; // strlen("wos")
-	if (len + 1 > bufsize)
-		return ENAMETOOLONG;
-	memcpy(buffer, name, len + 1);
+	int64_t r = ker::process::gethostname(buffer, bufsize);
+	if (r < 0)
+		return static_cast<int>(-r);
 	return 0;
 }
 
