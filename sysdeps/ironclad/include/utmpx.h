@@ -7,7 +7,7 @@ extern "C" {
 #endif
 
 #include <abi-bits/pid_t.h>
-#include <bits/posix/timeval.h>
+#include <bits/timeval.h>
 
 #define UTMPX_FILE "/var/run/utmp"
 #define WTMPX_FILE "/var/run/wtmp"

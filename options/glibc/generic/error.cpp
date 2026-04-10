@@ -24,13 +24,10 @@ void error(int status, int errnum, const char *format, ...) {
 	vfprintf(stderr, format, args);
 	va_end(args);
 
-	if (errnum) {
-		fprintf(stderr, ": %s\n", strerror(errnum));
-	}
+	fprintf(stderr, ": %s\n", strerror(errnum));
 
-	if (status) {
+	if (status)
 		exit(status);
-	}
 }
 
 void error_at_line(

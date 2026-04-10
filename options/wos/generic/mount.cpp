@@ -1,8 +1,7 @@
 #include <errno.h>
 #include <sys/mount.h>
 
-#include <bits/ensure.h>
-#include <mlibc/wos-sysdeps.hpp>
+#include <mlibc/all-sysdeps.hpp>
 
 int mount(
     const char *source,
@@ -11,8 +10,7 @@ int mount(
     unsigned long flags,
     const void *data
 ) {
-	MLIBC_CHECK_OR_ENOSYS(mlibc::sys_mount, -1);
-	if (int e = mlibc::sys_mount(source, target, fstype, flags, data); e) {
+	if (int e = mlibc::sysdep_or_enosys<Mount>(source, target, fstype, flags, data); e) {
 		errno = e;
 		return -1;
 	}
@@ -22,8 +20,7 @@ int mount(
 int umount(const char *target) { return umount2(target, 0); }
 
 int umount2(const char *target, int flags) {
-	MLIBC_CHECK_OR_ENOSYS(mlibc::sys_umount2, -1);
-	if (int e = mlibc::sys_umount2(target, flags); e) {
+	if (int e = mlibc::sysdep_or_enosys<Umount2>(target, flags); e) {
 		errno = e;
 		return -1;
 	}

@@ -1,8 +1,8 @@
-#ifndef  _UTMP_H
-#define  _UTMP_H
+#ifndef _UTMP_H
+#define _UTMP_H
 
 #include <abi-bits/pid_t.h>
-#include <bits/posix/timeval.h>
+#include <bits/timeval.h>
 #include <bits/types.h>
 #include <paths.h>
 
@@ -44,7 +44,7 @@ struct utmp {
 	char ut_user[UT_NAMESIZE];
 	char ut_host[UT_HOSTSIZE];
 	struct exit_status ut_exit;
-	long   ut_session;
+	long ut_session;
 	struct timeval ut_tv;
 	__mlibc_int32 ut_addr_v6[4];
 	char __unused[20];

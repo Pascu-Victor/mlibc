@@ -5,7 +5,7 @@
 extern "C" {
 #endif
 
-#include <bits/posix/timeval.h>
+#include <bits/timeval.h>
 
 #define RUSAGE_SELF 0
 #define RUSAGE_CHILDREN -1

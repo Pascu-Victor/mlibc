@@ -1,14 +1,10 @@
-
-#include <bits/ensure.h>
 #include <errno.h>
 #include <sys/statfs.h>
 
-#include <mlibc/debug.hpp>
-#include <mlibc/wos-sysdeps.hpp>
+#include <mlibc/all-sysdeps.hpp>
 
 extern "C" int statfs(const char *path, struct statfs *buf) {
-	MLIBC_CHECK_OR_ENOSYS(mlibc::sys_statfs, -1);
-	if (int e = mlibc::sys_statfs(path, buf); e) {
+	if (int e = mlibc::sysdep_or_enosys<Statfs>(path, buf); e) {
 		errno = e;
 		return -1;
 	}
@@ -16,8 +12,7 @@ extern "C" int statfs(const char *path, struct statfs *buf) {
 }
 
 extern "C" int fstatfs(int fd, struct statfs *buf) {
-	MLIBC_CHECK_OR_ENOSYS(mlibc::sys_fstatfs, -1);
-	if (int e = mlibc::sys_fstatfs(fd, buf); e) {
+	if (int e = mlibc::sysdep_or_enosys<Fstatfs>(fd, buf); e) {
 		errno = e;
 		return -1;
 	}

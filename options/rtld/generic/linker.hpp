@@ -33,6 +33,7 @@ enum class LinkerError {
 };
 
 uint32_t elf64Hash(frg::string_view string);
+uint32_t gnuHash(frg::string_view string);
 
 // --------------------------------------------------------
 // ObjectRepository
@@ -133,6 +134,11 @@ private:
 // --------------------------------------------------------
 
 enum class HashStyle { none, systemV, gnu };
+
+struct SystemVHashTableHeader {
+	uint32_t nBuckets;
+	uint32_t nChain;
+};
 
 struct GnuHashTableHeader {
 	uint32_t nBuckets;

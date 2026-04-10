@@ -1,14 +1,14 @@
 
 #include <bits/ensure.h>
+#include <mlibc/all-sysdeps.hpp>
 #include <mlibc/debug.hpp>
-#include <mlibc/internal-sysdeps.hpp>
 
 __attribute__((visibility("default"))) extern "C" void frg_panic(const char *mstr) {
-	//	mlibc::sys_libc_log("mlibc: Call to frg_panic");
-	mlibc::sys_libc_log(mstr);
-	mlibc::sys_libc_panic();
+	//	mlibc::sysdep<LibcLog>("mlibc: Call to frg_panic");
+	mlibc::sysdep<LibcLog>(mstr);
+	mlibc::sysdep<LibcPanic>();
 }
 
 __attribute__((visibility("default"))) extern "C" void frg_log(const char *mstr) {
-	mlibc::sys_libc_log(mstr);
+	mlibc::sysdep<LibcLog>(mstr);
 }

@@ -9,6 +9,7 @@
 #include <strings.h>
 
 #include <mlibc/debug.hpp>
+#include <mlibc/strings.hpp>
 
 char *strdup(const char *string) {
 	auto num_bytes = strlen(string);
@@ -139,9 +140,22 @@ char *strcasestr(const char *s, const char *pattern) {
 	return nullptr;
 }
 
-void *memccpy(void *__restrict, const void *__restrict, int, size_t) {
-	__ensure(!"Not implemented");
-	__builtin_unreachable();
+void *memccpy(void *__restrict dest, const void *__restrict src, int c, size_t n) {
+	auto *d = static_cast<unsigned char *>(dest);
+	const auto *s = static_cast<const unsigned char *>(src);
+	const unsigned char target = static_cast<unsigned char>(c);
+
+	for (size_t i = 0; i < n; i++) {
+		*d = *s;
+
+		if (*d == target)
+			return static_cast<void *>(d + 1);
+
+		d++;
+		s++;
+	}
+
+	return nullptr;
 }
 
 // This implementation was taken from musl
@@ -182,33 +196,12 @@ void *memmem(const void *hs, size_t haystackLen, const void *nd, size_t needleLe
 }
 
 // BSD extensions.
-// Taken from musl
-size_t strlcpy(char *d, const char *s, size_t n) {
-	char *d0 = d;
-
-	if (!n--)
-		goto finish;
-	for (; n && (*d = *s); n--, s++, d++)
-		;
-	*d = 0;
-finish:
-	return d - d0 + strlen(s);
-}
+size_t strlcpy(char *d, const char *s, size_t n) { return mlibc::strlcpy(d, s, n); }
 
 size_t strlcat(char *d, const char *s, size_t n) {
 	size_t l = strnlen(d, n);
 	if (l == n) {
 		return l + strlen(s);
 	}
-	return l + strlcpy(d + l, s, n - l);
-}
-
-size_t strxfrm_l(char *dest, const char *src, size_t n, locale_t locale) {
-	// Stub implementation: just copy the string as-is (no locale-specific transformation)
-	size_t len = strlen(src);
-	if (n > 0) {
-		strncpy(dest, src, n - 1);
-		dest[n - 1] = '\0';
-	}
-	return len;
+	return l + mlibc::strlcpy(d + l, s, n - l);
 }

@@ -1,13 +1,13 @@
 
-#ifndef  _UTMPX_H
-#define  _UTMPX_H
+#ifndef _UTMPX_H
+#define _UTMPX_H
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 #include <abi-bits/pid_t.h>
-#include <bits/posix/timeval.h>
+#include <bits/timeval.h>
 
 /* Struct definition taken from musl */
 struct utmpx {
@@ -43,15 +43,15 @@ void endutxent(void);
 
 #endif /* !__MLIBC_ABI_ONLY */
 
-#define EMPTY           0
-#define RUN_LVL         1
-#define BOOT_TIME       2
-#define NEW_TIME        3
-#define OLD_TIME        4
-#define INIT_PROCESS    5
-#define LOGIN_PROCESS   6
-#define USER_PROCESS    7
-#define DEAD_PROCESS    8
+#define EMPTY 0
+#define RUN_LVL 1
+#define BOOT_TIME 2
+#define NEW_TIME 3
+#define OLD_TIME 4
+#define INIT_PROCESS 5
+#define LOGIN_PROCESS 6
+#define USER_PROCESS 7
+#define DEAD_PROCESS 8
 
 #ifdef _GNU_SOURCE
 #define ACCOUNTING 9

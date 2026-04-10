@@ -12,10 +12,11 @@ enum {
 #include <frg/scope_exit.hpp>
 #include <frg/small_vector.hpp>
 #include <frg/unique.hpp>
+#include <mlibc/all-sysdeps.hpp>
 #include <mlibc/allocator.hpp>
 #include <mlibc/debug.hpp>
 #include <mlibc/rtld-abi.hpp>
-#include <mlibc/rtld-sysdeps.hpp>
+#include <mlibc/rtld-config.hpp>
 #include <mlibc/thread.hpp>
 
 #include "elf.hpp"
@@ -25,12 +26,6 @@ enum {
 uintptr_t libraryBase = 0x41000000;
 #endif
 
-constexpr bool verbose = false;
-constexpr bool stillSlightlyVerbose = false;
-constexpr bool logBaseAddresses = false;
-constexpr bool logRpath = false;
-constexpr bool logLdPath = false;
-constexpr bool logSymbolVersions = false;
 constexpr bool eagerBinding = true;
 
 #if defined(__x86_64__) || defined(__i386__)
@@ -54,6 +49,7 @@ constexpr inline uintptr_t tlsOffsetFromTp = 0;
 
 extern DebugInterface globalDebugInterface;
 extern uintptr_t __stack_chk_guard;
+extern mlibc::RtldConfig rtldConfig;
 
 extern frg::manual_box<
     frg::small_vector<frg::string_view, MLIBC_NUM_DEFAULT_LIBRARY_PATHS, MemoryAllocator>>
@@ -108,7 +104,7 @@ int __riscv_hwprobe(
     cpu_set_t *cpus,
     unsigned int flags
 ) {
-	return mlibc::sys_riscv_hwprobe(pairs, pair_count, cpusetsize, cpus, flags);
+	return mlibc::sysdep_or_enosys<RiscvHwprobe>(pairs, pair_count, cpusetsize, cpus, flags);
 }
 
 #endif
@@ -156,14 +152,16 @@ elf_addr handleIfunc(elf_addr addr) {
 
 bool trySeek(int fd, int64_t offset) {
 	off_t noff;
-	return mlibc::sys_seek(fd, offset, SEEK_SET, &noff) == 0;
+	return mlibc::sysdep<Seek>(fd, offset, SEEK_SET, &noff) == 0;
 }
 
 bool tryReadExactly(int fd, void *data, size_t length) {
 	size_t offset = 0;
 	while (offset < length) {
 		ssize_t chunk;
-		if (mlibc::sys_read(fd, reinterpret_cast<char *>(data) + offset, length - offset, &chunk))
+		if (mlibc::sysdep<Read>(
+		        fd, reinterpret_cast<char *>(data) + offset, length - offset, &chunk
+		    ))
 			return false;
 		if (chunk > 0)
 			offset += chunk;
@@ -175,7 +173,7 @@ bool tryReadExactly(int fd, void *data, size_t length) {
 }
 
 void closeOrDie(int fd) {
-	if (mlibc::sys_close(fd))
+	if (mlibc::sysdep<Close>(fd))
 		__ensure(!"sys_close() failed");
 }
 
@@ -289,7 +287,7 @@ frg::expected<LinkerError, SharedObject *> ObjectRepository::requestObjectWithNa
 
 	auto tryToOpen = [&](const char *path) -> frg::optional<int> {
 		int fd;
-		if (auto x = mlibc::sys_open(path, O_RDONLY, 0, &fd); x) {
+		if (auto x = mlibc::sysdep<Open>(path, O_RDONLY, 0, &fd); x) {
 			return frg::null_opt;
 		}
 		return fd;
@@ -318,13 +316,13 @@ frg::expected<LinkerError, SharedObject *> ObjectRepository::requestObjectWithNa
 		}
 		sPath += name;
 
-		if (logRpath)
+		if (rtldConfig.debugVerbose)
 			mlibc::infoLogger() << "rtld: trying in rpath " << sPath << frg::endlog;
 
 		auto fd = tryToOpen(sPath.data());
 		if (!fd)
 			return LinkerError::notFound;
-		if (logRpath)
+		if (rtldConfig.debugVerbose)
 			mlibc::infoLogger() << "rtld: found in rpath" << frg::endlog;
 		return frg::tuple{std::move(sPath), fd.value()};
 	};
@@ -357,7 +355,7 @@ frg::expected<LinkerError, SharedObject *> ObjectRepository::requestObjectWithNa
 		auto result = _fetchFromFile(object.get(), fd);
 		closeOrDie(fd);
 		if (!result) {
-			if (verbose || stillSlightlyVerbose)
+			if (rtldConfig.debugVerbose)
 				mlibc::infoLogger() << "rtld: failed to open " << name << frg::endlog;
 			return result.error();
 		}
@@ -398,14 +396,14 @@ frg::expected<LinkerError, SharedObject *> ObjectRepository::requestObjectWithNa
 				    rpathResult.value().get<0>(), rpathResult.value().get<1>()
 				);
 		}
-	} else if (logRpath) {
+	} else if (rtldConfig.debug) {
 		mlibc::infoLogger() << "rtld: no rpath set for object" << frg::endlog;
 	}
 
 	for (size_t i = 0; i < libraryPaths->size() && !res; i++) {
 		auto ldPath = (*libraryPaths)[i];
 		auto path = frg::string<MemoryAllocator>{getAllocator(), ldPath} + '/' + name;
-		if (logLdPath)
+		if (rtldConfig.debug)
 			mlibc::infoLogger() << "rtld: Trying to load " << name << " from ldpath " << ldPath
 			                    << "/" << frg::endlog;
 
@@ -462,7 +460,7 @@ frg::expected<LinkerError, SharedObject *> ObjectRepository::requestObjectAtPath
 	frg::string<MemoryAllocator> no_prefix(getAllocator(), path);
 
 	int fd;
-	if (mlibc::sys_open((no_prefix + '\0').data(), O_RDONLY, 0, &fd)) {
+	if (mlibc::sysdep<Open>((no_prefix + '\0').data(), O_RDONLY, 0, &fd)) {
 		frg::destruct(getAllocator(), object);
 		return LinkerError::notFound;
 	}
@@ -548,7 +546,7 @@ void ObjectRepository::_fetchFromPhdrs(
 	object->phdrPointer = phdr_pointer;
 	object->phdrEntrySize = phdr_entry_size;
 	object->phdrCount = phdr_count;
-	if (verbose)
+	if (rtldConfig.debugVerbose)
 		mlibc::infoLogger() << "rtld: Loading " << object->name << frg::endlog;
 
 	// Note: the entry pointer is absolute and not relative to the base address.
@@ -565,7 +563,7 @@ void ObjectRepository::_fetchFromPhdrs(
 				// Determine the executable's base address (in the PIE case) by comparing
 				// the PHDR segment's load address against it's address in the ELF file.
 				object->baseAddress = reinterpret_cast<uintptr_t>(phdr_pointer) - phdr->p_vaddr;
-				if (verbose)
+				if (rtldConfig.debugVerbose)
 					mlibc::infoLogger() << "rtld: Executable is loaded at "
 					                    << (void *)object->baseAddress << frg::endlog;
 				break;
@@ -651,7 +649,7 @@ frg::expected<LinkerError, void> ObjectRepository::_fetchFromFile(SharedObject *
 #if MLIBC_MMAP_ALLOCATE_DSO
 	void *mappedAddr = nullptr;
 
-	if (mlibc::sys_vm_map(
+	if (mlibc::sysdep<VmMap>(
 	        nullptr,
 	        highest_address - object->baseAddress,
 	        PROT_NONE,
@@ -674,7 +672,7 @@ frg::expected<LinkerError, void> ObjectRepository::_fetchFromFile(SharedObject *
 	libraryBase += (highest_address + (hugeSize - 1)) & ~(hugeSize - 1);
 #endif
 
-	if (verbose || logBaseAddresses)
+	if (rtldConfig.debug)
 		mlibc::infoLogger() << "rtld: Loading " << object->name << " at "
 		                    << (void *)object->baseAddress << frg::endlog;
 
@@ -712,7 +710,7 @@ frg::expected<LinkerError, void> ObjectRepository::_fetchFromFile(SharedObject *
 				initial_prot = prot;
 
 			void *map_pointer;
-			if (mlibc::sys_vm_map(
+			if (mlibc::sysdep<VmMap>(
 			        reinterpret_cast<void *>(map_address),
 			        backed_map_size,
 			        initial_prot,
@@ -723,7 +721,7 @@ frg::expected<LinkerError, void> ObjectRepository::_fetchFromFile(SharedObject *
 			    ))
 				__ensure(!"sys_vm_map failed");
 			if (total_map_size > backed_map_size)
-				if (mlibc::sys_vm_map(
+				if (mlibc::sysdep<VmMap>(
 				        reinterpret_cast<void *>(map_address + backed_map_size),
 				        total_map_size - backed_map_size,
 				        initial_prot,
@@ -734,10 +732,13 @@ frg::expected<LinkerError, void> ObjectRepository::_fetchFromFile(SharedObject *
 				    ))
 					__ensure(!"sys_vm_map failed");
 
-			if (mlibc::sys_vm_readahead)
-				if (mlibc::sys_vm_readahead(reinterpret_cast<void *>(map_address), backed_map_size))
+			if constexpr (mlibc::IsImplemented<VmReadahead>) {
+				if (mlibc::sysdep_or_enosys<VmReadahead>(
+				        reinterpret_cast<void *>(map_address), backed_map_size
+				    ))
 					mlibc::infoLogger()
 					    << "mlibc: sys_vm_readahead() failed in ld.so" << frg::endlog;
+			}
 
 			// Clear the trailing area at the end of the backed mapping.
 			// We do not clear the leading area; programs are not supposed to access it.
@@ -750,7 +751,7 @@ frg::expected<LinkerError, void> ObjectRepository::_fetchFromFile(SharedObject *
 			(void)backed_map_size;
 
 			void *map_pointer;
-			if (mlibc::sys_vm_map(
+			if (mlibc::sysdep<VmMap>(
 			        reinterpret_cast<void *>(map_address),
 			        total_map_size,
 			        initial_prot,
@@ -767,10 +768,10 @@ frg::expected<LinkerError, void> ObjectRepository::_fetchFromFile(SharedObject *
 			);
 #endif
 			if (initial_prot != prot) {
-				if (!mlibc::sys_vm_protect)
+				if constexpr (!mlibc::IsImplemented<VmProtect>)
 					__ensure(!"sys_vm_protect not provided");
 
-				if (mlibc::sys_vm_protect(
+				if (mlibc::sysdep_or_panic<VmProtect>(
 				        reinterpret_cast<void *>(map_address), total_map_size, prot
 				    ))
 					__ensure(!"sys_vm_protect failed");
@@ -782,10 +783,12 @@ frg::expected<LinkerError, void> ObjectRepository::_fetchFromFile(SharedObject *
 			object->tlsImagePtr = (void *)(object->baseAddress + phdr->p_vaddr);
 		} else if (phdr->p_type == PT_DYNAMIC) {
 			object->dynamic = (elf_dyn *)(object->baseAddress + phdr->p_vaddr);
-		} else if (phdr->p_type == PT_INTERP || phdr->p_type == PT_PHDR || phdr->p_type == PT_NOTE
-		           || phdr->p_type == PT_RISCV_ATTRIBUTES || phdr->p_type == PT_GNU_EH_FRAME
-		           || phdr->p_type == PT_GNU_RELRO || phdr->p_type == PT_GNU_STACK
-		           || phdr->p_type == PT_GNU_PROPERTY) {
+		} else if (
+		    phdr->p_type == PT_INTERP || phdr->p_type == PT_PHDR || phdr->p_type == PT_NOTE
+		    || phdr->p_type == PT_RISCV_ATTRIBUTES || phdr->p_type == PT_GNU_EH_FRAME
+		    || phdr->p_type == PT_GNU_RELRO || phdr->p_type == PT_GNU_STACK
+		    || phdr->p_type == PT_GNU_PROPERTY
+		) {
 			// ignore the phdr
 		} else {
 			mlibc::panicLogger() << "Unexpected PHDR type 0x" << frg::hex_fmt(phdr->p_type)
@@ -1009,13 +1012,13 @@ void ObjectRepository::_parseDynamic(SharedObject *object) {
 
 void ObjectRepository::_parseVerdef(SharedObject *object) {
 	if (!object->versionDefinitionTableOffset) {
-		if (verbose)
+		if (rtldConfig.debugVerbose)
 			mlibc::infoLogger() << "mlibc: Object " << object->name << " defines no versions"
 			                    << frg::endlog;
 		return;
 	}
 
-	if (verbose)
+	if (rtldConfig.debugVerbose)
 		mlibc::infoLogger() << "mlibc: Object " << object->name << " defines "
 		                    << object->versionDefinitionCount << " version(s)" << frg::endlog;
 
@@ -1039,7 +1042,7 @@ void ObjectRepository::_parseVerdef(SharedObject *object) {
 		    object->baseAddress + object->stringTableOffset + aux.vda_name
 		);
 
-		if (verbose)
+		if (rtldConfig.debugVerbose)
 			mlibc::infoLogger() << "mlibc: Object " << object->name << " defines version " << name
 			                    << " (index " << def.vd_ndx << ")" << frg::endlog;
 
@@ -1055,13 +1058,13 @@ void ObjectRepository::_parseVerdef(SharedObject *object) {
 
 void ObjectRepository::_parseVerneed(SharedObject *object) {
 	if (!object->versionRequirementTableOffset) {
-		if (verbose)
+		if (rtldConfig.debugVerbose)
 			mlibc::infoLogger() << "mlibc: Object " << object->name << " requires no versions"
 			                    << frg::endlog;
 		return;
 	}
 
-	if (verbose)
+	if (rtldConfig.debugVerbose)
 		mlibc::infoLogger() << "mlibc: Object " << object->name << " requires "
 		                    << object->versionRequirementCount << " version(s)" << frg::endlog;
 
@@ -1081,7 +1084,7 @@ void ObjectRepository::_parseVerneed(SharedObject *object) {
 		// Figure out the target object from file
 		SharedObject *target = nullptr;
 		for (auto dep : object->dependencies) {
-			if (verbose)
+			if (rtldConfig.debugVerbose)
 				mlibc::infoLogger() << "mlibc: Trying " << dep->name << " (SONAME: " << dep->soName
 				                    << ") to satisfy " << file << frg::endlog;
 			if (dep->name == file || (dep->soName && dep->soName == file)) {
@@ -1094,7 +1097,7 @@ void ObjectRepository::_parseVerneed(SharedObject *object) {
 			                     << "\" found for VERNEED entry of object " << object->name
 			                     << frg::endlog;
 
-		if (verbose)
+		if (rtldConfig.debugVerbose)
 			mlibc::infoLogger() << "mlibc: Object " << object->name << " requires " << need.vn_cnt
 			                    << " version(s) from DSO " << file << frg::endlog;
 
@@ -1110,7 +1113,7 @@ void ObjectRepository::_parseVerneed(SharedObject *object) {
 			    object->baseAddress + object->stringTableOffset + aux.vna_name
 			);
 
-			if (verbose)
+			if (rtldConfig.debugVerbose)
 				mlibc::infoLogger()
 				    << "mlibc:   Object " << object->name << " requires version " << name
 				    << " (index " << aux.vna_other << ") from DSO " << file << frg::endlog;
@@ -1155,7 +1158,7 @@ ObjectRepository::_discoverDependencies(SharedObject *object, Scope *localScope,
 			if (!libraryResult)
 				mlibc::panicLogger() << "rtld: Could not load preload " << preload << frg::endlog;
 
-			if (verbose)
+			if (rtldConfig.debugVerbose)
 				mlibc::infoLogger() << "rtld: Preloading " << preload << frg::endlog;
 
 			auto library = libraryResult.value();
@@ -1290,7 +1293,7 @@ frg::tuple<ObjectSymbol, SymbolVersion> SharedObject::getSymbolByIndex(size_t in
 		if (isDefault)
 			ver = ver.makeDefault();
 
-		if (logSymbolVersions)
+		if (rtldConfig.debugVerbose)
 			mlibc::infoLogger() << "mlibc: Symbol " << sym.getString() << " of object " << name
 			                    << " has version " << ver.name() << " and "
 			                    << (ver.isDefault() ? "is" : "isn't") << " the default version"
@@ -1388,21 +1391,21 @@ void doInitialize(SharedObject *object) {
 	__ensure(object->wasLinked);
 	__ensure(!object->wasInitialized);
 
-	if (verbose)
+	if (rtldConfig.debugVerbose)
 		mlibc::infoLogger() << "rtld: Initialize " << object->name << frg::endlog;
 
-	if (verbose)
+	if (rtldConfig.debugVerbose)
 		mlibc::infoLogger() << "rtld: Running DT_INIT function" << frg::endlog;
 	if (object->initPtr != nullptr)
 		object->initPtr();
 
-	if (verbose)
+	if (rtldConfig.debugVerbose)
 		mlibc::infoLogger() << "rtld: Running DT_INIT_ARRAY functions" << frg::endlog;
 	__ensure((object->initArraySize % sizeof(InitFuncPtr)) == 0);
 	for (size_t i = 0; i < object->initArraySize / sizeof(InitFuncPtr); i++)
 		object->initArray[i]();
 
-	if (verbose)
+	if (rtldConfig.debugVerbose)
 		mlibc::infoLogger() << "rtld: Object initialization complete" << frg::endlog;
 	object->wasInitialized = true;
 }
@@ -1411,21 +1414,21 @@ void doDestruct(SharedObject *object) {
 	if (!object->wasInitialized || object->wasDestroyed)
 		return;
 
-	if (verbose)
+	if (rtldConfig.debugVerbose)
 		mlibc::infoLogger() << "rtld: Destruct " << object->name << frg::endlog;
 
-	if (verbose)
+	if (rtldConfig.debugVerbose)
 		mlibc::infoLogger() << "rtld: Running DT_FINI_ARRAY functions" << frg::endlog;
 	__ensure((object->finiArraySize % sizeof(InitFuncPtr)) == 0);
 	for (size_t i = object->finiArraySize / sizeof(InitFuncPtr); i > 0; i--)
 		object->finiArray[i - 1]();
 
-	if (verbose)
+	if (rtldConfig.debugVerbose)
 		mlibc::infoLogger() << "rtld: Running DT_FINI function" << frg::endlog;
 	if (object->finiPtr != nullptr)
 		object->finiPtr();
 
-	if (verbose)
+	if (rtldConfig.debugVerbose)
 		mlibc::infoLogger() << "rtld: Object destruction complete" << frg::endlog;
 	object->wasDestroyed = true;
 }
@@ -1455,7 +1458,7 @@ void initTlsObjects(
 			memset(tls_ptr, 0, object->tlsSegmentSize);
 			memcpy(tls_ptr, object->tlsImagePtr, object->tlsImageSize);
 
-			if (verbose) {
+			if (rtldConfig.debugVerbose) {
 				mlibc::infoLogger()
 				    << "rtld: wrote tls image at " << (void *)tls_ptr << ", size = 0x"
 				    << frg::hex_fmt{object->tlsSegmentSize} << frg::endlog;
@@ -1501,7 +1504,7 @@ Tcb *allocateTcb() {
 	}
 	__ensure((tcbAddress & (alignof(Tcb) - 1)) == 0);
 
-	if (verbose) {
+	if (rtldConfig.debugVerbose) {
 		mlibc::infoLogger() << "rtld: tcb allocated at " << (void *)tcbAddress << ", size = 0x"
 		                    << frg::hex_fmt{sizeof(Tcb)} << frg::endlog;
 		mlibc::infoLogger() << "rtld: tls allocated at " << (void *)tlsAddress << ", size = 0x"
@@ -1561,7 +1564,7 @@ void *accessDtv(SharedObject *object) {
 		memcpy(buffer, object->tlsImagePtr, object->tlsImageSize);
 		tcb_ptr->dtvPointers[object->tlsIndex] = buffer;
 
-		if (verbose) {
+		if (rtldConfig.debugVerbose) {
 			mlibc::infoLogger() << "rtld: accessDtv wrote tls image at " << buffer << ", size = 0x"
 			                    << frg::hex_fmt{object->tlsSegmentSize} << frg::endlog;
 		}
@@ -1660,18 +1663,29 @@ frg::optional<ObjectSymbol> resolveInObject(
 
 	// Checks if the symbol's version matches the desired version.
 	auto correctVersion = [&](SymbolVersion candVersion) {
-		// TODO(qookie): Not sure if local symbols should participate in dynamic symbol resolution
-		if (!version
-		    && (candVersion.isDefault() || candVersion.isLocal() || candVersion.isGlobal()))
+		// Local version symbols shouldn't participate in symbol resolution.
+		// Only time .dynsym can contain a local version symbol is if it's
+		// undefined, so it should be discarded earlier.
+		__ensure(!candVersion.isLocal());
+
+		// Caller requested default version, ...
+		// ... and this symbol matches.
+		if (!version && (candVersion.isDefault() || candVersion.isGlobal()))
 			return true;
-		// Caller requested default version, but this isn't it.
+		// ... but this symbol isn't the default.
 		if (!version)
 			return false;
-		// If the requested version is global (caller has VERNEED but not for this symbol),
-		// use the default one.
-		if (version->isGlobal() && !candVersion.isGlobal() && !candVersion.isLocal()
-		    && candVersion.isDefault())
+
+		// Caller has requested an unversioned symbol.
+		// LLD prior to version 22, and binutils between versions 2.35 and 2.45
+		// produce a global version symbol for this case, while newer ones produce
+		// a local version symbol.
+		// In this case, accept either the global or default version.
+		if ((version->isLocal() || version->isGlobal())
+		    && (candVersion.isGlobal() || candVersion.isDefault()))
 			return true;
+
+		// Otherwise, make sure the version is correct.
 		return *version == candVersion;
 	};
 
@@ -1895,15 +1909,10 @@ void Loader::linkObjects(SharedObject *root) {
 		if (object->dynamic == nullptr)
 			continue;
 
-		if (verbose)
+		if (rtldConfig.debugVerbose)
 			mlibc::infoLogger() << "rtld: Linking " << object->name << frg::endlog;
 
 		__ensure(!object->wasLinked);
-
-		// TODO: Support this.
-		if (object->symbolicResolution)
-			mlibc::infoLogger() << "\e[31mrtld: DT_SYMBOLIC is not implemented correctly!\e[39m"
-			                    << frg::endlog;
 
 		_processStaticRelocations(object);
 		_processLazyRelocations(object);
@@ -1978,7 +1987,7 @@ void Loader::_buildTlsMaps() {
 				object->tlsOffset = -runtimeTlsMap->initialPtr;
 			}
 
-			if (verbose)
+			if (rtldConfig.debugVerbose)
 				mlibc::infoLogger()
 				    << "rtld: TLS of " << object->name << " mapped to 0x"
 				    << frg::hex_fmt{object->tlsOffset} << ", size: " << object->tlsSegmentSize
@@ -2025,7 +2034,7 @@ void Loader::_buildTlsMaps() {
 					                        " allocating TLS for "
 					                     << object->name << frg::endlog;
 
-				if (verbose)
+				if (rtldConfig.debugVerbose)
 					mlibc::infoLogger()
 					    << "rtld: TLS of " << object->name << " mapped to 0x"
 					    << frg::hex_fmt{object->tlsOffset} << ", size: " << object->tlsSegmentSize
@@ -2041,7 +2050,7 @@ void Loader::initObjects(ObjectRepository *repository) {
 	initTlsObjects(mlibc::get_current_tcb(), _linkBfs, true);
 
 	if (_mainExecutable && _mainExecutable->preInitArray) {
-		if (verbose)
+		if (rtldConfig.debugVerbose)
 			mlibc::infoLogger() << "rtld: Running DT_PREINIT_ARRAY functions" << frg::endlog;
 
 		__ensure(_mainExecutable->isMainObject);
@@ -2094,15 +2103,25 @@ void Loader::_processRelocations(Relocation &rel) {
 	if (rel.symbol_index()) {
 		auto [sym, ver] = rel.object()->getSymbolByIndex(rel.symbol_index());
 
-		p = Scope::resolveGlobalOrLocal(
-		    *globalScope, rel.object()->localScope, sym.getString(), rel.object()->objectRts, 0, ver
-		);
+		if (rel.object()->symbolicResolution)
+			p = resolveInObject(rel.object(), sym.getString(), ver);
+
+		if (!p)
+			p = Scope::resolveGlobalOrLocal(
+			    *globalScope,
+			    rel.object()->localScope,
+			    sym.getString(),
+			    rel.object()->objectRts,
+			    0,
+			    ver
+			);
+
 		if (!p) {
 			if (ELF_ST_BIND(sym.symbol()->st_info) != STB_WEAK)
 				mlibc::panicLogger() << "Unresolved load-time symbol " << sym.getString()
 				                     << " in object " << rel.object()->name << frg::endlog;
 
-			if (verbose)
+			if (rtldConfig.debugVerbose)
 				mlibc::infoLogger() << "rtld: Unresolved weak load-time symbol " << sym.getString()
 				                    << " in object " << rel.object()->name << frg::endlog;
 		}
@@ -2148,7 +2167,7 @@ void Loader::_processRelocations(Relocation &rel) {
 				__ensure(p);
 				rel.relocate(elf_addr(p->object()));
 			} else {
-				if (stillSlightlyVerbose)
+				if (rtldConfig.debugVerbose)
 					mlibc::infoLogger() << "rtld: Warning: TLS_DTPMOD64 with no symbol in object "
 					                    << rel.object()->name << frg::endlog;
 				rel.relocate(elf_addr(rel.object()));
@@ -2173,7 +2192,7 @@ void Loader::_processRelocations(Relocation &rel) {
 				off += p->symbol()->st_value;
 				tls_offset = p->object()->tlsOffset;
 			} else {
-				if (stillSlightlyVerbose)
+				if (rtldConfig.debugVerbose)
 					mlibc::infoLogger() << "rtld: Warning: TPOFF64 with no symbol"
 					                       " in object "
 					                    << rel.object()->name << frg::endlog;
@@ -2345,7 +2364,7 @@ void Loader::_processLazyRelocations(SharedObject *object) {
 							    << "rtld: Unresolved JUMP_SLOT symbol " << sym.getString()
 							    << " in object " << object->name << frg::endlog;
 
-						if (verbose)
+						if (rtldConfig.debugVerbose)
 							mlibc::infoLogger()
 							    << "rtld: Unresolved weak JUMP_SLOT symbol " << sym.getString()
 							    << " in object " << object->name << frg::endlog;

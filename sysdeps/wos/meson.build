@@ -6,15 +6,15 @@ sysdep_supported_options = {
     'wos': true,
 }
 
-rtld_sources += files(
-    'generic/generic.cpp',
+rtld_dso_sources += files(
+    'generic/sysdeps.cpp',
     'generic/thread.cpp',
     'sys/logging.cpp',
     'crt-x86_64' / host_machine.cpu_family() / 'signals.S',
 )
 
 libc_sources += files(
-    'generic/generic.cpp',
+    'generic/sysdeps.cpp',
     'generic/thread.cpp',
     'generic/entry.cpp',
     'sys/logging.cpp',
@@ -69,6 +69,8 @@ if not no_headers
         'include/abi-bits/sem.h',
         'include/abi-bits/ioctls.h',
         'include/abi-bits/route.h',
+        'include/abi-bits/sig-limits.h',
+        'include/abi-bits/sigset_t.h',
         subdir: 'abi-bits',
         follow_symlinks: true,
     )

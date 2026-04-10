@@ -1,45 +1,211 @@
 #include <bits/ensure.h>
-#include <netdb.h>
 
 #include <arpa/inet.h>
 #include <errno.h>
 #include <frg/array.hpp>
 #include <frg/span.hpp>
 #include <frg/vector.hpp>
+#include <mlibc/all-sysdeps.hpp>
 #include <mlibc/allocator.hpp>
 #include <mlibc/debug.hpp>
 #include <mlibc/lookup.hpp>
-#include <mlibc/posix-sysdeps.hpp>
 #include <mlibc/services.hpp>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/socket.h>
 
+namespace {
+
+frg::optional<int> protoFd = frg::null_opt;
+off_t protoFdOffset = 0;
+int protoFdStayopen = 0;
+struct protoent protoentStorage{};
+
+void openProtoFd(int stayopen) {
+	if (protoFd) {
+		if (stayopen)
+			protoFdStayopen = stayopen;
+		return;
+	}
+
+	int fd = -1;
+	auto e = mlibc::sysdep<Open>("/etc/protocols", O_RDONLY | O_CLOEXEC, 0, &fd);
+	if (e == 0) {
+		protoFd = fd;
+		protoFdStayopen = stayopen;
+	}
+}
+
+void resetProtoentStorage() {
+	if (protoentStorage.p_name) {
+		free(protoentStorage.p_name);
+		protoentStorage.p_name = nullptr;
+	}
+
+	if (protoentStorage.p_aliases) {
+		for (size_t i = 0; protoentStorage.p_aliases[i]; i++)
+			free(protoentStorage.p_aliases[i]);
+
+		free(protoentStorage.p_aliases);
+		protoentStorage.p_aliases = nullptr;
+	}
+}
+
+template <typename F>
+bool findProto(struct protoent &ent, F function)
+    requires(std::is_invocable_r_v<bool, F, frg::string_view, int>)
+{
+	__ensure(protoFd.has_value());
+
+	frg::string<MemoryAllocator> line{getAllocator()};
+
+	auto readLine = [&]() {
+		line.resize(0);
+
+		while (true) {
+			auto e = mlibc::sysdep<Seek>(*protoFd, protoFdOffset, SEEK_SET, &protoFdOffset);
+			__ensure(e == 0);
+
+			char buf[256];
+			ssize_t bytesRead = 0;
+			e = mlibc::sysdep<Read>(*protoFd, buf, sizeof(buf), &bytesRead);
+			__ensure(e == 0);
+			if (bytesRead == 0)
+				return false;
+
+			frg::string_view lineView{buf, static_cast<size_t>(bytesRead)};
+			auto eolIndex = lineView.find_first('\n', 0);
+			if (eolIndex == size_t(-1)) {
+				line += lineView;
+			} else {
+				line += lineView.sub_string(0, eolIndex);
+				break;
+			}
+		}
+
+		protoFdOffset += line.size() + 1;
+
+		return true;
+	};
+
+	while (true) {
+		if (!readLine())
+			return false;
+
+		frg::string_view lineView{line};
+
+		auto skipLeadingWhitespace = [&lineView]() {
+			while (lineView.size() && (lineView[0] == ' ' || lineView[0] == '\t'))
+				lineView = lineView.sub_string(1, lineView.size() - 1);
+		};
+
+		if (!lineView.size())
+			continue;
+
+		// exclude comments from being part of lineView
+		auto commentIndex = lineView.find_first('#');
+		if (commentIndex != size_t(-1)) {
+			lineView = lineView.sub_string(0, commentIndex);
+			if (!lineView.size())
+				continue;
+		}
+
+		skipLeadingWhitespace();
+
+		if (!lineView.size())
+			continue;
+
+		// parse first field, the protocol name
+		auto separatorIndex = lineView.find_first_of({" \t"});
+		if (separatorIndex == size_t(-1))
+			continue;
+
+		frg::string_view protoName = lineView.sub_string(0, separatorIndex);
+		lineView = lineView.sub_string(separatorIndex, lineView.size() - separatorIndex);
+		if (!lineView.size())
+			continue;
+
+		skipLeadingWhitespace();
+
+		if (!lineView.size())
+			continue;
+
+		// parse second field, the protocol number
+		separatorIndex = lineView.find_first_of({" \t"});
+		if (separatorIndex == size_t(-1))
+			continue;
+
+		auto protoNumRes = lineView.sub_string(0, separatorIndex).to_number<int>();
+		if (!protoNumRes)
+			continue;
+
+		lineView = lineView.sub_string(separatorIndex, lineView.size() - separatorIndex);
+		if (!lineView.size())
+			continue;
+
+		skipLeadingWhitespace();
+
+		if (!lineView.size())
+			continue;
+
+		// parse any following fields, which are aliases
+		frg::vector<frg::string<MemoryAllocator>, MemoryAllocator> aliases{getAllocator()};
+
+		while (lineView.size()) {
+			if (lineView[0] == ' ' || lineView[0] == '\t') {
+				lineView = lineView.sub_string(1, lineView.size() - 1);
+				continue;
+			}
+
+			separatorIndex = lineView.find_first_of({" \t"});
+			if (separatorIndex == size_t(-1))
+				separatorIndex = lineView.size();
+
+			if (separatorIndex == 0)
+				break;
+
+			aliases.push_back(frg::string{lineView.sub_string(0, separatorIndex), getAllocator()});
+			lineView = lineView.sub_string(separatorIndex, lineView.size() - separatorIndex);
+		}
+
+		if (function(protoName, *protoNumRes)) {
+			ent.p_name = strndup(protoName.data(), protoName.size());
+			ent.p_proto = *protoNumRes;
+			ent.p_aliases =
+			    reinterpret_cast<char **>(malloc(sizeof(char *) * (aliases.size() + 1)));
+			for (size_t i = 0; i < aliases.size(); i++) {
+				ent.p_aliases[i] = aliases[i].data();
+				aliases[i].detach();
+			}
+			ent.p_aliases[aliases.size()] = nullptr;
+
+			return true;
+		}
+	}
+
+	return false;
+}
+
+} // namespace
+
 __thread int __mlibc_h_errno;
 
 // This function is from musl
 int *__h_errno_location(void) { return &__mlibc_h_errno; }
 
-void endhostent(void) {
-	__ensure(!"Not implemented");
-	__builtin_unreachable();
-}
+void endhostent(void) {}
 
-void endnetent(void) {
-	__ensure(!"Not implemented");
-	__builtin_unreachable();
-}
+void endnetent(void) {}
 
 void endprotoent(void) {
-	__ensure(!"Not implemented");
-	__builtin_unreachable();
+	if (protoFd) {
+		mlibc::sysdep<Close>(*protoFd);
+		protoFd = frg::null_opt;
+	}
 }
 
-void endservent(void) {
-	__ensure(!"Not implemented");
-	__builtin_unreachable();
-}
+void endservent(void) {}
 
 void freeaddrinfo(struct addrinfo *ptr) {
 	if (ptr) {
@@ -85,11 +251,11 @@ int getaddrinfo(
 	}
 
 	if (flags & AI_ADDRCONFIG) {
-		if (mlibc::sys_inet_configured) {
+		if constexpr (mlibc::IsImplemented<InetConfigured>) {
 			bool ipv4 = false;
 			bool ipv6 = false;
 
-			if (int e = mlibc::sys_inet_configured(&ipv4, &ipv6); e) {
+			if (int e = mlibc::sysdep_or_panic<InetConfigured>(&ipv4, &ipv6); e) {
 				errno = e;
 				return EAI_SYSTEM;
 			}
@@ -186,10 +352,7 @@ int getaddrinfo(
 	return 0;
 }
 
-struct hostent *gethostent(void) {
-	__ensure(!"Not implemented");
-	__builtin_unreachable();
-}
+struct hostent *gethostent(void) { return nullptr; }
 
 int getnameinfo(
     const struct sockaddr *__restrict addr,
@@ -277,20 +440,11 @@ int getnameinfo(
 	return 0;
 }
 
-struct netent *getnetbyaddr(uint32_t, int) {
-	__ensure(!"Not implemented");
-	__builtin_unreachable();
-}
+struct netent *getnetbyaddr(uint32_t, int) { return nullptr; }
 
-struct netent *getnetbyname(const char *) {
-	__ensure(!"Not implemented");
-	__builtin_unreachable();
-}
+struct netent *getnetbyname(const char *) { return nullptr; }
 
-struct netent *getnetent(void) {
-	__ensure(!"Not implemented");
-	__builtin_unreachable();
-}
+struct netent *getnetent(void) { return nullptr; }
 
 struct hostent *gethostbyname(const char *name) {
 	if (!name) {
@@ -363,15 +517,9 @@ struct hostent *gethostbyname(const char *name) {
 	return &h;
 }
 
-struct hostent *gethostbyname2(const char *, int) {
-	__ensure(!"gethostbyname2() not implemented");
-	__builtin_unreachable();
-}
+struct hostent *gethostbyname2(const char *, int) { return nullptr; }
 
-struct hostent *gethostbyaddr(const void *, socklen_t, int) {
-	__ensure(!"gethostbyaddr() not implemented");
-	__builtin_unreachable();
-}
+struct hostent *gethostbyaddr(const void *, socklen_t, int) { return nullptr; }
 
 int gethostbyaddr_r(
     const void *__restrict,
@@ -383,8 +531,7 @@ int gethostbyaddr_r(
     struct hostent **__restrict,
     int *__restrict
 ) {
-	__ensure(!"Not implemented");
-	__builtin_unreachable();
+	return -1;
 }
 
 int gethostbyname_r(
@@ -395,23 +542,64 @@ int gethostbyname_r(
     struct hostent **__restrict,
     int *__restrict
 ) {
-	__ensure(!"Not implemented");
-	__builtin_unreachable();
+	return -1;
 }
 
-struct protoent *getprotobyname(const char *) {
-	__ensure(!"Not implemented");
-	__builtin_unreachable();
+struct protoent *getprotobyname(const char *name) {
+	if (!protoFd)
+		openProtoFd(0);
+	if (!protoFd)
+		return nullptr;
+
+	auto e = mlibc::sysdep<Seek>(*protoFd, 0, SEEK_SET, &protoFdOffset);
+	__ensure(e == 0);
+
+	resetProtoentStorage();
+
+	auto success = findProto(protoentStorage, [name](auto protoName, auto) {
+		return frg::string_view{name} == protoName;
+	});
+
+	if (!protoFdStayopen)
+		endprotoent();
+
+	return success ? &protoentStorage : nullptr;
 }
 
-struct protoent *getprotobynumber(int) {
-	__ensure(!"Not implemented");
-	__builtin_unreachable();
+struct protoent *getprotobynumber(int num) {
+	if (!protoFd)
+		openProtoFd(0);
+	if (!protoFd)
+		return nullptr;
+
+	auto e = mlibc::sysdep<Seek>(*protoFd, 0, SEEK_SET, &protoFdOffset);
+	__ensure(e == 0);
+
+	resetProtoentStorage();
+
+	auto success =
+	    findProto(protoentStorage, [num](auto, auto protoNum) { return num == protoNum; });
+
+	if (!protoFdStayopen)
+		endprotoent();
+
+	return success ? &protoentStorage : nullptr;
 }
 
 struct protoent *getprotoent(void) {
-	__ensure(!"Not implemented");
-	__builtin_unreachable();
+	if (!protoFd)
+		openProtoFd(0);
+	if (!protoFd)
+		return nullptr;
+
+	resetProtoentStorage();
+
+	auto success = findProto(protoentStorage, [](auto, auto) { return true; });
+
+	if (!protoFdStayopen)
+		endprotoent();
+
+	return success ? &protoentStorage : nullptr;
 }
 
 struct servent *getservbyname(const char *name, const char *proto) {
@@ -533,32 +721,14 @@ struct servent *getservbyport(int port, const char *proto) {
 	return &ret;
 }
 
-struct servent *getservent(void) {
-	__ensure(!"Not implemented");
-	__builtin_unreachable();
-}
+struct servent *getservent(void) { return nullptr; }
 
-void sethostent(int) {
-	__ensure(!"Not implemented");
-	__builtin_unreachable();
-}
+void sethostent(int) {}
 
-void setnetent(int) {
-	__ensure(!"Not implemented");
-	__builtin_unreachable();
-}
+void setnetent(int) {}
 
-void setprotoent(int) {
-	__ensure(!"Not implemented");
-	__builtin_unreachable();
-}
+void setprotoent(int stayopen) { openProtoFd(stayopen); }
 
-void setservent(int) {
-	__ensure(!"Not implemented");
-	__builtin_unreachable();
-}
+void setservent(int) {}
 
-const char *hstrerror(int) {
-	__ensure(!"Not implemented");
-	__builtin_unreachable();
-}
+const char *hstrerror(int) { return ""; }

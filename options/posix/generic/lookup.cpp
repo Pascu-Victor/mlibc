@@ -9,8 +9,8 @@
 #include <errno.h>
 #include <frg/scope_exit.hpp>
 #include <frg/string.hpp>
+#include <mlibc/all-sysdeps.hpp>
 #include <mlibc/allocator.hpp>
-#include <mlibc/ansi-sysdeps.hpp>
 #include <poll.h>
 #include <stdio.h>
 #include <string.h>
@@ -31,7 +31,8 @@ constexpr unsigned int RECORD_AAAA = 28;
 
 int get_poll_timeout(struct timespec *original_time) {
 	struct timespec current_time;
-	if (int e = mlibc::sys_clock_get(CLOCK_MONOTONIC, &current_time.tv_sec, &current_time.tv_nsec);
+	if (int e =
+	        mlibc::sysdep<ClockGet>(CLOCK_MONOTONIC, &current_time.tv_sec, &current_time.tv_nsec);
 	    e)
 		mlibc::panicLogger() << "mlibc: sys_clock_get() failed with error code: " << e
 		                     << frg::endlog;
@@ -160,7 +161,8 @@ int lookup_name_dns(
 	pollfd.fd = fd;
 	pollfd.events = POLLIN;
 
-	if (int e = mlibc::sys_clock_get(CLOCK_MONOTONIC, &start_time.tv_sec, &start_time.tv_nsec); e)
+	if (int e = mlibc::sysdep<ClockGet>(CLOCK_MONOTONIC, &start_time.tv_sec, &start_time.tv_nsec);
+	    e)
 		mlibc::panicLogger() << "mlibc: sys_clock_get() failed with error code: " << e
 		                     << frg::endlog;
 
@@ -332,7 +334,8 @@ int lookup_addr_dns(frg::span<char> name, frg::array<uint8_t, 16> &addr, int fam
 	pollfd.fd = fd;
 	pollfd.events = POLLIN;
 
-	if (int e = mlibc::sys_clock_get(CLOCK_MONOTONIC, &start_time.tv_sec, &start_time.tv_nsec); e)
+	if (int e = mlibc::sysdep<ClockGet>(CLOCK_MONOTONIC, &start_time.tv_sec, &start_time.tv_nsec);
+	    e)
 		mlibc::panicLogger() << "mlibc: sys_clock_get() failed with error code: " << e
 		                     << frg::endlog;
 
@@ -440,8 +443,9 @@ int lookup_name_hosts(
 
 		if ((family == AF_UNSPEC || family == AF_INET) && inet_pton(AF_INET, line, buffer.addr)) {
 			buffer.family = AF_INET;
-		} else if ((family == AF_UNSPEC || family == AF_INET6)
-		           && inet_pton(AF_INET6, line, buffer.addr)) {
+		} else if (
+		    (family == AF_UNSPEC || family == AF_INET6) && inet_pton(AF_INET6, line, buffer.addr)
+		) {
 			buffer.family = AF_INET6;
 		} else {
 			continue; // not a valid address

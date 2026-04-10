@@ -15,7 +15,6 @@
 
 #include <float.h>
 #include <stdint.h>
-#define _GNU_SOURCE
 #include <math.h>
 
 #if LDBL_MANT_DIG == 53 && LDBL_MAX_EXP == 1024

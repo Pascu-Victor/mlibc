@@ -2,8 +2,9 @@
 
 #include <bits/size_t.h>
 #include <frg/array.hpp>
+#include <frg/list.hpp>
 #include <limits.h>
-#include <stdint.h>
+#include <mlibc/threads.hpp>
 
 #include "elf.hpp"
 
@@ -63,7 +64,7 @@ static constexpr bool tcb_async_cancel(int value) {
 // Returns true when bitmask indicates cancellation is enabled.
 static constexpr bool tcb_cancel_enabled(int value) { return (value & tcbCancelEnableBit); }
 
-// Returns true when bitmask indicates threas has been cancelled.
+// Returns true when bitmask indicates thread has been cancelled.
 static constexpr bool tcb_cancelled(int value) {
 	return (value & (tcbCancelEnableBit | tcbCancelTriggerBit))
 	       == (tcbCancelEnableBit | tcbCancelTriggerBit);
@@ -95,10 +96,7 @@ struct Tcb {
 	uintptr_t stackCanary;
 	int cancelBits;
 
-	union {
-		void *voidPtr;
-		int intVal;
-	} returnValue;
+	mlibc::thread_exit_return returnValue;
 	TcbThreadReturnValue returnValueType;
 
 	struct AtforkHandler {
@@ -117,12 +115,17 @@ struct Tcb {
 		void (*func)(void *);
 		void *arg;
 
-		CleanupHandler *next;
-		CleanupHandler *prev;
+		frg::default_list_hook<CleanupHandler> hook_;
 	};
 
-	CleanupHandler *cleanupBegin;
-	CleanupHandler *cleanupEnd;
+	using CleanupHandlerList = frg::intrusive_list<
+	    CleanupHandler,
+	    frg::locate_member<
+	        CleanupHandler,
+	        frg::default_list_hook<CleanupHandler>,
+	        &CleanupHandler::hook_>>;
+
+	CleanupHandlerList cleanupHandlers;
 	int isJoinable;
 
 	struct LocalKey {
@@ -141,7 +144,7 @@ struct Tcb {
 			returnValue.voidPtr = func(user_arg);
 		} else {
 			auto func = reinterpret_cast<int (*)(void *)>(entry);
-			returnValue.intVal = func(user_arg);
+			returnValue.integer = func(user_arg);
 		}
 	}
 };

@@ -6,8 +6,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <mlibc/all-sysdeps.hpp>
 #include <mlibc/debug.hpp>
-#include <mlibc/posix-sysdeps.hpp>
 
 namespace {
 FILE *global_file;
@@ -276,8 +276,7 @@ void setgrent(void) {
 }
 
 int setgroups(size_t size, const gid_t *list) {
-	MLIBC_CHECK_OR_ENOSYS(mlibc::sys_setgroups, -1);
-	if (int e = mlibc::sys_setgroups(size, list); e) {
+	if (int e = mlibc::sysdep_or_enosys<SetGroups>(size, list); e) {
 		errno = e;
 		return -1;
 	}

@@ -1,17 +1,15 @@
 #pragma once
 
+#include <frg/allocation.hpp>
+#include <frg/span.hpp>
 #include <ifaddrs.h>
 #include <linux/rtnetlink.h>
+#include <mlibc/all-sysdeps.hpp>
+#include <mlibc/allocator.hpp>
 #include <net/if.h>
 #include <netpacket/packet.h>
 #include <sys/socket.h>
-
-#include <frg/allocation.hpp>
-#include <frg/span.hpp>
 #include <unistd.h>
-
-#include "mlibc/allocator.hpp"
-#include "mlibc/posix-sysdeps.hpp"
 
 namespace {
 
@@ -27,7 +25,8 @@ struct NetlinkHelper {
 	bool send_request(int type) {
 		if (!fd_ || *fd_ == -1) {
 			int fd;
-			if (int e = mlibc::sys_socket(AF_NETLINK, SOCK_RAW | SOCK_CLOEXEC, NETLINK_ROUTE, &fd);
+			if (int e =
+			        mlibc::sysdep<Socket>(AF_NETLINK, SOCK_RAW | SOCK_CLOEXEC, NETLINK_ROUTE, &fd);
 			    e)
 				return false;
 			fd_ = fd;
@@ -51,9 +50,9 @@ struct NetlinkHelper {
 	bool recv(void cb(void *, const nlmsghdr *), void *ctx) {
 		ssize_t read;
 
-		while ((read =
-		            ::recv(fd_.value(), reinterpret_cast<msghdr *>(data_.data()), data_.size(), 0))
-		       > 0) {
+		while (
+		    (read = ::recv(fd_.value(), reinterpret_cast<msghdr *>(data_.data()), data_.size(), 0))
+		    > 0) {
 			auto hdr = reinterpret_cast<nlmsghdr *>(data_.data());
 
 			for (; NLMSG_OK(hdr, static_cast<size_t>(read)); hdr = NLMSG_NEXT(hdr, read)) {

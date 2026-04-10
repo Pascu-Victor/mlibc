@@ -1,4 +1,4 @@
 [wrap-git]
 url = https://github.com/managarm/frigg.git
-revision = 080ddac8148deb899e9d6ad64300f45c97cb2859
+revision = 58fb2ab734934cf4b245f833797ab5eeefeb60c0
 diff_files = frigg/0001-frigg-wchar.patch

@@ -60,9 +60,9 @@ struct cmsghdr {
 
 #define SCM_RIGHTS 1
 
-#if defined(_DEFAULT_SOURCE)
+#if defined(_DEFAULT_SOURCE) || __MLIBC_XOPEN
 #define SCM_CREDENTIALS 2
-#endif /* defined(_DEFAULT_SOURCE) */
+#endif /* defined(_DEFAULT_SOURCE) || __MLIBC_XOPEN */
 
 #define SHUT_RD 0
 #define SHUT_WR 1
@@ -76,11 +76,11 @@ struct cmsghdr {
 #define SOCK_RAW 3
 #define SOCK_SEQPACKET 5
 
-#if defined(_DEFAULT_SOURCE)
+#if defined(_DEFAULT_SOURCE) || __MLIBC_XOPEN
 #define SOCK_RDM 4
 #define SOCK_DCCP 6
 #define SOCK_PACKET 10
-#endif /* defined(_DEFAULT_SOURCE) */
+#endif /* defined(_DEFAULT_SOURCE) || __MLIBC_XOPEN */
 
 #ifndef SOCK_CLOEXEC
 #define SOCK_CLOEXEC 02000000
@@ -223,7 +223,7 @@ struct cmsghdr {
 #endif
 #endif
 
-#if defined(_DEFAULT_SOURCE)
+#if defined(_DEFAULT_SOURCE) || __MLIBC_XOPEN
 #ifndef SO_RCVTIMEO_OLD
 #define SO_RCVTIMEO_OLD 20
 #endif
@@ -297,11 +297,12 @@ struct cmsghdr {
 #define SCM_TXTIME SO_TXTIME
 #define SO_BINDTOIFINDEX 62
 #define SO_DETACH_REUSEPORT_BPF 68
-#endif /* defined(_DEFAULT_SOURCE) */
+#define SO_PASSRIGHTS 83
+#endif /* defined(_DEFAULT_SOURCE) || __MLIBC_XOPEN */
 
 #define SOL_SOCKET 1
 
-#if defined(_DEFAULT_SOURCE)
+#if defined(_DEFAULT_SOURCE) || __MLIBC_XOPEN
 #define SOL_IP 0
 #define SOL_IPV6 41
 #define SOL_ICMPV6 58
@@ -330,7 +331,7 @@ struct cmsghdr {
 #define SOL_KCM 281
 #define SOL_TLS 282
 #define SOL_XDP 283
-#endif /* defined(_DEFAULT_SOURCE) */
+#endif /* defined(_DEFAULT_SOURCE) || __MLIBC_XOPEN */
 
 #define SOMAXCONN 128
 
@@ -344,7 +345,7 @@ struct cmsghdr {
 #define MSG_NOSIGNAL 0x4000
 #define MSG_CMSG_CLOEXEC 0x40000000
 
-#if defined(_DEFAULT_SOURCE)
+#if defined(_DEFAULT_SOURCE) || __MLIBC_XOPEN
 #define MSG_PROXY 0x0010
 #define MSG_DONTWAIT 0x0040
 #define MSG_FIN 0x0200
@@ -357,6 +358,6 @@ struct cmsghdr {
 #define MSG_BATCH 0x40000
 #define MSG_ZEROCOPY 0x4000000
 #define MSG_FASTOPEN 0x20000000
-#endif /* defined(_DEFAULT_SOURCE) */
+#endif /* defined(_DEFAULT_SOURCE) || __MLIBC_XOPEN */
 
 #endif

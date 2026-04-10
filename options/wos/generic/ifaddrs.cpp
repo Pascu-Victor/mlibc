@@ -1,15 +1,13 @@
 #include <errno.h>
 #include <ifaddrs.h>
+#include <mlibc/all-sysdeps.hpp>
 #include <mlibc/allocator.hpp>
-#include <mlibc/wos-sysdeps.hpp>
 
 int getifaddrs(struct ifaddrs **ifap) {
-	auto sysdep = MLIBC_CHECK_OR_ENOSYS(mlibc::sys_getifaddrs, -1);
-	if (int e = sysdep(ifap); e) {
+	if (int e = mlibc::sysdep_or_enosys<Getifaddrs>(ifap); e) {
 		errno = e;
 		return -1;
 	}
-
 	return 0;
 }
 
