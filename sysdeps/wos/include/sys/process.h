@@ -7,6 +7,8 @@
 
 namespace ker::process {
 
+constexpr uint32_t WKI_TARGET_FLAG_STRICT = 1U << 0;
+
 inline void exit(uint64_t status) {
 	syscall(abi::callnums::process, (uint64_t)abi::process::procmgmt_ops::exit, status);
 }
@@ -192,6 +194,26 @@ inline int64_t setpriority(int which, int64_t who, int prio) {
 	    (uint64_t)which,
 	    (uint64_t)who,
 	    (uint64_t)(int64_t)prio
+	);
+}
+
+inline int64_t setwkitarget(const char *hostname, uint64_t len, uint32_t flags) {
+	return (int64_t)syscall(
+	    abi::callnums::process,
+	    (uint64_t)abi::process::procmgmt_ops::setwkitarget,
+	    (uint64_t)(uintptr_t)hostname,
+	    len,
+	    (uint64_t)flags
+	);
+}
+
+inline int64_t getwkitarget(char *hostname, uint64_t hostname_size, uint32_t *flags) {
+	return (int64_t)syscall(
+	    abi::callnums::process,
+	    (uint64_t)abi::process::procmgmt_ops::getwkitarget,
+	    (uint64_t)(uintptr_t)hostname,
+	    hostname_size,
+	    (uint64_t)(uintptr_t)flags
 	);
 }
 

@@ -54,7 +54,13 @@ enum class ops : uint64_t {
 	ioctl,
 	fsync,
 	link,
+	wki_rule_add,
+	wki_rule_get,
+	wki_rule_clear,
 };
+
+constexpr uint32_t WKI_VFS_ROUTE_LOCAL = 0;
+constexpr uint32_t WKI_VFS_ROUTE_HOST = 1;
 
 // Thin syscall veneers (similar to sys/logging.h) so userspace can
 // call VFS operations directly until higher-level libc paths are used.
@@ -457,6 +463,34 @@ static inline int link_vfs(const char *oldpath, const char *newpath) {
 	    reinterpret_cast<uint64_t>(oldpath),
 	    reinterpret_cast<uint64_t>(newpath)
 	);
+	return static_cast<int>((int64_t)r);
+}
+
+static inline int wki_rule_add_vfs(const char *prefix, uint32_t route) {
+	uint64_t r = syscall(
+	    ker::abi::callnums::vfs,
+	    static_cast<uint64_t>(ops::wki_rule_add),
+	    reinterpret_cast<uint64_t>(prefix),
+	    static_cast<uint64_t>(route)
+	);
+	return static_cast<int>((int64_t)r);
+}
+
+static inline int
+wki_rule_get_vfs(uint32_t index, char *prefix_buf, size_t prefix_buf_size, uint32_t *route_out) {
+	uint64_t r = syscall(
+	    ker::abi::callnums::vfs,
+	    static_cast<uint64_t>(ops::wki_rule_get),
+	    static_cast<uint64_t>(index),
+	    reinterpret_cast<uint64_t>(prefix_buf),
+	    static_cast<uint64_t>(prefix_buf_size),
+	    reinterpret_cast<uint64_t>(route_out)
+	);
+	return static_cast<int>((int64_t)r);
+}
+
+static inline int wki_rule_clear_vfs() {
+	uint64_t r = syscall(ker::abi::callnums::vfs, static_cast<uint64_t>(ops::wki_rule_clear));
 	return static_cast<int>((int64_t)r);
 }
 
