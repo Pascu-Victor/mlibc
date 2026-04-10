@@ -810,24 +810,14 @@ int pthread_mutexattr_setprioceiling(pthread_mutexattr_t *attr, int prioceiling)
 // pthread_mutex functions
 int
 pthread_mutex_init(pthread_mutex_t *__restrict mutex, const pthread_mutexattr_t *__restrict attr) {
-	SCOPE_TRACE();
-
 	return mlibc::thread_mutex_init(mutex, attr);
 }
 
 int pthread_mutex_destroy(pthread_mutex_t *mutex) { return mlibc::thread_mutex_destroy(mutex); }
 
-int pthread_mutex_lock(pthread_mutex_t *mutex) {
-	SCOPE_TRACE();
+int pthread_mutex_lock(pthread_mutex_t *mutex) { return mlibc::thread_mutex_lock(mutex); }
 
-	return mlibc::thread_mutex_lock(mutex);
-}
-
-int pthread_mutex_trylock(pthread_mutex_t *mutex) {
-	SCOPE_TRACE();
-
-	return mlibc::thread_mutex_trylock(mutex);
-}
+int pthread_mutex_trylock(pthread_mutex_t *mutex) { return mlibc::thread_mutex_trylock(mutex); }
 
 int pthread_mutex_timedlock(
     pthread_mutex_t *__restrict mutex, const struct timespec *__restrict abstime
@@ -838,16 +828,10 @@ int pthread_mutex_timedlock(
 int pthread_mutex_clocklock(
     pthread_mutex_t *__restrict mutex, clockid_t clockid, const struct timespec *__restrict abstime
 ) {
-	SCOPE_TRACE();
-
 	return mlibc::thread_mutex_timedlock(mutex, abstime, clockid);
 }
 
-int pthread_mutex_unlock(pthread_mutex_t *mutex) {
-	SCOPE_TRACE();
-
-	return mlibc::thread_mutex_unlock(mutex);
-}
+int pthread_mutex_unlock(pthread_mutex_t *mutex) { return mlibc::thread_mutex_unlock(mutex); }
 
 int pthread_mutex_consistent(pthread_mutex_t *) {
 	mlibc::infoLogger() << "mlibc: pthread_mutex_consistent is unsupported!" << frg::endlog;

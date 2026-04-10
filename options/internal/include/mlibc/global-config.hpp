@@ -4,7 +4,7 @@
 namespace mlibc {
 
 struct GlobalConfig {
-	GlobalConfig();
+	void init();
 
 	bool debugMalloc;
 	bool debugPrintf;
@@ -14,11 +14,10 @@ struct GlobalConfig {
 	bool debugMonetaryLengths;
 };
 
-inline const GlobalConfig &globalConfig() {
-	static GlobalConfig cached;
-	return cached;
-}
+// Defined in global-config.cpp. Uses a global (not function-local static)
+// to avoid __cxa_guard_acquire which depends on pthread_mutex_lock.
+const GlobalConfig &globalConfig();
 
-}
+} // namespace mlibc
 
 #endif // MLIBC_GLOBAL_CONFIG

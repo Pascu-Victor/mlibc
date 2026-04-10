@@ -4,6 +4,14 @@
 
 namespace mlibc {
 
+// Use a global with controlled initialization order instead of a
+// function-local static. Function-local statics go through
+// __cxa_guard_acquire which calls pthread_mutex_lock, creating a
+// circular dependency during early init on WOS.
+static GlobalConfig globalConfigInstance;
+
+const GlobalConfig &globalConfig() { return globalConfigInstance; }
+
 struct GlobalConfigGuard {
 	GlobalConfigGuard();
 };
@@ -11,8 +19,8 @@ struct GlobalConfigGuard {
 GlobalConfigGuard guard;
 
 GlobalConfigGuard::GlobalConfigGuard() {
-	// Force the config to be created during initialization of libc.so.
-	mlibc::globalConfig();
+	// Force the config to be initialized during startup.
+	globalConfigInstance.init();
 }
 
 static bool envEnabled(const char *env) {
@@ -20,7 +28,7 @@ static bool envEnabled(const char *env) {
 	return value && *value && *value != '0';
 }
 
-GlobalConfig::GlobalConfig() {
+void GlobalConfig::init() {
 	debugMalloc = envEnabled("MLIBC_DEBUG_MALLOC");
 	debugPrintf = envEnabled("MLIBC_DEBUG_PRINTF");
 	debugLocale = envEnabled("MLIBC_DEBUG_LOCALE");

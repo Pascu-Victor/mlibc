@@ -28,6 +28,7 @@
 #include <sys/time_ops.h>
 #include <sys/times.h>
 #include <sys/types.h>
+#include <sys/uio.h>
 #include <sys/utsname.h>
 #include <sys/vfs.h>
 #include <sys/vmem.h>
@@ -301,6 +302,50 @@ int Sysdeps<Write>::operator()(int fd, const void *buf, size_t count, ssize_t *b
 		return (int)(-r);
 	if (bytes_written)
 		*bytes_written = r;
+	return 0;
+}
+
+int Sysdeps<Writev>::operator()(int fd, const struct iovec *iovs, int iovc, ssize_t *bytes_written) {
+	ssize_t total = 0;
+	for (int i = 0; i < iovc; i++) {
+		if (iovs[i].iov_len == 0)
+			continue;
+		ssize_t r = ker::abi::vfs::write(fd, iovs[i].iov_base, iovs[i].iov_len);
+		if (r < 0) {
+			if (total > 0)
+				break;
+			if (bytes_written)
+				*bytes_written = 0;
+			return (int)(-r);
+		}
+		total += r;
+		if (static_cast<size_t>(r) < iovs[i].iov_len)
+			break;
+	}
+	if (bytes_written)
+		*bytes_written = total;
+	return 0;
+}
+
+int Sysdeps<Readv>::operator()(int fd, const struct iovec *iovs, int iovc, ssize_t *bytes_read) {
+	ssize_t total = 0;
+	for (int i = 0; i < iovc; i++) {
+		if (iovs[i].iov_len == 0)
+			continue;
+		ssize_t r = ker::abi::vfs::read(fd, iovs[i].iov_base, iovs[i].iov_len);
+		if (r < 0) {
+			if (total > 0)
+				break;
+			if (bytes_read)
+				*bytes_read = 0;
+			return (int)(-r);
+		}
+		total += r;
+		if (r == 0 || static_cast<size_t>(r) < iovs[i].iov_len)
+			break;
+	}
+	if (bytes_read)
+		*bytes_read = total;
 	return 0;
 }
 

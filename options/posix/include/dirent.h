@@ -26,6 +26,10 @@ extern "C" {
 #define DT_SOCK 12
 #define DT_WHT 14
 
+/* WOS extension: WOSLINK flag - OR'd with DT_DIR to mark transparent VFS
+ * directories that tools should not recurse into. */
+#define DT_WOSLINK 0x80
+
 /* The character array d_name is of unspecified size, but the number of bytes preceding
  * the terminating null byte will not exceed {NAME_MAX}. */
 #define __MLIBC_DIRENT_BODY ino_t d_ino; \

@@ -22,6 +22,11 @@
 #define S_IFLNK 0x0A000
 #define S_IFSOCK 0x0C000
 
+/* WOS extension: WOSLINK flag (bit 16) — marks transparent VFS directories
+ * that should not be recursed into (e.g., WKI mount points). */
+#define S_WOSLINK 0x10000
+#define S_ISWLNK(m) ((m) & S_WOSLINK)
+
 #define S_IRWXU 0700
 #define S_IRUSR 0400
 #define S_IWUSR 0200

@@ -121,6 +121,8 @@ struct WosSysdepTags :
     ReadEntries,
     Read,
     Write,
+    Readv,
+    Writev,
     Pread,
     Seek,
     Close,

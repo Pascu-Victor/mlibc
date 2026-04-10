@@ -656,7 +656,7 @@ if not headers_only
 
 	# Our libraries have different behaviour when built as static and shared libraries.
 	# Place this directory as the first include
-	# custom_include = include_directories('/home/womywomwoo/git/wos/toolchain/target1/include/c++/v1')
+	# custom_include = include_directories('/home/womywomwoo/git/wos/toolchain/sysroot/include/c++/v1')
 	# libc_include_dirs = [custom_include] + libc_include_dirs
 	# rtld_include_dirs = [custom_include] + rtld_include_dirs
 
