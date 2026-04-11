@@ -289,28 +289,46 @@ Sysdeps<ReadEntries>::operator()(int handle, void *buffer, size_t max_size, size
 }
 
 int Sysdeps<Read>::operator()(int fd, void *buf, size_t count, ssize_t *bytes_read) {
-	ssize_t r = ker::abi::vfs::read(fd, buf, count);
-	if (r < 0)
-		return (int)(-r);
-	*bytes_read = r;
-	return 0;
+	static constexpr ssize_t WOS_ERESTARTSYS = 512;
+	for (;;) {
+		ssize_t r = ker::abi::vfs::read(fd, buf, count);
+		if (r == -WOS_ERESTARTSYS)
+			continue;
+		if (r < 0)
+			return (int)(-r);
+		if (bytes_read)
+			*bytes_read = r;
+		return 0;
+	}
 }
 
 int Sysdeps<Write>::operator()(int fd, const void *buf, size_t count, ssize_t *bytes_written) {
-	ssize_t r = ker::abi::vfs::write(fd, buf, count);
-	if (r < 0)
-		return (int)(-r);
-	if (bytes_written)
-		*bytes_written = r;
-	return 0;
+	static constexpr ssize_t WOS_ERESTARTSYS = 512;
+	for (;;) {
+		ssize_t r = ker::abi::vfs::write(fd, buf, count);
+		if (r == -WOS_ERESTARTSYS)
+			continue;
+		if (r < 0)
+			return (int)(-r);
+		if (bytes_written)
+			*bytes_written = r;
+		return 0;
+	}
 }
 
-int Sysdeps<Writev>::operator()(int fd, const struct iovec *iovs, int iovc, ssize_t *bytes_written) {
+int
+Sysdeps<Writev>::operator()(int fd, const struct iovec *iovs, int iovc, ssize_t *bytes_written) {
 	ssize_t total = 0;
+	static constexpr ssize_t WOS_ERESTARTSYS = 512;
 	for (int i = 0; i < iovc; i++) {
 		if (iovs[i].iov_len == 0)
 			continue;
-		ssize_t r = ker::abi::vfs::write(fd, iovs[i].iov_base, iovs[i].iov_len);
+		ssize_t r;
+		for (;;) {
+			r = ker::abi::vfs::write(fd, iovs[i].iov_base, iovs[i].iov_len);
+			if (r != -WOS_ERESTARTSYS)
+				break;
+		}
 		if (r < 0) {
 			if (total > 0)
 				break;
@@ -329,10 +347,16 @@ int Sysdeps<Writev>::operator()(int fd, const struct iovec *iovs, int iovc, ssiz
 
 int Sysdeps<Readv>::operator()(int fd, const struct iovec *iovs, int iovc, ssize_t *bytes_read) {
 	ssize_t total = 0;
+	static constexpr ssize_t WOS_ERESTARTSYS = 512;
 	for (int i = 0; i < iovc; i++) {
 		if (iovs[i].iov_len == 0)
 			continue;
-		ssize_t r = ker::abi::vfs::read(fd, iovs[i].iov_base, iovs[i].iov_len);
+		ssize_t r;
+		for (;;) {
+			r = ker::abi::vfs::read(fd, iovs[i].iov_base, iovs[i].iov_len);
+			if (r != -WOS_ERESTARTSYS)
+				break;
+		}
 		if (r < 0) {
 			if (total > 0)
 				break;
@@ -1135,6 +1159,22 @@ int Sysdeps<Poll>::operator()(struct pollfd *fds, nfds_t count, int timeout, int
 		*num_events = r;
 		return 0;
 	}
+}
+
+int Sysdeps<Sendfile>::operator()(int outfd, int infd, off_t *offset, size_t count, ssize_t *out) {
+	static constexpr ssize_t WOS_ERESTARTSYS = 512;
+	ssize_t r;
+	for (;;) {
+		r = ker::abi::vfs::sendfile(outfd, infd, offset, count);
+		if (r == -WOS_ERESTARTSYS)
+			continue;
+		break;
+	}
+	if (r < 0)
+		return static_cast<int>(-r);
+	if (out)
+		*out = r;
+	return 0;
 }
 
 int Sysdeps<Ioctl>::operator()(int fd, unsigned long request, void *arg, int *result) {

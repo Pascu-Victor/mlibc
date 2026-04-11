@@ -94,6 +94,7 @@ struct WosSysdepTags :
     Getcpu,
     Mount,
     Umount2,
+    Sendfile,
     EpollCreate,
     EpollCtl,
     EpollPwait,

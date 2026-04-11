@@ -327,6 +327,18 @@ static inline ssize_t pwrite(int fd, const void *buf, size_t count, off_t offset
 	return static_cast<ssize_t>((int64_t)r);
 }
 
+static inline ssize_t sendfile(int outfd, int infd, off_t *offset, size_t count) {
+	uint64_t r = syscall(
+	    ker::abi::callnums::vfs,
+	    static_cast<uint64_t>(ops::sendfile),
+	    static_cast<uint64_t>(outfd),
+	    static_cast<uint64_t>(infd),
+	    reinterpret_cast<uint64_t>(offset),
+	    static_cast<uint64_t>(count)
+	);
+	return static_cast<ssize_t>((int64_t)r);
+}
+
 static inline int fcntl(int fd, int cmd, uint64_t arg) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::vfs,
