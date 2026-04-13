@@ -363,7 +363,7 @@ void setupVdso(uintptr_t vdsoBase) {
 } // namespace
 
 #ifndef MLIBC_STATIC_BUILD
-static constexpr uint64_t supportedDtFlags = DF_BIND_NOW;
+static constexpr uint64_t supportedDtFlags = DF_BIND_NOW | DF_SYMBOLIC;
 static constexpr uint64_t supportedDtFlags1 = DF_1_NOW;
 #endif
 

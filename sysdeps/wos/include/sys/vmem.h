@@ -12,6 +12,7 @@ namespace abi::vmem {
 enum class ops : uint64_t {
 	anon_allocate = 0,
 	anon_free = 1,
+	protect = 2,
 };
 
 } // namespace abi::vmem
@@ -85,6 +86,21 @@ map(void **addr,
 	*addr = reinterpret_cast<void *>(result); // NOLINT
 
 	return 0; // Success
+}
+
+// Change memory protection
+// Returns 0 on success, or negative error code on failure
+static inline int64_t protect(void *addr, uint64_t size, uint64_t prot) {
+	uint64_t result = syscall(
+	    abi::callnums::vmem,
+	    static_cast<uint64_t>(abi::vmem::ops::protect),
+	    reinterpret_cast<uint64_t>(addr),
+	    size,
+	    prot,
+	    0 // unused
+	);
+
+	return static_cast<int64_t>(result);
 }
 
 } // namespace vmem

@@ -1,5 +1,6 @@
 #include <errno.h>
 #include <sys/mount.h>
+#include <sys/vfs.h>
 
 #include <mlibc/all-sysdeps.hpp>
 
@@ -28,9 +29,10 @@ int umount2(const char *target, int flags) {
 }
 
 int pivot_root(const char *new_root, const char *put_old) {
-	(void)new_root;
-	(void)put_old;
-	// TODO: Implement via WOS syscall
-	errno = ENOSYS;
-	return -1;
+	int r = ker::abi::vfs::pivot_root_vfs(new_root, put_old);
+	if (r < 0) {
+		errno = -r;
+		return -1;
+	}
+	return 0;
 }

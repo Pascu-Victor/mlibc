@@ -93,7 +93,7 @@ int mask_to_cpuset(uint64_t mask, size_t cpusetsize, cpu_set_t *set) {
 // ---- Base sysdeps (always required) ----
 
 void Sysdeps<LibcLog>::operator()(const char *message) {
-	ker::logging::log(message, strlen(message), ker::abi::sys_log::sys_log_device::serial);
+	ker::logging::logLine(message, strlen(message), ker::abi::sys_log::sys_log_device::serial);
 }
 
 [[noreturn]]
@@ -152,6 +152,14 @@ int Sysdeps<VmUnmap>::operator()(void *pointer, size_t size) {
 	int result = (int)ker::vmem::free(pointer, size);
 	if (result < 0) {
 		return (-result);
+	}
+	return 0;
+}
+
+int Sysdeps<VmProtect>::operator()(void *pointer, size_t size, int prot) {
+	int64_t result = ker::vmem::protect(pointer, size, prot);
+	if (result < 0) {
+		return (int)(-result);
 	}
 	return 0;
 }

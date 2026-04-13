@@ -108,6 +108,7 @@ struct WosSysdepTags :
     Stat,
     VmMap,
     VmUnmap,
+    VmProtect,
     TcbSet,
     Exit,
     ThreadExit,

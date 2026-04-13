@@ -59,6 +59,7 @@ enum class ops : uint64_t {
 	wki_rule_add,
 	wki_rule_get,
 	wki_rule_clear,
+	pivot_root,
 };
 
 constexpr uint32_t WKI_VFS_ROUTE_LOCAL = 0;
@@ -505,6 +506,16 @@ wki_rule_get_vfs(uint32_t index, char *prefix_buf, size_t prefix_buf_size, uint3
 
 static inline int wki_rule_clear_vfs() {
 	uint64_t r = syscall(ker::abi::callnums::vfs, static_cast<uint64_t>(ops::wki_rule_clear));
+	return static_cast<int>((int64_t)r);
+}
+
+static inline int pivot_root_vfs(const char *new_root, const char *put_old) {
+	uint64_t r = syscall(
+	    ker::abi::callnums::vfs,
+	    static_cast<uint64_t>(ops::pivot_root),
+	    reinterpret_cast<uint64_t>(new_root),
+	    reinterpret_cast<uint64_t>(put_old)
+	);
 	return static_cast<int>((int64_t)r);
 }
 

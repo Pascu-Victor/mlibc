@@ -1179,8 +1179,27 @@ ObjectRepository::_discoverDependencies(SharedObject *object, Scope *localScope,
 		const char *library_str =
 		    (const char *)(object->baseAddress + object->stringTableOffset + dynamic->d_un.d_val);
 
-		auto libraryResult =
-		    requestObjectWithName(frg::string_view{library_str}, object, localScope, false, rts);
+		// glibc-compatible DT_NEEDED resolution:
+		// - If the name contains '/', try it as a literal path first.
+		// - If that fails (or no '/'), search by basename in library paths.
+		frg::string_view library_name{library_str};
+		frg::expected<LinkerError, SharedObject *> libraryResult{LinkerError::notFound};
+
+		if (library_name.find_first('/') != size_t(-1)) {
+			// Contains '/': try as a literal path first (glibc behavior)
+			libraryResult = requestObjectAtPath(library_name, localScope, false, rts);
+
+			// If literal path fails, fall back to basename search
+			if (!libraryResult) {
+				auto slash_pos = library_name.find_last('/');
+				library_name =
+				    library_name.sub_string(slash_pos + 1, library_name.size() - slash_pos - 1);
+				libraryResult = requestObjectWithName(library_name, object, localScope, false, rts);
+			}
+		} else {
+			libraryResult = requestObjectWithName(library_name, object, localScope, false, rts);
+		}
+
 		if (!libraryResult)
 			mlibc::panicLogger() << "Could not satisfy dependency " << library_str << frg::endlog;
 
@@ -2167,9 +2186,6 @@ void Loader::_processRelocations(Relocation &rel) {
 				__ensure(p);
 				rel.relocate(elf_addr(p->object()));
 			} else {
-				if (rtldConfig.debugVerbose)
-					mlibc::infoLogger() << "rtld: Warning: TLS_DTPMOD64 with no symbol in object "
-					                    << rel.object()->name << frg::endlog;
 				rel.relocate(elf_addr(rel.object()));
 			}
 		} break;

@@ -693,7 +693,7 @@ if not headers_only
 			rtld_sources + rtld_dso_sources,
 			name_prefix: '',
 			cpp_args: mlibc_c_args + ld_cpp_args,
-			link_args: mlibc_link_args,
+			link_args: mlibc_link_args + ['-Wl,-Bsymbolic'],
 			include_directories: rtld_include_dirs,
 			dependencies: rtld_deps + rtlib_deps,
 			install: true,
