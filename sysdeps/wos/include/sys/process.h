@@ -4,6 +4,8 @@
 #include <sys/callnums.h>
 #include <sys/resource.h>
 #include <sys/syscall.h>
+#include <fcntl.h>
+#include <unistd.h>
 
 namespace ker::process {
 
@@ -217,6 +219,39 @@ inline int64_t getwkitarget(char *hostname, uint64_t hostname_size, uint32_t *fl
 	    hostname_size,
 	    (uint64_t)(uintptr_t)flags
 	);
+}
+
+// Read the hostname of the node that LAUNCHED this process (i.e. the submitter).
+// For locally-started processes this equals the runner node.
+// buf must be at least bufsize bytes; returns the number of bytes written
+// (excluding NUL), or -1 on error.
+inline int64_t wki_launcher_node(char *buf, uint64_t bufsize) {
+	if (buf == nullptr || bufsize == 0) return -1;
+	int fd = open("/proc/self/wki_launcher", O_RDONLY);
+	if (fd < 0) return -1;
+	ssize_t n = read(fd, buf, bufsize - 1);
+	close(fd);
+	if (n <= 0) { buf[0] = '\0'; return n; }
+	// strip trailing newline
+	if (buf[n - 1] == '\n') n--;
+	buf[n] = '\0';
+	return n;
+}
+
+// Read the hostname of the node that is RUNNING this process.
+// buf must be at least bufsize bytes; returns the number of bytes written
+// (excluding NUL), or -1 on error.
+inline int64_t wki_runner_node(char *buf, uint64_t bufsize) {
+	if (buf == nullptr || bufsize == 0) return -1;
+	int fd = open("/proc/self/wki_runner", O_RDONLY);
+	if (fd < 0) return -1;
+	ssize_t n = read(fd, buf, bufsize - 1);
+	close(fd);
+	if (n <= 0) { buf[0] = '\0'; return n; }
+	// strip trailing newline
+	if (buf[n - 1] == '\n') n--;
+	buf[n] = '\0';
+	return n;
 }
 
 } // namespace ker::process
