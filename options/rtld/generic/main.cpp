@@ -450,6 +450,7 @@ extern "C" void *interpreterMain(uintptr_t *entry_stack) {
 			case DT_RELRENT:
 			case DT_PLTGOT:
 			case DT_BIND_NOW:
+			case DT_SYMBOLIC:
 				continue;
 			case DT_FLAGS: {
 				if ((ent->d_un.d_val & ~supportedDtFlags) == 0) {

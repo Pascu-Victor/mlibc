@@ -16,6 +16,8 @@ struct WosSysdepTags :
     Readlinkat,
     Ftruncate,
     Openat,
+    IfIndextoname,
+    IfNametoindex,
     Socket,
     MsgSend,
     Sendto,

@@ -21,4 +21,15 @@ uint64_t logLine(const char *str, uint64_t len, abi::sys_log::sys_log_device dev
 	);
 }
 
+uint64_t logEx(const char *module, abi::sys_log::sys_log_level level, const char *str, uint64_t len) {
+	return syscall(
+	    ker::abi::callnums::sys_log,
+	    (uint64_t)abi::sys_log::sys_log_ops::logEx,
+	    (uint64_t)str,
+	    len,
+	    (uint64_t)level,
+	    (uint64_t)module
+	);
+}
+
 } // namespace ker::logging

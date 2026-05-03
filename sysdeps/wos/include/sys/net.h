@@ -29,6 +29,12 @@ enum class ops : uint64_t {
 	SELECT,
 	POLL,
 	IOCTL_NET,
+	SET_DEV_CPU_AFFINITY,
+	NETCTL_IF_LIST,
+	NETCTL_ADDR_LIST,
+	NETCTL_ADDR_SET,
+	NETCTL_ADDR_DEL,
+	NETCTL_LINK_SET,
 };
 
 // Syscall register layout:
@@ -222,6 +228,53 @@ static inline int ioctl_net(unsigned long request, void *arg) {
 	    static_cast<uint64_t>(ops::IOCTL_NET),
 	    static_cast<uint64_t>(request),
 	    reinterpret_cast<uint64_t>(arg)
+	);
+	return static_cast<int>((int64_t)r);
+}
+
+static inline int netctl_if_list(void *out, size_t *count) {
+	uint64_t r = syscall(
+	    ker::abi::callnums::net,
+	    static_cast<uint64_t>(ops::NETCTL_IF_LIST),
+	    reinterpret_cast<uint64_t>(out),
+	    reinterpret_cast<uint64_t>(count)
+	);
+	return static_cast<int>((int64_t)r);
+}
+
+static inline int netctl_addr_list(void *out, size_t *count) {
+	uint64_t r = syscall(
+	    ker::abi::callnums::net,
+	    static_cast<uint64_t>(ops::NETCTL_ADDR_LIST),
+	    reinterpret_cast<uint64_t>(out),
+	    reinterpret_cast<uint64_t>(count)
+	);
+	return static_cast<int>((int64_t)r);
+}
+
+static inline int netctl_addr_set(const void *req) {
+	uint64_t r = syscall(
+	    ker::abi::callnums::net,
+	    static_cast<uint64_t>(ops::NETCTL_ADDR_SET),
+	    reinterpret_cast<uint64_t>(req)
+	);
+	return static_cast<int>((int64_t)r);
+}
+
+static inline int netctl_addr_del(const void *req) {
+	uint64_t r = syscall(
+	    ker::abi::callnums::net,
+	    static_cast<uint64_t>(ops::NETCTL_ADDR_DEL),
+	    reinterpret_cast<uint64_t>(req)
+	);
+	return static_cast<int>((int64_t)r);
+}
+
+static inline int netctl_link_set(const void *req) {
+	uint64_t r = syscall(
+	    ker::abi::callnums::net,
+	    static_cast<uint64_t>(ops::NETCTL_LINK_SET),
+	    reinterpret_cast<uint64_t>(req)
 	);
 	return static_cast<int>((int64_t)r);
 }

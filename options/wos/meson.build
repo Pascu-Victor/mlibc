@@ -6,6 +6,7 @@ libc_sources += files(
 	'generic/mntent.cpp',
 	'generic/reboot.cpp',
 	'generic/mount.cpp',
+	'generic/netctl.cpp',
 	'generic/klog.cpp',
 	'generic/sched.cpp',
 	'generic/sys-statfs.cpp',
@@ -43,6 +44,7 @@ if not no_headers
 	# )
 	install_headers(
 		'include/wos/kd.h',
+		'include/wos/netctl.h',
 		'include/wos/vt.h',
 		subdir: 'wos',
 	)

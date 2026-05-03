@@ -33,6 +33,7 @@
 #include <sys/vfs.h>
 #include <sys/vmem.h>
 #include <termios.h>
+#include <wos/netctl.h>
 
 // SafeStack support: This variable is accessed by the compiler-generated code
 // It needs to be in TLS storage and properly initialized
@@ -93,7 +94,7 @@ int mask_to_cpuset(uint64_t mask, size_t cpusetsize, cpu_set_t *set) {
 // ---- Base sysdeps (always required) ----
 
 void Sysdeps<LibcLog>::operator()(const char *message) {
-	ker::logging::logLine(message, strlen(message), ker::abi::sys_log::sys_log_device::serial);
+	ker::logging::logEx("mlibc", ker::abi::sys_log::sys_log_level::info, message, strlen(message));
 }
 
 [[noreturn]]
@@ -613,6 +614,68 @@ int Sysdeps<Openat>::operator()(int dirfd, const char *path, int flags, mode_t m
 		return sysdep<Open>(path, flags, mode, fd);
 	}
 	return ENOSYS;
+}
+
+int Sysdeps<IfIndextoname>::operator()(unsigned int index, char *name) {
+	size_t count = 0;
+	int r = ker::abi::net::netctl_if_list(nullptr, &count);
+	if (r < 0)
+		return -r;
+	if (count == 0)
+		return ENODEV;
+
+	auto *ifs = static_cast<wos_net_if_info *>(calloc(count, sizeof(wos_net_if_info)));
+	if (!ifs)
+		return ENOMEM;
+
+	size_t cap = count;
+	r = ker::abi::net::netctl_if_list(ifs, &cap);
+	if (r < 0) {
+		free(ifs);
+		return -r;
+	}
+	for (size_t i = 0; i < cap; ++i) {
+		if (ifs[i].ifindex == index) {
+			strncpy(name, ifs[i].name, WOS_NET_IF_NAME_LEN);
+			name[WOS_NET_IF_NAME_LEN - 1] = '\0';
+			free(ifs);
+			return 0;
+		}
+	}
+	free(ifs);
+	return ENODEV;
+}
+
+int Sysdeps<IfNametoindex>::operator()(const char *name, unsigned int *ret) {
+	if (!name || !ret)
+		return EINVAL;
+
+	size_t count = 0;
+	int r = ker::abi::net::netctl_if_list(nullptr, &count);
+	if (r < 0)
+		return -r;
+	if (count == 0)
+		return ENODEV;
+
+	auto *ifs = static_cast<wos_net_if_info *>(calloc(count, sizeof(wos_net_if_info)));
+	if (!ifs)
+		return ENOMEM;
+
+	size_t cap = count;
+	r = ker::abi::net::netctl_if_list(ifs, &cap);
+	if (r < 0) {
+		free(ifs);
+		return -r;
+	}
+	for (size_t i = 0; i < cap; ++i) {
+		if (!strncmp(ifs[i].name, name, WOS_NET_IF_NAME_LEN)) {
+			*ret = ifs[i].ifindex;
+			free(ifs);
+			return 0;
+		}
+	}
+	free(ifs);
+	return ENODEV;
 }
 
 int Sysdeps<Socket>::operator()(int family, int type, int protocol, int *fd) {
