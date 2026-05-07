@@ -1,6 +1,7 @@
 #include <abi-bits/pid_t.h>
 #include <algorithm>
 #include <errno.h>
+#include <fcntl.h>
 #include <limits.h>
 #include <mlibc/all-sysdeps.hpp>
 #include <mlibc/debug.hpp>
@@ -609,6 +610,17 @@ int Sysdeps<Ftruncate>::operator()(int fd, size_t size) {
 	return 0;
 }
 
+int Sysdeps<Truncate>::operator()(const char *path, off_t length) {
+	int fd = ker::abi::vfs::open(path, 1 /* O_WRONLY */, 0);
+	if (fd < 0)
+		return -fd;
+	int r = ker::abi::vfs::truncate(fd, length);
+	ker::abi::vfs::close(fd);
+	if (r < 0)
+		return -r;
+	return 0;
+}
+
 int Sysdeps<Openat>::operator()(int dirfd, const char *path, int flags, mode_t mode, int *fd) {
 	if (dirfd == -100 || (path && path[0] == '/')) {
 		return sysdep<Open>(path, flags, mode, fd);
@@ -679,7 +691,7 @@ int Sysdeps<IfNametoindex>::operator()(const char *name, unsigned int *ret) {
 }
 
 int Sysdeps<Socket>::operator()(int family, int type, int protocol, int *fd) {
-	int64_t r = ker::abi::net::socket(family, type & 0xFF, protocol);
+	int64_t r = ker::abi::net::socket(family, type, protocol);
 	if (r < 0)
 		return (int)(-r);
 	*fd = (int)r;
@@ -687,31 +699,24 @@ int Sysdeps<Socket>::operator()(int family, int type, int protocol, int *fd) {
 }
 
 int Sysdeps<MsgSend>::operator()(int fd, const struct msghdr *hdr, int flags, ssize_t *length) {
+	static constexpr ssize_t WOS_ERESTARTSYS = 512;
 	if (!hdr || hdr->msg_iovlen == 0 || !hdr->msg_iov)
 		return EINVAL;
 	const iovec *iov = &hdr->msg_iov[0];
-	if (hdr->msg_name) {
-		for (;;) {
-			ssize_t r =
-			    ker::abi::net::sendto(fd, iov->iov_base, iov->iov_len, flags, hdr->msg_name);
-			if (r == -EAGAIN)
-				continue;
-			if (r < 0) {
-				return (int)(-r);
-			}
-			*length = r;
-			return 0;
-		}
-	}
+	ssize_t r;
 	for (;;) {
-		ssize_t r = ker::abi::net::send(fd, iov->iov_base, iov->iov_len, flags);
-		if (r == -EAGAIN)
-			continue;
-		if (r < 0)
-			return (int)(-r);
-		*length = r;
-		return 0;
+		if (hdr->msg_name) {
+			r = ker::abi::net::sendto(fd, iov->iov_base, iov->iov_len, flags, hdr->msg_name);
+		} else {
+			r = ker::abi::net::send(fd, iov->iov_base, iov->iov_len, flags);
+		}
+		if (r != -WOS_ERESTARTSYS)
+			break;
 	}
+	if (r < 0)
+		return (int)(-r);
+	*length = r;
+	return 0;
 }
 
 int Sysdeps<Sendto>::operator()(
@@ -723,35 +728,39 @@ int Sysdeps<Sendto>::operator()(
     socklen_t addr_length,
     ssize_t *length
 ) {
+	static constexpr ssize_t WOS_ERESTARTSYS = 512;
 	(void)addr_length;
+	ssize_t r;
 	for (;;) {
-		ssize_t r;
 		if (sock_addr) {
 			r = ker::abi::net::sendto(fd, buffer, size, flags, sock_addr);
 		} else {
 			r = ker::abi::net::send(fd, buffer, size, flags);
 		}
-		if (r == -EAGAIN)
-			continue;
-		if (r < 0)
-			return (int)(-r);
-		*length = r;
-		return 0;
+		if (r != -WOS_ERESTARTSYS)
+			break;
 	}
+	if (r < 0)
+		return (int)(-r);
+	*length = r;
+	return 0;
 }
 
 int Sysdeps<MsgRecv>::operator()(int fd, struct msghdr *hdr, int flags, ssize_t *length) {
+	static constexpr ssize_t WOS_ERESTARTSYS = 512;
 	if (!hdr || hdr->msg_iovlen == 0 || !hdr->msg_iov)
 		return EINVAL;
 	const iovec *iov = &hdr->msg_iov[0];
-	if (hdr->msg_name) {
-		ssize_t r = ker::abi::net::recvfrom(fd, iov->iov_base, iov->iov_len, flags, hdr->msg_name);
-		if (r < 0)
-			return (int)(-r);
-		*length = r;
-		return 0;
+	ssize_t r;
+	for (;;) {
+		if (hdr->msg_name) {
+			r = ker::abi::net::recvfrom(fd, iov->iov_base, iov->iov_len, flags, hdr->msg_name);
+		} else {
+			r = ker::abi::net::recv(fd, iov->iov_base, iov->iov_len, flags);
+		}
+		if (r != -WOS_ERESTARTSYS)
+			break;
 	}
-	ssize_t r = ker::abi::net::recv(fd, iov->iov_base, iov->iov_len, flags);
 	if (r < 0)
 		return (int)(-r);
 	*length = r;
@@ -767,12 +776,17 @@ int Sysdeps<Recvfrom>::operator()(
     socklen_t *addr_length,
     ssize_t *length
 ) {
+	static constexpr ssize_t WOS_ERESTARTSYS = 512;
 	(void)addr_length;
 	ssize_t r;
-	if (sock_addr) {
-		r = ker::abi::net::recvfrom(fd, buffer, size, flags, sock_addr);
-	} else {
-		r = ker::abi::net::recv(fd, buffer, size, flags);
+	for (;;) {
+		if (sock_addr) {
+			r = ker::abi::net::recvfrom(fd, buffer, size, flags, sock_addr);
+		} else {
+			r = ker::abi::net::recv(fd, buffer, size, flags);
+		}
+		if (r != -WOS_ERESTARTSYS)
+			break;
 	}
 	if (r < 0)
 		return (int)(-r);
@@ -1297,19 +1311,41 @@ int Sysdeps<Shutdown>::operator()(int sockfd, int how) {
 int Sysdeps<Accept>::operator()(
     int fd, int *newfd, struct sockaddr *addr_ptr, socklen_t *addr_length, int flags
 ) {
-	(void)flags;
+	static constexpr int WOS_ERESTARTSYS = 512;
 	size_t alen = addr_length ? *addr_length : 0;
+	int64_t r;
 	for (;;) {
-		int64_t r = ker::abi::net::accept(fd, addr_ptr, &alen);
-		if (r == -EAGAIN)
-			continue;
-		if (r < 0)
-			return (int)(-r);
-		if (addr_length)
-			*addr_length = (socklen_t)alen;
-		*newfd = (int)r;
-		return 0;
+		r = ker::abi::net::accept(fd, addr_ptr, &alen);
+		if (r != -WOS_ERESTARTSYS)
+			break;
 	}
+	if (r < 0)
+		return (int)(-r);
+
+	int accepted_fd = (int)r;
+	if (flags & SOCK_NONBLOCK) {
+		int current_flags = ker::abi::vfs::fcntl(accepted_fd, F_GETFL, 0);
+		if (current_flags < 0) {
+			ker::abi::vfs::close(accepted_fd);
+			return -current_flags;
+		}
+		int set_flags = ker::abi::vfs::fcntl(accepted_fd, F_SETFL, current_flags | O_NONBLOCK);
+		if (set_flags < 0) {
+			ker::abi::vfs::close(accepted_fd);
+			return -set_flags;
+		}
+	}
+	if (flags & SOCK_CLOEXEC) {
+		int set_fd_flags = ker::abi::vfs::fcntl(accepted_fd, F_SETFD, FD_CLOEXEC);
+		if (set_fd_flags < 0) {
+			ker::abi::vfs::close(accepted_fd);
+			return -set_fd_flags;
+		}
+	}
+	if (addr_length)
+		*addr_length = (socklen_t)alen;
+	*newfd = accepted_fd;
+	return 0;
 }
 
 int Sysdeps<Bind>::operator()(int fd, const struct sockaddr *addr_ptr, socklen_t addr_length) {
@@ -1320,14 +1356,16 @@ int Sysdeps<Bind>::operator()(int fd, const struct sockaddr *addr_ptr, socklen_t
 }
 
 int Sysdeps<Connect>::operator()(int fd, const struct sockaddr *addr_ptr, socklen_t addr_length) {
+	static constexpr int WOS_ERESTARTSYS = 512;
+	int64_t r;
 	for (;;) {
-		int64_t r = ker::abi::net::connect(fd, addr_ptr, addr_length);
-		if (r == -EAGAIN || r == -EINPROGRESS)
-			continue;
-		if (r < 0)
-			return (int)(-r);
-		return 0;
+		r = ker::abi::net::connect(fd, addr_ptr, addr_length);
+		if (r != -WOS_ERESTARTSYS)
+			break;
 	}
+	if (r < 0)
+		return (int)(-r);
+	return 0;
 }
 
 int Sysdeps<Sockname>::operator()(
@@ -1356,6 +1394,13 @@ int Sysdeps<Peername>::operator()(
 
 int Sysdeps<GetHostname>::operator()(char *buffer, size_t bufsize) {
 	int64_t r = ker::process::gethostname(buffer, bufsize);
+	if (r < 0)
+		return static_cast<int>(-r);
+	return 0;
+}
+
+int Sysdeps<SetHostname>::operator()(const char *buffer, size_t bufsize) {
+	int64_t r = ker::process::sethostname(buffer, bufsize);
 	if (r < 0)
 		return static_cast<int>(-r);
 	return 0;
@@ -1611,8 +1656,33 @@ int Sysdeps<EpollPwait>::operator()(
 	}
 }
 
+int Sysdeps<Statvfs>::operator()(const char *path, struct statvfs *out) {
+	int r = ker::abi::vfs::statvfs_path(path, out);
+	if (r < 0)
+		return -r;
+	return 0;
+}
+
+int Sysdeps<Fstatvfs>::operator()(int fd, struct statvfs *out) {
+	int r = ker::abi::vfs::fstatvfs_fd(fd, out);
+	if (r < 0)
+		return -r;
+	return 0;
+}
+
 int Sysdeps<Getcpu>::operator()(int *cpu) {
 	*cpu = (int)ker::multiproc::getCurrentCpu();
+	return 0;
+}
+
+int Sysdeps<Utimensat>::operator()(int dirfd, const char *pathname, const struct timespec *, int flags) {
+	// Timestamps are not tracked. Return ENOENT if the path doesn't exist so
+	// callers like `touch` fall back to open(O_CREAT) to create the file.
+	if (dirfd != AT_FDCWD && dirfd != -100) return ENOSYS;
+	struct stat st;
+	if (int e = sysdep<Stat>(fsfd_target::path, -1, pathname, flags, &st); e) {
+		return e;
+	}
 	return 0;
 }
 

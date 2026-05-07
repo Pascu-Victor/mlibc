@@ -14,6 +14,7 @@ struct WosSysdepTags :
     Dup2,
     Readlink,
     Readlinkat,
+    Truncate,
     Ftruncate,
     Openat,
     IfIndextoname,
@@ -58,6 +59,7 @@ struct WosSysdepTags :
     Chmod,
     Fchmod,
     Fchmodat,
+    Utimensat,
     SetSid,
     Tcgetattr,
     Tcsetattr,
@@ -77,6 +79,7 @@ struct WosSysdepTags :
     Sockname,
     Peername,
     GetHostname,
+    SetHostname,
     GetEntropy,
     Umask,
     Fchownat,
@@ -100,6 +103,8 @@ struct WosSysdepTags :
     EpollCreate,
     EpollCtl,
     EpollPwait,
+    Statvfs,
+    Fstatvfs,
 #endif // __MLIBC_POSIX_OPTION
 
     LibcLog,

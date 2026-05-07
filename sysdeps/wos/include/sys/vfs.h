@@ -60,6 +60,9 @@ enum class ops : uint64_t {
 	wki_rule_get,
 	wki_rule_clear,
 	pivot_root,
+	wki_rule_get_default,
+	statvfs,
+	fstatvfs,
 };
 
 constexpr uint32_t WKI_VFS_ROUTE_LOCAL = 0;
@@ -509,12 +512,45 @@ static inline int wki_rule_clear_vfs() {
 	return static_cast<int>((int64_t)r);
 }
 
+static inline int
+wki_rule_get_default_vfs(uint32_t index, char *prefix_buf, size_t prefix_buf_size, uint32_t *route_out) {
+	uint64_t r = syscall(
+	    ker::abi::callnums::vfs,
+	    static_cast<uint64_t>(ops::wki_rule_get_default),
+	    static_cast<uint64_t>(index),
+	    reinterpret_cast<uint64_t>(prefix_buf),
+	    static_cast<uint64_t>(prefix_buf_size),
+	    reinterpret_cast<uint64_t>(route_out)
+	);
+	return static_cast<int>((int64_t)r);
+}
+
 static inline int pivot_root_vfs(const char *new_root, const char *put_old) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::vfs,
 	    static_cast<uint64_t>(ops::pivot_root),
 	    reinterpret_cast<uint64_t>(new_root),
 	    reinterpret_cast<uint64_t>(put_old)
+	);
+	return static_cast<int>((int64_t)r);
+}
+
+static inline int statvfs_path(const char *path, void *buf) {
+	uint64_t r = syscall(
+	    ker::abi::callnums::vfs,
+	    static_cast<uint64_t>(ops::statvfs),
+	    reinterpret_cast<uint64_t>(path),
+	    reinterpret_cast<uint64_t>(buf)
+	);
+	return static_cast<int>((int64_t)r);
+}
+
+static inline int fstatvfs_fd(int fd, void *buf) {
+	uint64_t r = syscall(
+	    ker::abi::callnums::vfs,
+	    static_cast<uint64_t>(ops::fstatvfs),
+	    static_cast<uint64_t>(fd),
+	    reinterpret_cast<uint64_t>(buf)
 	);
 	return static_cast<int>((int64_t)r);
 }
