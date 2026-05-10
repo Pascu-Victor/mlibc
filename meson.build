@@ -303,6 +303,9 @@ elif host_machine.system() == 'wos'
 	rtld_include_dirs += include_directories('sysdeps/wos/include')
 	libc_include_dirs += include_directories('sysdeps/wos/include')
 	add_project_arguments('-D_GNU_SOURCE', language: ['c', 'cpp'])
+	internal_conf.set10('MLIBC_MAP_DSO_SEGMENTS', true)
+	internal_conf.set10('MLIBC_MMAP_ALLOCATE_DSO', true)
+	internal_conf.set10('MLIBC_MAP_FILE_WINDOWS', true)
 	subdir('sysdeps/wos')
 elif host_machine.system() == 'demo'
 	subdir('sysdeps/demo')

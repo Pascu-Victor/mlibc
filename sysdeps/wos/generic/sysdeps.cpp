@@ -15,6 +15,7 @@
 #include <sys/callnums.h>
 #include <sys/epoll.h>
 #include <sys/futex.h>
+#include <sys/ioctl.h>
 #include <sys/logging.h>
 #include <sys/multiproc.h>
 #include <sys/net.h>
@@ -95,7 +96,7 @@ int mask_to_cpuset(uint64_t mask, size_t cpusetsize, cpu_set_t *set) {
 // ---- Base sysdeps (always required) ----
 
 void Sysdeps<LibcLog>::operator()(const char *message) {
-	ker::logging::logEx("mlibc", ker::abi::sys_log::sys_log_level::info, message, strlen(message));
+	ker::logging::logEx("mlibc", ker::abi::sys_log::sys_log_level::INFO, message, strlen(message));
 }
 
 [[noreturn]]
@@ -408,7 +409,7 @@ int Sysdeps<Close>::operator()(int fd) {
 }
 
 int Sysdeps<ClockGet>::operator()(int clock_id, time_t *secs, long *nanos) {
-	timespec ts;
+	timespec ts{};
 	uint64_t res = ker::time::clock_gettime(clock_id, &ts);
 	if ((int64_t)res < 0) {
 		return (int)(-(int64_t)res);
@@ -421,10 +422,10 @@ int Sysdeps<ClockGet>::operator()(int clock_id, time_t *secs, long *nanos) {
 }
 
 int Sysdeps<Sleep>::operator()(time_t *secs, long *nanos) {
-	timespec req;
+	timespec req{};
 	req.tv_sec = secs ? *secs : 0;
 	req.tv_nsec = nanos ? *nanos : 0;
-	timespec rem = {0, 0};
+	timespec rem{.tv_sec = 0, .tv_nsec = 0};
 
 	uint64_t r = syscall(
 	    ker::abi::callnums::time,
@@ -483,7 +484,7 @@ extern "C" void __mlibc_signal_restore_rt();
 int Sysdeps<Sigaction>::operator()(
     int signum, const struct sigaction *__restrict act, struct sigaction *__restrict oldact
 ) {
-	struct sigaction modified_act;
+	struct sigaction modified_act{};
 	const struct sigaction *act_ptr = act;
 	if (act) {
 		modified_act = *act;
@@ -1078,9 +1079,7 @@ int Sysdeps<Ttyname>::operator()(int fd, char *buf, size_t size) {
 		return ENOTTY;
 
 	int pty_num = -1;
-	int r = ker::abi::vfs::ioctl_vfs(
-	    fd, 0x80045430 /* TIOCGPTN */, reinterpret_cast<unsigned long>(&pty_num)
-	);
+	int r = ker::abi::vfs::ioctl_vfs(fd, TIOCGPTN, reinterpret_cast<unsigned long>(&pty_num));
 	if (r >= 0 && pty_num >= 0) {
 		char name[32];
 		int pos = 0;
@@ -1671,14 +1670,17 @@ int Sysdeps<Fstatvfs>::operator()(int fd, struct statvfs *out) {
 }
 
 int Sysdeps<Getcpu>::operator()(int *cpu) {
-	*cpu = (int)ker::multiproc::getCurrentCpu();
+	*cpu = (int)ker::multiproc::getcurrent_cpu();
 	return 0;
 }
 
-int Sysdeps<Utimensat>::operator()(int dirfd, const char *pathname, const struct timespec *, int flags) {
+int Sysdeps<Utimensat>::operator()(
+    int dirfd, const char *pathname, const struct timespec *, int flags
+) {
 	// Timestamps are not tracked. Return ENOENT if the path doesn't exist so
 	// callers like `touch` fall back to open(O_CREAT) to create the file.
-	if (dirfd != AT_FDCWD && dirfd != -100) return ENOSYS;
+	if (dirfd != AT_FDCWD && dirfd != -100)
+		return ENOSYS;
 	struct stat st;
 	if (int e = sysdep<Stat>(fsfd_target::path, -1, pathname, flags, &st); e) {
 		return e;

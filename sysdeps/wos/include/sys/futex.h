@@ -9,7 +9,7 @@ namespace ker::futex {
 [[gnu::weak]] inline int64_t wait(int *addr, int expected, const timespec *timeout) {
 	return static_cast<int64_t>(syscall(
 	    abi::callnums::futex,
-	    static_cast<uint64_t>(abi::futex::futex_ops::futex_wait),
+	    static_cast<uint64_t>(abi::futex::futex_ops::FUTEX_WAIT),
 	    reinterpret_cast<uint64_t>(addr),
 	    static_cast<uint64_t>(expected),
 	    reinterpret_cast<uint64_t>(timeout)
@@ -19,7 +19,7 @@ namespace ker::futex {
 [[gnu::weak]] inline int64_t wake(int *addr) {
 	return static_cast<int64_t>(syscall(
 	    abi::callnums::futex,
-	    static_cast<uint64_t>(abi::futex::futex_ops::futex_wake),
+	    static_cast<uint64_t>(abi::futex::futex_ops::FUTEX_WAKE),
 	    reinterpret_cast<uint64_t>(addr)
 	));
 }

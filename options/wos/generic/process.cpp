@@ -10,7 +10,7 @@ namespace mlibc {
 void sys_exit(int status) {
 	syscall(
 	    ker::abi::callnums::process,
-	    static_cast<uint64_t>(ker::abi::process::procmgmt_ops::exit),
+	    static_cast<uint64_t>(ker::abi::process::procmgmt_ops::EXIT),
 	    static_cast<uint64_t>(status)
 	);
 	__builtin_unreachable();
@@ -38,7 +38,7 @@ int sys_execve(const char *path, char *const argv[], char *const envp[]) {
 	// For now, pass the raw pointers to the kernel which will handle conversion
 	uint64_t r = syscall(
 	    ker::abi::callnums::process,
-	    static_cast<uint64_t>(ker::abi::process::procmgmt_ops::exec),
+	    static_cast<uint64_t>(ker::abi::process::procmgmt_ops::EXEC),
 	    reinterpret_cast<uint64_t>(path),
 	    reinterpret_cast<uint64_t>(argv),
 	    static_cast<uint64_t>(argc),

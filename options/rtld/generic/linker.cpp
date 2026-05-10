@@ -1708,9 +1708,19 @@ frg::optional<ObjectSymbol> resolveInObject(
 		return *version == candVersion;
 	};
 
+	// Some objects that participate in the global scope (for example special
+	// kernel-provided images) do not expose a hash table for dynsym lookups.
+	// Treat them as non-exporting here instead of asserting during unrelated
+	// symbol resolution.
+	if (object->hashStyle == HashStyle::none || !object->hashTableOffset || !object->symbolTableOffset
+	    || !object->stringTableOffset)
+		return frg::optional<ObjectSymbol>{};
+
 	if (object->hashStyle == HashStyle::systemV) {
 		auto hash_table = (Elf64_Word *)(object->baseAddress + object->hashTableOffset);
 		Elf64_Word num_buckets = hash_table[0];
+		if (!num_buckets)
+			return frg::optional<ObjectSymbol>{};
 		auto bucket = elf64Hash(string) % num_buckets;
 
 		auto index = hash_table[2 + bucket];
@@ -1742,6 +1752,8 @@ frg::optional<ObjectSymbol> resolveInObject(
 		// TODO: Use the bloom filter.
 
 		// The symbols of a given bucket are contiguous in the table.
+		if (!hash_table->nBuckets)
+			return frg::optional<ObjectSymbol>{};
 		auto hash = gnuHash(string);
 		auto index = buckets[hash % hash_table->nBuckets];
 

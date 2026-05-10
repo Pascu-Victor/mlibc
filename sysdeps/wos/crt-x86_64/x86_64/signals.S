@@ -14,8 +14,8 @@
 //   syscall instruction
 __mlibc_signal_restore:
 __mlibc_signal_restore_rt:
-    mov $3, %rax          // callnums::process
-    mov $9, %rdi          // procmgmt_ops::sigreturn
+    mov $3, %rax          // callnums::PROCESS
+    mov $9, %rdi          // procmgmt_ops::SIGRETURN
     syscall
     ud2                   // should never return
 

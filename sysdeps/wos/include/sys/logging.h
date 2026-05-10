@@ -52,11 +52,16 @@ logExf(const char *module, abi::sys_log::sys_log_level level, const char *fmt, A
 
 namespace ker::mod::dbg {
 
-template <size_t N>
 struct fixed_string {
-	char value[N]{};
+	size_t size{};
+	char value[abi::sys_log::JOURNAL_MODULE_MAX + 1]{};
 
-	consteval fixed_string(const char (&str)[N]) {
+	template <size_t N>
+	consteval fixed_string(const char (&str)[N]) : size(N - 1) {
+		static_assert(
+		    N <= (abi::sys_log::JOURNAL_MODULE_MAX + 1),
+		    "logger tag exceeds JOURNAL_MODULE_MAX"
+		);
 		for (size_t i = 0; i < N; i++) {
 			value[i] = str[i];
 		}
@@ -68,7 +73,7 @@ struct fixed_string {
 template <fixed_string Tag>
 struct logger {
 	static_assert(
-	    (sizeof(Tag.value) - 1) <= abi::sys_log::JOURNAL_MODULE_MAX,
+	    Tag.size <= abi::sys_log::JOURNAL_MODULE_MAX,
 	    "logger tag exceeds JOURNAL_MODULE_MAX"
 	);
 
@@ -80,42 +85,42 @@ struct logger {
 
 	template <typename... Args>
 	[[gnu::always_inline]] static inline void trace(const char *fmt, Args... args) {
-		log(abi::sys_log::sys_log_level::trace, fmt, args...);
+		log(abi::sys_log::sys_log_level::TRACE, fmt, args...);
 	}
 
 	template <typename... Args>
 	[[gnu::always_inline]] static inline void debug(const char *fmt, Args... args) {
-		log(abi::sys_log::sys_log_level::debug, fmt, args...);
+		log(abi::sys_log::sys_log_level::DEBUG, fmt, args...);
 	}
 
 	template <typename... Args>
 	[[gnu::always_inline]] static inline void info(const char *fmt, Args... args) {
-		log(abi::sys_log::sys_log_level::info, fmt, args...);
+		log(abi::sys_log::sys_log_level::INFO, fmt, args...);
 	}
 
 	template <typename... Args>
 	[[gnu::always_inline]] static inline void notice(const char *fmt, Args... args) {
-		log(abi::sys_log::sys_log_level::notice, fmt, args...);
+		log(abi::sys_log::sys_log_level::NOTICE, fmt, args...);
 	}
 
 	template <typename... Args>
 	[[gnu::always_inline]] static inline void warn(const char *fmt, Args... args) {
-		log(abi::sys_log::sys_log_level::warn, fmt, args...);
+		log(abi::sys_log::sys_log_level::WARN, fmt, args...);
 	}
 
 	template <typename... Args>
 	[[gnu::always_inline]] static inline void error(const char *fmt, Args... args) {
-		log(abi::sys_log::sys_log_level::error, fmt, args...);
+		log(abi::sys_log::sys_log_level::ERROR, fmt, args...);
 	}
 
 	template <typename... Args>
 	[[gnu::always_inline]] static inline void critical(const char *fmt, Args... args) {
-		log(abi::sys_log::sys_log_level::critical, fmt, args...);
+		log(abi::sys_log::sys_log_level::CRITICAL, fmt, args...);
 	}
 
 	template <typename... Args>
 	[[gnu::always_inline]] static inline void panic(const char *fmt, Args... args) {
-		log(abi::sys_log::sys_log_level::panic, fmt, args...);
+		log(abi::sys_log::sys_log_level::PANIC, fmt, args...);
 	}
 };
 
