@@ -10,7 +10,8 @@ namespace ker::abi::net {
 
 // Operation codes for the kernel net syscall dispatcher.
 // Must match modules/kern/src/abi/callnums/net.h
-enum class ops : uint64_t {
+enum class ops : uint64_t { // NOLINT(performance-enum-size): syscall ABI passes op numbers in
+	                        // 64-bit registers.
 	SOCKET,
 	BIND,
 	LISTEN,
