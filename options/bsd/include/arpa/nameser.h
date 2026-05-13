@@ -44,6 +44,15 @@ typedef	enum __ns_rcode {
 	ns_r_badtime = 18
 } ns_rcode;
 
+typedef enum __ns_opcode {
+	ns_o_query = 0,
+	ns_o_iquery = 1,
+	ns_o_status = 2,
+	ns_o_notify = 4,
+	ns_o_update = 5,
+	ns_o_max = 6
+} ns_opcode;
+
 typedef enum __ns_type {
 	ns_t_invalid = 0,
 	ns_t_a = 1,
@@ -228,6 +237,10 @@ typedef struct {
 #define NXRRSET		ns_r_nxrrset
 #define NOTAUTH		ns_r_notauth
 #define NOTZONE		ns_r_notzone
+
+#define QUERY		ns_o_query
+#define IQUERY		ns_o_iquery
+#define STATUS		ns_o_status
 
 #define T_A			ns_t_a
 #define T_NS		ns_t_ns

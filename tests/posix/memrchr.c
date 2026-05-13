@@ -1,11 +1,11 @@
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
 #endif
+#include <assert.h>
 #include <stdio.h>
 #include <string.h>
-#include <assert.h>
 
-int main () {
+int main() {
 	char str[] = "The Last Supper by Leonardo da Vinci";
 	char *str_temp;
 

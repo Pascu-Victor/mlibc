@@ -16,15 +16,17 @@
 #include <wctype.h>
 
 int main() {
-	char buf[64] = { 0 };
+	char buf[64] = {0};
 	wint_t c = 0xC9;
 	char *locale = setlocale(LC_ALL, "");
 	assert(locale && strlen(locale));
 	if (snprintf(buf, MB_LEN_MAX, "%lc", c) < 0)
 		return -1;
 
-	assert((unsigned char) buf[0] == 0xc3 && (unsigned char) buf[1] == 0x89
-			&& buf[2] == '\0' && buf[3] == '\0');
+	assert(
+	    (unsigned char)buf[0] == 0xc3 && (unsigned char)buf[1] == 0x89 && buf[2] == '\0'
+	    && buf[3] == '\0'
+	);
 
 	locale_t fake = newlocale(LC_ALL_MASK, "not german", 0);
 	assert(fake == 0);
@@ -158,7 +160,7 @@ int main() {
 	assert(!strcmp("PM", pm));
 
 	posix = newlocale(LC_NUMERIC_MASK, "de_DE", posix);
-	assert(posix != (locale_t) 0);
+	assert(posix != (locale_t)0);
 
 	decimal_point = nl_langinfo_l(DECIMAL_POINT, posix);
 	assert(!strcmp(",", decimal_point));
@@ -218,7 +220,12 @@ int main() {
 	assert(!strcmp(locale, "en_US.utf8"));
 
 	locale = setlocale(LC_ALL, NULL);
-	assert(!strcmp(locale, "LC_CTYPE=de_DE;LC_NUMERIC=C;LC_TIME=ru_RU.utf8;LC_COLLATE=de_DE;LC_MONETARY=en_US.utf8;LC_MESSAGES=de_DE;LC_PAPER=de_DE;LC_NAME=de_DE;LC_ADDRESS=de_DE;LC_TELEPHONE=de_DE;LC_MEASUREMENT=de_DE;LC_IDENTIFICATION=de_DE"));
+	assert(!strcmp(
+	    locale,
+	    "LC_CTYPE=de_DE;LC_NUMERIC=C;LC_TIME=ru_RU.utf8;LC_COLLATE=de_DE;LC_MONETARY=en_US.utf8;LC_"
+	    "MESSAGES=de_DE;LC_PAPER=de_DE;LC_NAME=de_DE;LC_ADDRESS=de_DE;LC_TELEPHONE=de_DE;LC_"
+	    "MEASUREMENT=de_DE;LC_IDENTIFICATION=de_DE"
+	));
 #if !defined(USE_HOST_LIBC) && !defined(USE_CROSS_LIBC)
 	assert(!strcmp(locale, getlocalename_l(LC_ALL, LC_GLOBAL_LOCALE)));
 #endif

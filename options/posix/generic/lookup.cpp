@@ -17,6 +17,7 @@
 #include <sys/socket.h>
 #include <time.h>
 #include <unistd.h>
+#include <utility>
 
 namespace mlibc {
 
@@ -77,7 +78,7 @@ static frg::string<MemoryAllocator> read_dns_name(char *buf, char *&it) {
 	return res;
 }
 
-int lookup_name_dns(
+int lookup_name_dns_one(
     struct lookup_result &buf,
     const char *name,
     frg::string<MemoryAllocator> &canon_name,
@@ -241,6 +242,45 @@ int lookup_name_dns(
 		return -EAI_AGAIN;
 
 	return buf.buf.size();
+}
+
+int lookup_name_dns(
+    struct lookup_result &buf,
+    const char *name,
+    frg::string<MemoryAllocator> &canon_name,
+    int family
+) {
+	auto conf = get_resolv_conf();
+	bool const has_trailing_dot = name[0] && name[strlen(name) - 1] == '.';
+
+	if (!has_trailing_dot && conf && !conf->search.empty()) {
+		for (auto &domain : conf->search) {
+			if (domain.empty())
+				continue;
+
+			frg::string<MemoryAllocator> qualified{name, getAllocator()};
+			qualified += '.';
+			qualified += domain;
+
+			struct lookup_result qualified_buf;
+			frg::string<MemoryAllocator> qualified_canon{getAllocator()};
+			int count = lookup_name_dns_one(qualified_buf, qualified.data(), qualified_canon, family);
+			if (count > 0) {
+				for (auto &entry : qualified_buf.buf)
+					buf.buf.push(std::move(entry));
+				for (auto &alias : qualified_buf.aliases)
+					buf.aliases.push(std::move(alias));
+				canon_name = qualified_canon.empty() ? std::move(qualified) : std::move(qualified_canon);
+				return count;
+			}
+		}
+	}
+
+	if (!has_trailing_dot)
+		return lookup_name_dns_one(buf, name, canon_name, family);
+
+	frg::string<MemoryAllocator> absolute{name, strlen(name) - 1, getAllocator()};
+	return lookup_name_dns_one(buf, absolute.data(), canon_name, family);
 }
 
 int lookup_addr_dns(frg::span<char> name, frg::array<uint8_t, 16> &addr, int family) {

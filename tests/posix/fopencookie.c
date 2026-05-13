@@ -14,22 +14,22 @@ struct testcookie {
 };
 
 ssize_t cookie_read(void *c, char *buf, size_t size) {
-	(void) buf;
+	(void)buf;
 	struct testcookie *cookie = c;
 	cookie->read = true;
 	return size;
 }
 
 ssize_t cookie_write(void *c, const char *buf, size_t size) {
-	(void) buf;
+	(void)buf;
 	struct testcookie *cookie = c;
 	cookie->write = true;
 	return size;
 }
 
 int cookie_seek(void *c, off64_t *offset, int whence) {
-	(void) offset;
-	(void) whence;
+	(void)offset;
+	(void)whence;
 	struct testcookie *cookie = c;
 	cookie->seek = true;
 	return 0;
@@ -42,13 +42,13 @@ int cookie_close(void *c) {
 }
 
 int main() {
-	struct testcookie cookie = { false, false, false, false };
+	struct testcookie cookie = {false, false, false, false};
 
 	cookie_io_functions_t funcs = {
-		.read = cookie_read,
-		.write = cookie_write,
-		.seek = cookie_seek,
-		.close = cookie_close,
+	    .read = cookie_read,
+	    .write = cookie_write,
+	    .seek = cookie_seek,
+	    .close = cookie_close,
 	};
 
 	FILE *stream = fopencookie(&cookie, "w+", funcs);

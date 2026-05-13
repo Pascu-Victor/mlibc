@@ -103,6 +103,10 @@ struct WosSysdepTags :
     EpollCreate,
     EpollCtl,
     EpollPwait,
+    Shmat,
+    Shmctl,
+    Shmdt,
+    Shmget,
     Statvfs,
     Fstatvfs,
 #endif // __MLIBC_POSIX_OPTION
@@ -148,6 +152,7 @@ struct WosSysdepTags :
     Execve,
     Yield,
     GetPid,
+    Ptrace,
     Kill {
 };
 

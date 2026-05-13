@@ -60,7 +60,7 @@ int main() {
 	assert(f);
 
 	pos = ftell(f);
-	assert(pos == (long) (BUFFER1_SIZE - 1));
+	assert(pos == (long)(BUFFER1_SIZE - 1));
 
 	ret = fseek(f, 0, SEEK_SET);
 	assert(!ret);
@@ -70,7 +70,7 @@ int main() {
 	ret = fseek(f, 0, SEEK_END);
 	assert(!ret);
 	pos = ftell(f);
-	assert(pos == (long) (BUFFER1_SIZE - 1));
+	assert(pos == (long)(BUFFER1_SIZE - 1));
 
 	fclose(f);
 
@@ -81,7 +81,7 @@ int main() {
 	ret = fseek(f, 0, SEEK_END);
 	assert(!ret);
 	pos = ftell(f);
-	assert(pos == (long) (BUFFER1_SIZE - 2));
+	assert(pos == (long)(BUFFER1_SIZE - 2));
 
 	fclose(f);
 
@@ -133,7 +133,7 @@ int main() {
 	f = fmemopen(buf2, 0, "r");
 	assert(f || errno == EINVAL);
 
-	if(f) {
+	if (f) {
 		memset(buf, 0, BUFFER1_SIZE);
 		read = fread(buf, 10, 1, f);
 		assert(!read);

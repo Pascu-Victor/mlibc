@@ -27,6 +27,7 @@
 #include <mlibc/time.hpp>
 
 #include <frg/mutex.hpp>
+#include <smarter.hpp>
 
 // The DST rules to use if TZ has no rules and we can't load posixinfo.
 // POSIX does not specify the default DST rules, for historical reasons
@@ -41,6 +42,13 @@ constexpr size_t tznameNormal = 0;
 constexpr size_t tznameDST = 1;
 
 frg::string<MemoryAllocator> tznameStorage[2] = {{getAllocator()}, {getAllocator()}};
+smarter::shared_ptr<file_window> tzFileCache;
+frg::string<MemoryAllocator> tzFileCachePath{getAllocator()};
+frg::string<MemoryAllocator> cachedTzEnv{getAllocator()};
+frg::string<MemoryAllocator> cachedTzDirEnv{getAllocator()};
+bool cachedTzEnvUnset = true;
+bool cachedTzDirEnvUnset = true;
+bool tzStateInitialized = false;
 
 } // namespace
 
@@ -98,7 +106,6 @@ struct tm *gmtime(const time_t *unix_gmt) {
 }
 
 struct tm *localtime(const time_t *unix_gmt) {
-	tzset();
 	static thread_local struct tm per_thread_tm;
 	return localtime_r(unix_gmt, &per_thread_tm);
 }
@@ -462,23 +469,25 @@ frg::string<MemoryAllocator> parse_tzfile_path(const char *tz) {
 }
 
 bool parse_tzfile(const char *tz) {
-	frg::string<MemoryAllocator> path = parse_tzfile_path(tz);
+	if (!tzFileCache) {
+		frg::string<MemoryAllocator> path = parse_tzfile_path(tz);
 
-	// Check if file exists, otherwise fallback to the default.
-	if constexpr (!mlibc::IsImplemented<Stat>) {
-		MLIBC_MISSING_SYSDEP();
-		__ensure(!"cannot proceed without sys_stat");
+		// Check if file exists, otherwise fallback to the default.
+		if constexpr (!mlibc::IsImplemented<Stat>) {
+			MLIBC_MISSING_SYSDEP();
+			__ensure(!"cannot proceed without sys_stat");
+		}
+		struct stat info;
+		if (mlibc::sysdep_or_panic<Stat>(mlibc::fsfd_target::path, -1, path.data(), 0, &info))
+			return true;
+
+		tzFileCache = smarter::allocate_shared<file_window>(getAllocator(), path.data());
+		tzFileCachePath = path;
 	}
-	struct stat info;
-	if (mlibc::sysdep_or_panic<Stat>(mlibc::fsfd_target::path, -1, path.data(), 0, &info))
-		return true;
-
-	// FIXME: Make this fallible so the above check is not needed.
-	file_window window{path.data()};
 
 	// TODO(geert): we can probably cache this somehow
 	tzfile tzfile_time;
-	memcpy(&tzfile_time, reinterpret_cast<char *>(window.get()), sizeof(tzfile));
+	memcpy(&tzfile_time, reinterpret_cast<char *>(tzFileCache->get()), sizeof(tzfile));
 	tzfile_time.tzh_ttisgmtcnt = mlibc::bit_util<uint32_t>::be_to_host(tzfile_time.tzh_ttisgmtcnt);
 	tzfile_time.tzh_ttisstdcnt = mlibc::bit_util<uint32_t>::be_to_host(tzfile_time.tzh_ttisstdcnt);
 	tzfile_time.tzh_leapcnt = mlibc::bit_util<uint32_t>::be_to_host(tzfile_time.tzh_leapcnt);
@@ -488,12 +497,12 @@ bool parse_tzfile(const char *tz) {
 
 	if (tzfile_time.magic[0] != 'T' || tzfile_time.magic[1] != 'Z' || tzfile_time.magic[2] != 'i'
 	    || tzfile_time.magic[3] != 'f') {
-		mlibc::infoLogger() << "mlibc: " << path << " is not a valid TZinfo file" << frg::endlog;
+		mlibc::infoLogger() << "mlibc: " << tzFileCachePath << " is not a valid TZinfo file" << frg::endlog;
 		return true;
 	}
 
 	if (tzfile_time.version != '\0' && tzfile_time.version != '2' && tzfile_time.version != '3') {
-		mlibc::infoLogger() << "mlibc: " << path << " has an invalid TZinfo version" << frg::endlog;
+		mlibc::infoLogger() << "mlibc: " << tzFileCachePath << " has an invalid TZinfo version" << frg::endlog;
 		return true;
 	}
 
@@ -501,7 +510,7 @@ bool parse_tzfile(const char *tz) {
 	if (!tzfile_time.tzh_typecnt)
 		return true;
 
-	char *abbrevs = reinterpret_cast<char *>(window.get()) + sizeof(tzfile)
+	char *abbrevs = reinterpret_cast<char *>(tzFileCache->get()) + sizeof(tzfile)
 	                + tzfile_time.tzh_timecnt * sizeof(int32_t)
 	                + tzfile_time.tzh_timecnt * sizeof(uint8_t)
 	                + tzfile_time.tzh_typecnt * sizeof(struct ttinfo);
@@ -512,7 +521,7 @@ bool parse_tzfile(const char *tz) {
 		ttinfo time_info;
 		memcpy(
 		    &time_info,
-		    reinterpret_cast<char *>(window.get()) + sizeof(tzfile)
+		    reinterpret_cast<char *>(tzFileCache->get()) + sizeof(tzfile)
 		        + tzfile_time.tzh_timecnt * sizeof(int32_t)
 		        + tzfile_time.tzh_timecnt * sizeof(uint8_t) + i * sizeof(ttinfo),
 		    sizeof(ttinfo)
@@ -539,6 +548,44 @@ bool parse_tzfile(const char *tz) {
 	rules[1].type = TZFILE;
 
 	return false;
+}
+
+bool env_value_matches_cache(const frg::string<MemoryAllocator> &cached, bool cached_unset, const char *current) {
+	if (!current)
+		return cached_unset;
+	if (cached_unset)
+		return false;
+	size_t current_len = strlen(current);
+	return current_len == cached.size() && !memcmp(cached.data(), current, current_len);
+}
+
+void snapshot_tz_env_locked() {
+	const char *tz = getenv("TZ");
+	cachedTzEnvUnset = !tz;
+	cachedTzEnv = tz ? frg::string<MemoryAllocator>{tz, getAllocator()} : frg::string<MemoryAllocator>{getAllocator()};
+
+	const char *tzdir = getenv("TZDIR");
+	cachedTzDirEnvUnset = !tzdir;
+	cachedTzDirEnv =
+	    tzdir ? frg::string<MemoryAllocator>{tzdir, getAllocator()} : frg::string<MemoryAllocator>{getAllocator()};
+}
+
+bool tz_env_changed_locked() {
+	return !env_value_matches_cache(cachedTzEnv, cachedTzEnvUnset, getenv("TZ"))
+	    || !env_value_matches_cache(cachedTzDirEnv, cachedTzDirEnvUnset, getenv("TZDIR"));
+}
+
+void do_tzset(void);
+
+void ensure_tzset_locked(bool force) {
+	if (!force && tzStateInitialized && !tz_env_changed_locked())
+		return;
+
+	tzFileCache = nullptr;
+	tzFileCachePath = frg::string<MemoryAllocator>{getAllocator()};
+	do_tzset();
+	snapshot_tz_env_locked();
+	tzStateInitialized = true;
 }
 
 // Assumes __time_lock is taken
@@ -585,7 +632,7 @@ void do_tzset(void) {
 
 void tzset(void) {
 	frg::unique_lock<FutexLock> lock(__time_lock);
-	do_tzset();
+	ensure_tzset_locked(true);
 }
 
 // POSIX extensions.
@@ -799,23 +846,11 @@ int unix_local_from_gmt_tzfile(
 	if (!tz || *tz == '\0')
 		tz = "/etc/localtime";
 
-	frg::string<MemoryAllocator> path = parse_tzfile_path(tz);
-
-	// Check if file exists
-	if constexpr (!mlibc::IsImplemented<Stat>) {
-		MLIBC_MISSING_SYSDEP();
-		__ensure(!"cannot proceed without sys_stat");
-	}
-	struct stat info;
-	if (mlibc::sysdep_or_panic<Stat>(mlibc::fsfd_target::path, -1, path.data(), 0, &info))
+	if (!tzFileCache && parse_tzfile(tz))
 		return -1;
 
-	// FIXME: Make this fallible so the above check is not needed.
-	file_window window{path.data()};
-
-	// TODO(geert): we can probably cache this somehow
 	tzfile tzfile_time;
-	memcpy(&tzfile_time, reinterpret_cast<char *>(window.get()), sizeof(tzfile));
+	memcpy(&tzfile_time, reinterpret_cast<char *>(tzFileCache->get()), sizeof(tzfile));
 	tzfile_time.tzh_ttisgmtcnt = mlibc::bit_util<uint32_t>::be_to_host(tzfile_time.tzh_ttisgmtcnt);
 	tzfile_time.tzh_ttisstdcnt = mlibc::bit_util<uint32_t>::be_to_host(tzfile_time.tzh_ttisstdcnt);
 	tzfile_time.tzh_leapcnt = mlibc::bit_util<uint32_t>::be_to_host(tzfile_time.tzh_leapcnt);
@@ -825,12 +860,12 @@ int unix_local_from_gmt_tzfile(
 
 	if (tzfile_time.magic[0] != 'T' || tzfile_time.magic[1] != 'Z' || tzfile_time.magic[2] != 'i'
 	    || tzfile_time.magic[3] != 'f') {
-		mlibc::infoLogger() << "mlibc: " << path << " is not a valid TZinfo file" << frg::endlog;
+		mlibc::infoLogger() << "mlibc: " << tzFileCachePath << " is not a valid TZinfo file" << frg::endlog;
 		return -1;
 	}
 
 	if (tzfile_time.version != '\0' && tzfile_time.version != '2' && tzfile_time.version != '3') {
-		mlibc::infoLogger() << "mlibc: " << path << " has an invalid TZinfo version" << frg::endlog;
+		mlibc::infoLogger() << "mlibc: " << tzFileCachePath << " has an invalid TZinfo version" << frg::endlog;
 		return -1;
 	}
 
@@ -839,7 +874,7 @@ int unix_local_from_gmt_tzfile(
 		int32_t ttime;
 		memcpy(
 		    &ttime,
-		    reinterpret_cast<char *>(window.get()) + sizeof(tzfile) + i * sizeof(int32_t),
+		    reinterpret_cast<char *>(tzFileCache->get()) + sizeof(tzfile) + i * sizeof(int32_t),
 		    sizeof(int32_t)
 		);
 		ttime = mlibc::bit_util<uint32_t>::be_to_host(ttime);
@@ -858,7 +893,7 @@ int unix_local_from_gmt_tzfile(
 	if (index >= 0) {
 		memcpy(
 		    &ttinfo_index,
-		    reinterpret_cast<char *>(window.get()) + sizeof(tzfile)
+		    reinterpret_cast<char *>(tzFileCache->get()) + sizeof(tzfile)
 		        + tzfile_time.tzh_timecnt * sizeof(int32_t) + index * sizeof(uint8_t),
 		    sizeof(uint8_t)
 		);
@@ -871,14 +906,14 @@ int unix_local_from_gmt_tzfile(
 	ttinfo time_info;
 	memcpy(
 	    &time_info,
-	    reinterpret_cast<char *>(window.get()) + sizeof(tzfile)
+	    reinterpret_cast<char *>(tzFileCache->get()) + sizeof(tzfile)
 	        + tzfile_time.tzh_timecnt * sizeof(int32_t) + tzfile_time.tzh_timecnt * sizeof(uint8_t)
 	        + ttinfo_index * sizeof(ttinfo),
 	    sizeof(ttinfo)
 	);
 	time_info.tt_gmtoff = mlibc::bit_util<uint32_t>::be_to_host(time_info.tt_gmtoff);
 
-	char *abbrevs = reinterpret_cast<char *>(window.get()) + sizeof(tzfile)
+	char *abbrevs = reinterpret_cast<char *>(tzFileCache->get()) + sizeof(tzfile)
 	                + tzfile_time.tzh_timecnt * sizeof(int32_t)
 	                + tzfile_time.tzh_timecnt * sizeof(uint8_t)
 	                + tzfile_time.tzh_typecnt * sizeof(struct ttinfo);
@@ -893,7 +928,7 @@ int unix_local_from_gmt_tzfile(
 // UNIX GMT timestamp (seconds since 1970 GMT, ignoring leap seconds).
 // This function assumes the __time_lock has been taken
 int unix_local_from_gmt(time_t unix_gmt, time_t *offset, bool *dst, char **tm_zone) {
-	do_tzset();
+	ensure_tzset_locked(false);
 
 	if (daylight && rules[0].type == TZFILE) {
 		int ret = unix_local_from_gmt_tzfile(unix_gmt, offset, dst, tznameStorage[tznameDST]);

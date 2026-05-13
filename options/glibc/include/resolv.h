@@ -1,6 +1,7 @@
 #ifndef _RESOLV_H
 #define _RESOLV_H
 
+#include <arpa/nameser.h>
 #include <netinet/in.h>
 
 #define RES_INIT     0x00000001
@@ -28,6 +29,10 @@ int dn_expand(const unsigned char *__msg, const unsigned char *__eomorig,
 
 int res_query(const char *__dname, int __class, int __type,
 		unsigned char *__answer, int __anslen);
+
+int res_mkquery(int __op, const char *__dname, int __class, int __type,
+		const unsigned char *__data, int __datalen,
+		const unsigned char *__newrr, unsigned char *__buf, int __buflen);
 
 int res_init(void);
 

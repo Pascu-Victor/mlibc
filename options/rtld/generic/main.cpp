@@ -18,7 +18,6 @@
 #include <mlibc/rtld-config.hpp>
 #include <mlibc/stack_protector.hpp>
 #if __MLIBC_POSIX_OPTION
-#define _GNU_SOURCE
 #include <dlfcn.h>
 #endif
 
@@ -865,7 +864,9 @@ void *__dlapi_open(const char *file, int flags, void *returnAddress) {
 					lastError = "Cannot locate requested DSO";
 					break;
 				case LinkerError::fileTooShort:
-					lastError = "File too short";
+					lastError = rtld_describe_last_file_read_failure()
+					                ? rtld_describe_last_file_read_failure()
+					                : "File too short";
 					break;
 				case LinkerError::notElf:
 					lastError = "File is not an ELF file";
@@ -877,7 +878,9 @@ void *__dlapi_open(const char *file, int flags, void *returnAddress) {
 					lastError = "Out of memory";
 					break;
 				case LinkerError::invalidProgramHeader:
-					lastError = "File has invalid program header";
+					lastError = rtld_describe_last_file_read_failure()
+					                ? rtld_describe_last_file_read_failure()
+					                : "File has invalid program header";
 					break;
 			}
 			return nullptr;

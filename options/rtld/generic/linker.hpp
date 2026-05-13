@@ -32,6 +32,11 @@ enum class LinkerError {
 	invalidProgramHeader
 };
 
+void rtld_record_file_read_failure(
+    const char *path, int64_t file_offset, size_t requested, int sysdep_error, ssize_t result
+);
+const char *rtld_describe_last_file_read_failure();
+
 uint32_t elf64Hash(frg::string_view string);
 uint32_t gnuHash(frg::string_view string);
 

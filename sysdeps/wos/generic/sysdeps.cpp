@@ -22,6 +22,7 @@
 #include <sys/poll.h>
 #include <sys/process.h>
 #include <sys/resource.h>
+#include <sys/shm.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/syscall.h>
@@ -36,6 +37,8 @@
 #include <sys/vmem.h>
 #include <termios.h>
 #include <wos/netctl.h>
+
+#include <callnums/shm.h>
 
 // SafeStack support: This variable is accessed by the compiler-generated code
 // It needs to be in TLS storage and properly initialized
@@ -120,13 +123,9 @@ int Sysdeps<FutexWake>::operator()(int *pointer, bool) {
 }
 
 int Sysdeps<FutexWait>::operator()(int *pointer, int expected, timespec const *timeout) {
-	static constexpr int WOS_ERESTARTSYS = 512;
 	int64_t result = ker::futex::wait(pointer, expected, timeout);
 	if (result < 0) {
-		int e = static_cast<int>(-result);
-		if (e == WOS_ERESTARTSYS)
-			return EAGAIN;
-		return e;
+		return static_cast<int>(-result);
 	}
 	return 0;
 }
@@ -146,7 +145,12 @@ int Sysdeps<VmMap>::operator()(
 ) {
 	int64_t result = ker::vmem::map(window, size, prot, flags, fd, offset, hint);
 	if (result < 0) {
-		return (int)(-result);
+		int e = static_cast<int>(-result);
+		mlibc::infoLogger() << "mlibc: VmMap failed: errno=" << e << " size=" << size << " prot=0x"
+		                    << frg::hex_fmt{static_cast<uint64_t>(prot)} << " flags=0x"
+		                    << frg::hex_fmt{static_cast<uint64_t>(flags)} << " fd=" << fd
+		                    << " offset=" << offset << " hint=" << hint << frg::endlog;
+		return e;
 	}
 	return 0;
 }
@@ -300,46 +304,30 @@ Sysdeps<ReadEntries>::operator()(int handle, void *buffer, size_t max_size, size
 }
 
 int Sysdeps<Read>::operator()(int fd, void *buf, size_t count, ssize_t *bytes_read) {
-	static constexpr ssize_t WOS_ERESTARTSYS = 512;
-	for (;;) {
-		ssize_t r = ker::abi::vfs::read(fd, buf, count);
-		if (r == -WOS_ERESTARTSYS)
-			continue;
-		if (r < 0)
-			return (int)(-r);
-		if (bytes_read)
-			*bytes_read = r;
-		return 0;
-	}
+	ssize_t r = ker::abi::vfs::read(fd, buf, count);
+	if (r < 0)
+		return (int)(-r);
+	if (bytes_read)
+		*bytes_read = r;
+	return 0;
 }
 
 int Sysdeps<Write>::operator()(int fd, const void *buf, size_t count, ssize_t *bytes_written) {
-	static constexpr ssize_t WOS_ERESTARTSYS = 512;
-	for (;;) {
-		ssize_t r = ker::abi::vfs::write(fd, buf, count);
-		if (r == -WOS_ERESTARTSYS)
-			continue;
-		if (r < 0)
-			return (int)(-r);
-		if (bytes_written)
-			*bytes_written = r;
-		return 0;
-	}
+	ssize_t r = ker::abi::vfs::write(fd, buf, count);
+	if (r < 0)
+		return (int)(-r);
+	if (bytes_written)
+		*bytes_written = r;
+	return 0;
 }
 
 int
 Sysdeps<Writev>::operator()(int fd, const struct iovec *iovs, int iovc, ssize_t *bytes_written) {
 	ssize_t total = 0;
-	static constexpr ssize_t WOS_ERESTARTSYS = 512;
 	for (int i = 0; i < iovc; i++) {
 		if (iovs[i].iov_len == 0)
 			continue;
-		ssize_t r;
-		for (;;) {
-			r = ker::abi::vfs::write(fd, iovs[i].iov_base, iovs[i].iov_len);
-			if (r != -WOS_ERESTARTSYS)
-				break;
-		}
+		ssize_t r = ker::abi::vfs::write(fd, iovs[i].iov_base, iovs[i].iov_len);
 		if (r < 0) {
 			if (total > 0)
 				break;
@@ -358,16 +346,10 @@ Sysdeps<Writev>::operator()(int fd, const struct iovec *iovs, int iovc, ssize_t 
 
 int Sysdeps<Readv>::operator()(int fd, const struct iovec *iovs, int iovc, ssize_t *bytes_read) {
 	ssize_t total = 0;
-	static constexpr ssize_t WOS_ERESTARTSYS = 512;
 	for (int i = 0; i < iovc; i++) {
 		if (iovs[i].iov_len == 0)
 			continue;
-		ssize_t r;
-		for (;;) {
-			r = ker::abi::vfs::read(fd, iovs[i].iov_base, iovs[i].iov_len);
-			if (r != -WOS_ERESTARTSYS)
-				break;
-		}
+		ssize_t r = ker::abi::vfs::read(fd, iovs[i].iov_base, iovs[i].iov_len);
 		if (r < 0) {
 			if (total > 0)
 				break;
@@ -540,9 +522,77 @@ int Sysdeps<Kill>::operator()(pid_t pid, int sig) {
 	return 0;
 }
 
+int Sysdeps<Ptrace>::operator()(long req, pid_t pid, void *addr, void *data, long *out) {
+	int64_t r = ker::process::ptrace(
+	    static_cast<uint64_t>(req),
+	    static_cast<uint64_t>(pid),
+	    reinterpret_cast<uint64_t>(addr),
+	    reinterpret_cast<uint64_t>(data)
+	);
+	if (r < 0)
+		return static_cast<int>(-r);
+	if (out)
+		*out = r;
+	return 0;
+}
+
 // ---- POSIX sysdeps ----
 
 #if __MLIBC_POSIX_OPTION && !MLIBC_BUILDING_RTLD
+
+int Sysdeps<Shmget>::operator()(int *shm_id, key_t key, size_t size, int shmflg) {
+	auto result = static_cast<int64_t>(syscall(
+	    ker::abi::callnums::shm,
+	    static_cast<uint64_t>(ker::abi::shm::ops::get),
+	    static_cast<uint64_t>(static_cast<int64_t>(key)),
+	    size,
+	    static_cast<uint64_t>(shmflg)
+	));
+	if (result < 0)
+		return static_cast<int>(-result);
+	*shm_id = static_cast<int>(result);
+	return 0;
+}
+
+int Sysdeps<Shmat>::operator()(void **seg_start, int shmid, const void *shmaddr, int shmflg) {
+	auto result = static_cast<int64_t>(syscall(
+	    ker::abi::callnums::shm,
+	    static_cast<uint64_t>(ker::abi::shm::ops::attach),
+	    static_cast<uint64_t>(shmid),
+	    reinterpret_cast<uint64_t>(shmaddr),
+	    static_cast<uint64_t>(shmflg)
+	));
+	if (result < 0)
+		return static_cast<int>(-result);
+	*seg_start = reinterpret_cast<void *>(static_cast<uint64_t>(result));
+	return 0;
+}
+
+int Sysdeps<Shmdt>::operator()(const void *shmaddr) {
+	auto result = static_cast<int64_t>(syscall(
+	    ker::abi::callnums::shm,
+	    static_cast<uint64_t>(ker::abi::shm::ops::detach),
+	    reinterpret_cast<uint64_t>(shmaddr)
+	));
+	if (result < 0)
+		return static_cast<int>(-result);
+	return 0;
+}
+
+int Sysdeps<Shmctl>::operator()(int *idx, int shmid, int cmd, struct shmid_ds *buf) {
+	auto result = static_cast<int64_t>(syscall(
+	    ker::abi::callnums::shm,
+	    static_cast<uint64_t>(ker::abi::shm::ops::ctl),
+	    static_cast<uint64_t>(shmid),
+	    static_cast<uint64_t>(cmd),
+	    reinterpret_cast<uint64_t>(buf)
+	));
+	if (result < 0)
+		return static_cast<int>(-result);
+	if (idx)
+		*idx = static_cast<int>(result);
+	return 0;
+}
 
 int
 Sysdeps<Pwrite>::operator()(int fd, const void *buf, size_t n, off_t off, ssize_t *bytes_written) {
@@ -700,19 +750,14 @@ int Sysdeps<Socket>::operator()(int family, int type, int protocol, int *fd) {
 }
 
 int Sysdeps<MsgSend>::operator()(int fd, const struct msghdr *hdr, int flags, ssize_t *length) {
-	static constexpr ssize_t WOS_ERESTARTSYS = 512;
 	if (!hdr || hdr->msg_iovlen == 0 || !hdr->msg_iov)
 		return EINVAL;
 	const iovec *iov = &hdr->msg_iov[0];
 	ssize_t r;
-	for (;;) {
-		if (hdr->msg_name) {
-			r = ker::abi::net::sendto(fd, iov->iov_base, iov->iov_len, flags, hdr->msg_name);
-		} else {
-			r = ker::abi::net::send(fd, iov->iov_base, iov->iov_len, flags);
-		}
-		if (r != -WOS_ERESTARTSYS)
-			break;
+	if (hdr->msg_name) {
+		r = ker::abi::net::sendto(fd, iov->iov_base, iov->iov_len, flags, hdr->msg_name);
+	} else {
+		r = ker::abi::net::send(fd, iov->iov_base, iov->iov_len, flags);
 	}
 	if (r < 0)
 		return (int)(-r);
@@ -729,17 +774,12 @@ int Sysdeps<Sendto>::operator()(
     socklen_t addr_length,
     ssize_t *length
 ) {
-	static constexpr ssize_t WOS_ERESTARTSYS = 512;
 	(void)addr_length;
 	ssize_t r;
-	for (;;) {
-		if (sock_addr) {
-			r = ker::abi::net::sendto(fd, buffer, size, flags, sock_addr);
-		} else {
-			r = ker::abi::net::send(fd, buffer, size, flags);
-		}
-		if (r != -WOS_ERESTARTSYS)
-			break;
+	if (sock_addr) {
+		r = ker::abi::net::sendto(fd, buffer, size, flags, sock_addr);
+	} else {
+		r = ker::abi::net::send(fd, buffer, size, flags);
 	}
 	if (r < 0)
 		return (int)(-r);
@@ -748,19 +788,14 @@ int Sysdeps<Sendto>::operator()(
 }
 
 int Sysdeps<MsgRecv>::operator()(int fd, struct msghdr *hdr, int flags, ssize_t *length) {
-	static constexpr ssize_t WOS_ERESTARTSYS = 512;
 	if (!hdr || hdr->msg_iovlen == 0 || !hdr->msg_iov)
 		return EINVAL;
 	const iovec *iov = &hdr->msg_iov[0];
 	ssize_t r;
-	for (;;) {
-		if (hdr->msg_name) {
-			r = ker::abi::net::recvfrom(fd, iov->iov_base, iov->iov_len, flags, hdr->msg_name);
-		} else {
-			r = ker::abi::net::recv(fd, iov->iov_base, iov->iov_len, flags);
-		}
-		if (r != -WOS_ERESTARTSYS)
-			break;
+	if (hdr->msg_name) {
+		r = ker::abi::net::recvfrom(fd, iov->iov_base, iov->iov_len, flags, hdr->msg_name);
+	} else {
+		r = ker::abi::net::recv(fd, iov->iov_base, iov->iov_len, flags);
 	}
 	if (r < 0)
 		return (int)(-r);
@@ -777,17 +812,12 @@ int Sysdeps<Recvfrom>::operator()(
     socklen_t *addr_length,
     ssize_t *length
 ) {
-	static constexpr ssize_t WOS_ERESTARTSYS = 512;
 	(void)addr_length;
 	ssize_t r;
-	for (;;) {
-		if (sock_addr) {
-			r = ker::abi::net::recvfrom(fd, buffer, size, flags, sock_addr);
-		} else {
-			r = ker::abi::net::recv(fd, buffer, size, flags);
-		}
-		if (r != -WOS_ERESTARTSYS)
-			break;
+	if (sock_addr) {
+		r = ker::abi::net::recvfrom(fd, buffer, size, flags, sock_addr);
+	} else {
+		r = ker::abi::net::recv(fd, buffer, size, flags);
 	}
 	if (r < 0)
 		return (int)(-r);
@@ -920,16 +950,9 @@ int Sysdeps<Pselect>::operator()(
 		ker::abi::vfs::epoll_ctl_vfs(epfd, EPOLL_CTL_ADD, fd, &ev);
 	}
 
-	static constexpr int WOS_ERESTARTSYS = 512;
-
 	epoll_event out_events[64];
 	int max = num_fds < 64 ? num_fds : 64;
-	int ready;
-	for (;;) {
-		ready = ker::abi::vfs::epoll_pwait_vfs(epfd, out_events, max, timeout_ms);
-		if (ready != -WOS_ERESTARTSYS)
-			break;
-	}
+	int ready = ker::abi::vfs::epoll_pwait_vfs(epfd, out_events, max, timeout_ms);
 
 	if (ready == -EINTR) {
 		ker::abi::vfs::close(epfd);
@@ -1229,31 +1252,19 @@ int Sysdeps<Socketpair>::operator()(int domain, int type_and_flags, int proto, i
 }
 
 int Sysdeps<Poll>::operator()(struct pollfd *fds, nfds_t count, int timeout, int *num_events) {
-	static constexpr int WOS_ERESTARTSYS = 512;
-	for (;;) {
-		int r = ker::abi::net::poll(fds, count, timeout);
-		if (r == -WOS_ERESTARTSYS)
-			continue;
-		if (r == -EINTR) {
-			*num_events = 0;
-			return EINTR;
-		}
-		if (r < 0)
-			return -r;
-		*num_events = r;
-		return 0;
+	int r = ker::abi::net::poll(fds, count, timeout);
+	if (r == -EINTR) {
+		*num_events = 0;
+		return EINTR;
 	}
+	if (r < 0)
+		return -r;
+	*num_events = r;
+	return 0;
 }
 
 int Sysdeps<Sendfile>::operator()(int outfd, int infd, off_t *offset, size_t count, ssize_t *out) {
-	static constexpr ssize_t WOS_ERESTARTSYS = 512;
-	ssize_t r;
-	for (;;) {
-		r = ker::abi::vfs::sendfile(outfd, infd, offset, count);
-		if (r == -WOS_ERESTARTSYS)
-			continue;
-		break;
-	}
+	ssize_t r = ker::abi::vfs::sendfile(outfd, infd, offset, count);
 	if (r < 0)
 		return static_cast<int>(-r);
 	if (out)
@@ -1310,14 +1321,8 @@ int Sysdeps<Shutdown>::operator()(int sockfd, int how) {
 int Sysdeps<Accept>::operator()(
     int fd, int *newfd, struct sockaddr *addr_ptr, socklen_t *addr_length, int flags
 ) {
-	static constexpr int WOS_ERESTARTSYS = 512;
 	size_t alen = addr_length ? *addr_length : 0;
-	int64_t r;
-	for (;;) {
-		r = ker::abi::net::accept(fd, addr_ptr, &alen);
-		if (r != -WOS_ERESTARTSYS)
-			break;
-	}
+	int64_t r = ker::abi::net::accept(fd, addr_ptr, &alen);
 	if (r < 0)
 		return (int)(-r);
 
@@ -1355,13 +1360,7 @@ int Sysdeps<Bind>::operator()(int fd, const struct sockaddr *addr_ptr, socklen_t
 }
 
 int Sysdeps<Connect>::operator()(int fd, const struct sockaddr *addr_ptr, socklen_t addr_length) {
-	static constexpr int WOS_ERESTARTSYS = 512;
-	int64_t r;
-	for (;;) {
-		r = ker::abi::net::connect(fd, addr_ptr, addr_length);
-		if (r != -WOS_ERESTARTSYS)
-			break;
-	}
+	int64_t r = ker::abi::net::connect(fd, addr_ptr, addr_length);
 	if (r < 0)
 		return (int)(-r);
 	return 0;
@@ -1637,22 +1636,17 @@ int Sysdeps<EpollPwait>::operator()(
     int epfd, epoll_event *ev, int n, int timeout, const sigset_t *sigmask, int *raised
 ) {
 	(void)sigmask;
-	static constexpr int WOS_ERESTARTSYS = 512;
-	for (;;) {
-		int r = ker::abi::vfs::epoll_pwait_vfs(epfd, ev, n, timeout);
-		if (r == -WOS_ERESTARTSYS)
-			continue;
-		if (r == -EINTR) {
-			if (raised)
-				*raised = 0;
-			return EINTR;
-		}
-		if (r < 0)
-			return -r;
+	int r = ker::abi::vfs::epoll_pwait_vfs(epfd, ev, n, timeout);
+	if (r == -EINTR) {
 		if (raised)
-			*raised = r;
-		return 0;
+			*raised = 0;
+		return EINTR;
 	}
+	if (r < 0)
+		return -r;
+	if (raised)
+		*raised = r;
+	return 0;
 }
 
 int Sysdeps<Statvfs>::operator()(const char *path, struct statvfs *out) {

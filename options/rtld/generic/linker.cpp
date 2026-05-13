@@ -27,6 +27,70 @@ uintptr_t libraryBase = 0x41000000;
 #endif
 
 constexpr bool eagerBinding = true;
+namespace {
+
+const char *linkerErrorToString(LinkerError error) {
+	switch (error) {
+		case LinkerError::success:
+			return "success";
+		case LinkerError::notFound:
+			return "notFound";
+		case LinkerError::fileTooShort:
+			return "fileTooShort";
+		case LinkerError::notElf:
+			return "notElf";
+		case LinkerError::wrongElfType:
+			return "wrongElfType";
+		case LinkerError::outOfMemory:
+			return "outOfMemory";
+		case LinkerError::invalidProgramHeader:
+			return "invalidProgramHeader";
+	}
+	__builtin_unreachable();
+}
+
+struct LastFileReadFailure {
+	bool valid = false;
+	char message[512] = {};
+};
+
+LastFileReadFailure lastFileReadFailure;
+
+void appendChar(char *buffer, size_t capacity, size_t &used, char c) {
+	if (!buffer || !capacity || used >= capacity - 1)
+		return;
+	buffer[used++] = c;
+	buffer[used] = '\0';
+}
+
+void appendCString(char *buffer, size_t capacity, size_t &used, const char *text) {
+	if (!text)
+		text = "<null>";
+	while (*text)
+		appendChar(buffer, capacity, used, *text++);
+}
+
+void appendUnsignedDecimal(char *buffer, size_t capacity, size_t &used, unsigned long long value) {
+	char digits[32];
+	size_t count = 0;
+	do {
+		digits[count++] = static_cast<char>('0' + (value % 10));
+		value /= 10;
+	} while (value && count < sizeof(digits));
+	while (count)
+		appendChar(buffer, capacity, used, digits[--count]);
+}
+
+void appendSignedDecimal(char *buffer, size_t capacity, size_t &used, long long value) {
+	if (value < 0) {
+		appendChar(buffer, capacity, used, '-');
+		appendUnsignedDecimal(buffer, capacity, used, static_cast<unsigned long long>(-value));
+		return;
+	}
+	appendUnsignedDecimal(buffer, capacity, used, static_cast<unsigned long long>(value));
+}
+
+} // namespace
 
 #if defined(__x86_64__) || defined(__i386__)
 constexpr inline bool tlsAboveTp = false;
@@ -150,23 +214,111 @@ elf_addr handleIfunc(elf_addr addr) {
 
 } // namespace
 
-bool trySeek(int fd, int64_t offset) {
-	off_t noff;
-	return mlibc::sysdep<Seek>(fd, offset, SEEK_SET, &noff) == 0;
+void rtld_record_file_read_failure(
+    const char *path, int64_t file_offset, size_t requested, int sysdep_error, ssize_t result
+) {
+	lastFileReadFailure.valid = true;
+	lastFileReadFailure.message[0] = '\0';
+	size_t used = 0;
+	if (sysdep_error) {
+		appendCString(
+		    lastFileReadFailure.message,
+		    sizeof(lastFileReadFailure.message),
+		    used,
+		    "pread failed path="
+		);
+		appendCString(
+		    lastFileReadFailure.message,
+		    sizeof(lastFileReadFailure.message),
+		    used,
+		    path ? path : "<unknown>"
+		);
+		appendCString(
+		    lastFileReadFailure.message, sizeof(lastFileReadFailure.message), used, " off="
+		);
+		appendSignedDecimal(
+		    lastFileReadFailure.message,
+		    sizeof(lastFileReadFailure.message),
+		    used,
+		    static_cast<long long>(file_offset)
+		);
+		appendCString(
+		    lastFileReadFailure.message, sizeof(lastFileReadFailure.message), used, " len="
+		);
+		appendUnsignedDecimal(
+		    lastFileReadFailure.message, sizeof(lastFileReadFailure.message), used, requested
+		);
+		appendCString(
+		    lastFileReadFailure.message, sizeof(lastFileReadFailure.message), used, " errno="
+		);
+		appendSignedDecimal(
+		    lastFileReadFailure.message, sizeof(lastFileReadFailure.message), used, sysdep_error
+		);
+	} else {
+		appendCString(
+		    lastFileReadFailure.message,
+		    sizeof(lastFileReadFailure.message),
+		    used,
+		    "short read path="
+		);
+		appendCString(
+		    lastFileReadFailure.message,
+		    sizeof(lastFileReadFailure.message),
+		    used,
+		    path ? path : "<unknown>"
+		);
+		appendCString(
+		    lastFileReadFailure.message, sizeof(lastFileReadFailure.message), used, " off="
+		);
+		appendSignedDecimal(
+		    lastFileReadFailure.message,
+		    sizeof(lastFileReadFailure.message),
+		    used,
+		    static_cast<long long>(file_offset)
+		);
+		appendCString(
+		    lastFileReadFailure.message, sizeof(lastFileReadFailure.message), used, " len="
+		);
+		appendUnsignedDecimal(
+		    lastFileReadFailure.message, sizeof(lastFileReadFailure.message), used, requested
+		);
+		appendCString(
+		    lastFileReadFailure.message, sizeof(lastFileReadFailure.message), used, " result="
+		);
+		appendSignedDecimal(
+		    lastFileReadFailure.message,
+		    sizeof(lastFileReadFailure.message),
+		    used,
+		    static_cast<long long>(result)
+		);
+	}
 }
 
-bool tryReadExactly(int fd, void *data, size_t length) {
+const char *rtld_describe_last_file_read_failure() {
+	return lastFileReadFailure.valid ? lastFileReadFailure.message : nullptr;
+}
+
+bool tryPreadExactly(int fd, int64_t file_offset, void *data, size_t length, const char *path) {
 	size_t offset = 0;
 	while (offset < length) {
 		ssize_t chunk;
-		if (mlibc::sysdep<Read>(
-		        fd, reinterpret_cast<char *>(data) + offset, length - offset, &chunk
-		    ))
+		if (int err = mlibc::sysdep<Pread>(
+		        fd,
+		        reinterpret_cast<char *>(data) + offset,
+		        length - offset,
+		        file_offset + offset,
+		        &chunk
+		    );
+		    err) {
+			rtld_record_file_read_failure(path, file_offset + offset, length - offset, err, -1);
 			return false;
-		if (chunk > 0)
+		}
+		if (chunk > 0) {
 			offset += chunk;
-		else
+		} else {
+			rtld_record_file_read_failure(path, file_offset + offset, length - offset, 0, chunk);
 			return false;
+		}
 	}
 	__ensure(offset == length);
 	return true;
@@ -356,7 +508,9 @@ frg::expected<LinkerError, SharedObject *> ObjectRepository::requestObjectWithNa
 		closeOrDie(fd);
 		if (!result) {
 			if (rtldConfig.debugVerbose)
-				mlibc::infoLogger() << "rtld: failed to open " << name << frg::endlog;
+				mlibc::infoLogger()
+				    << "rtld: failed to open " << name << " path=" << path
+				    << " error=" << linkerErrorToString(result.error()) << frg::endlog;
 			return result.error();
 		}
 		return object;
@@ -418,8 +572,13 @@ frg::expected<LinkerError, SharedObject *> ObjectRepository::requestObjectWithNa
 		}
 	}
 
-	if (!res)
+	if (!res) {
+		if (rtldConfig.debugVerbose) {
+			mlibc::infoLogger() << "rtld: request failed name=" << name
+			                    << " error=" << linkerErrorToString(res.error()) << frg::endlog;
+		}
 		return res.error();
+	}
 
 	// the localScope is used by the SharedObject
 	localScopeGuard.release();
@@ -598,7 +757,7 @@ frg::expected<LinkerError, void> ObjectRepository::_fetchFromFile(SharedObject *
 
 	// read the elf file header
 	elf_ehdr ehdr;
-	if (!tryReadExactly(fd, &ehdr, sizeof(elf_ehdr)))
+	if (!tryPreadExactly(fd, 0, &ehdr, sizeof(elf_ehdr), object->path.data()))
 		return LinkerError::fileTooShort;
 
 	if (ehdr.e_ident[0] != 0x7F || ehdr.e_ident[1] != 'E' || ehdr.e_ident[2] != 'L'
@@ -614,11 +773,9 @@ frg::expected<LinkerError, void> ObjectRepository::_fetchFromFile(SharedObject *
 	if (!phdr_buffer)
 		return LinkerError::outOfMemory;
 
-	if (!trySeek(fd, ehdr.e_phoff)) {
-		getAllocator().deallocate(phdr_buffer, ehdr.e_phnum * ehdr.e_phentsize);
-		return LinkerError::invalidProgramHeader;
-	}
-	if (!tryReadExactly(fd, phdr_buffer, ehdr.e_phnum * ehdr.e_phentsize)) {
+	if (!tryPreadExactly(
+	        fd, ehdr.e_phoff, phdr_buffer, ehdr.e_phnum * ehdr.e_phentsize, object->path.data()
+	    )) {
 		getAllocator().deallocate(phdr_buffer, ehdr.e_phnum * ehdr.e_phentsize);
 		return LinkerError::invalidProgramHeader;
 	}
@@ -762,10 +919,13 @@ frg::expected<LinkerError, void> ObjectRepository::_fetchFromFile(SharedObject *
 			    ))
 				__ensure(!"sys_vm_map failed");
 
-			__ensure(trySeek(fd, phdr->p_offset));
-			__ensure(
-			    tryReadExactly(fd, reinterpret_cast<char *>(map_address) + misalign, phdr->p_filesz)
-			);
+			__ensure(tryPreadExactly(
+			    fd,
+			    phdr->p_offset,
+			    reinterpret_cast<char *>(map_address) + misalign,
+			    phdr->p_filesz,
+			    object->path.data()
+			));
 #endif
 			if (initial_prot != prot) {
 				if constexpr (!mlibc::IsImplemented<VmProtect>)
@@ -1201,7 +1361,13 @@ ObjectRepository::_discoverDependencies(SharedObject *object, Scope *localScope,
 		}
 
 		if (!libraryResult)
-			mlibc::panicLogger() << "Could not satisfy dependency " << library_str << frg::endlog;
+			mlibc::panicLogger() << "Could not satisfy dependency " << library_str
+			                     << (rtld_describe_last_file_read_failure() ? " (" : "")
+			                     << (rtld_describe_last_file_read_failure()
+			                             ? rtld_describe_last_file_read_failure()
+			                             : "")
+			                     << (rtld_describe_last_file_read_failure() ? ")" : "")
+			                     << frg::endlog;
 
 		auto library = libraryResult.value();
 		object->dependencies.push(library);
@@ -1712,8 +1878,8 @@ frg::optional<ObjectSymbol> resolveInObject(
 	// kernel-provided images) do not expose a hash table for dynsym lookups.
 	// Treat them as non-exporting here instead of asserting during unrelated
 	// symbol resolution.
-	if (object->hashStyle == HashStyle::none || !object->hashTableOffset || !object->symbolTableOffset
-	    || !object->stringTableOffset)
+	if (object->hashStyle == HashStyle::none || !object->hashTableOffset
+	    || !object->symbolTableOffset || !object->stringTableOffset)
 		return frg::optional<ObjectSymbol>{};
 
 	if (object->hashStyle == HashStyle::systemV) {

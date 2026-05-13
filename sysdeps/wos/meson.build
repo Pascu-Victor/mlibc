@@ -80,6 +80,7 @@ if not no_headers
         'include/callnums/futex.h',
         'include/callnums/multiproc.h',
         'include/callnums/process.h',
+        'include/callnums/shm.h',
         'include/callnums/sys_log.h',
         subdir: 'callnums',
     )
@@ -90,6 +91,7 @@ if not no_headers
         'include/sys/net.h',
         'include/sys/process.h',
         'include/sys/syscall.h',
+        'include/sys/wos-ptrace.h',
         'include/sys/logging.h',
         'include/sys/vfs.h',
         'include/sys/time_calls.h',

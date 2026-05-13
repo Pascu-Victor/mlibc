@@ -2,8 +2,8 @@
 #define _GNU_SOURCE
 #endif
 
-#include <errno.h>
 #include <bits/ensure.h>
+#include <errno.h>
 #include <fcntl.h>
 
 #include <mlibc/all-sysdeps.hpp>
@@ -15,8 +15,11 @@ int fallocate(int, int, off_t, off_t) {
 	return -1;
 }
 
-int name_to_handle_at(int dirfd, const char *pathname, struct file_handle *handle, int *mount_id, int flags) {
-	if(int e = mlibc::sysdep_or_enosys<NameToHandleAt>(dirfd, pathname, handle, mount_id, flags); e) {
+int name_to_handle_at(
+    int dirfd, const char *pathname, struct file_handle *handle, int *mount_id, int flags
+) {
+	if (int e = mlibc::sysdep_or_enosys<NameToHandleAt>(dirfd, pathname, handle, mount_id, flags);
+	    e) {
 		errno = e;
 		return -1;
 	}
@@ -28,9 +31,11 @@ int open_by_handle_at(int, struct file_handle *, int) {
 	__builtin_unreachable();
 }
 
-ssize_t splice(int in_fd, off_t *in_off, int out_fd, off_t *out_off, size_t size, unsigned int flags) {
+ssize_t
+splice(int in_fd, off_t *in_off, int out_fd, off_t *out_off, size_t size, unsigned int flags) {
 	ssize_t ret;
-	if(int e = mlibc::sysdep_or_enosys<Splice>(in_fd, in_off, out_fd, out_off, size, flags, &ret); e) {
+	if (int e = mlibc::sysdep_or_enosys<Splice>(in_fd, in_off, out_fd, out_off, size, flags, &ret);
+	    e) {
 		errno = e;
 		return -1;
 	}

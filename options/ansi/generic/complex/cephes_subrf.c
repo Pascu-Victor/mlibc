@@ -32,7 +32,6 @@
  * Marco Atzeri <marco_atzeri@yahoo.it>
  */
 
-#define _GNU_SOURCE
 #include "cephes_subrf.h"
 #include <complex.h>
 #include <math.h>

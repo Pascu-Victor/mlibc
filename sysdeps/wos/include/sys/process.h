@@ -222,6 +222,17 @@ inline int64_t getwkitarget(char *hostname, uint64_t hostname_size, uint32_t *fl
 	);
 }
 
+inline int64_t ptrace(uint64_t request, uint64_t pid, uint64_t addr, uint64_t data) {
+	return (int64_t)syscall(
+	    abi::callnums::process,
+	    (uint64_t)abi::process::procmgmt_ops::PTRACE,
+	    request,
+	    pid,
+	    addr,
+	    data
+	);
+}
+
 // Read the hostname of the node that LAUNCHED this process (i.e. the submitter).
 // For locally-started processes this equals the runner node.
 // buf must be at least bufsize bytes; returns the number of bytes written

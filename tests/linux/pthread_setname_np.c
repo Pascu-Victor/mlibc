@@ -4,8 +4,8 @@
 
 #include <assert.h>
 #include <errno.h>
-#include <string.h>
 #include <pthread.h>
+#include <string.h>
 
 int main() {
 	int ret = pthread_setname_np(pthread_self(), "mlibc-test-123");
