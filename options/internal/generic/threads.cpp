@@ -88,10 +88,11 @@ int thread_create(
 	auto new_tcb = __rtld_allocateTcb();
 	pid_t tid;
 	struct __mlibc_threadattr attr = {};
-	if (!attrp)
+	if (!attrp) {
 		thread_attr_init(&attr);
-	else
+	} else {
 		attr = *attrp;
+	}
 
 	if (attr.__mlibc_cpuset) {
 		if constexpr (IsImplemented<SetThreadaffinity>) {
@@ -120,8 +121,9 @@ int thread_create(
 	    &attr.__mlibc_guardsize,
 	    &new_tcb->stackAddr
 	);
-	if (ret)
+	if (ret) {
 		return ret;
+	}
 
 	if (!IsImplemented<Clone>) {
 		MLIBC_MISSING_SYSDEP();
@@ -134,8 +136,9 @@ int thread_create(
 	new_tcb->isJoinable = (attr.__mlibc_detachstate == __MLIBC_THREAD_CREATE_JOINABLE);
 	__atomic_store_n(&new_tcb->cancelBits, 0, __ATOMIC_RELAXED);
 	int clone_result = sysdep_or_panic<Clone>(new_tcb, &tid, stack);
-	if (clone_result)
+	if (clone_result) {
 		return clone_result;
+	}
 
 	if (attr.__mlibc_cpuset && IsImplemented<SetThreadaffinity>) {
 		if (int e = sysdep<SetThreadaffinity>(tid, attr.__mlibc_cpusetsize, attr.__mlibc_cpuset); e)

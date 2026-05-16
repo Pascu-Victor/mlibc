@@ -33,8 +33,8 @@ inline uint64_t exec(const char *path, const char *const argv[], const char *con
 	);
 }
 
-inline uint64_t waitpid(int64_t pid, int32_t *status, int32_t options, rusage *ru) {
-	return syscall(
+inline int64_t waitpid(int64_t pid, int32_t *status, int32_t options, rusage *ru) {
+	return (int64_t)syscall(
 	    abi::callnums::process,
 	    (uint64_t)abi::process::procmgmt_ops::WAITPID,
 	    (uint64_t)pid,
@@ -107,6 +107,15 @@ inline uint64_t getegid() {
 	return syscall(abi::callnums::process, (uint64_t)abi::process::procmgmt_ops::GETEGID);
 }
 
+inline int64_t getgroups(uint64_t size, gid_t *list) {
+	return (int64_t)syscall(
+	    abi::callnums::process,
+	    (uint64_t)abi::process::procmgmt_ops::GETGROUPS,
+	    size,
+	    (uint64_t)(uintptr_t)list
+	);
+}
+
 inline int64_t setuid(uint64_t uid) {
 	return (int64_t)syscall(
 	    abi::callnums::process, (uint64_t)abi::process::procmgmt_ops::SETUID, uid
@@ -128,6 +137,15 @@ inline int64_t seteuid(uint64_t euid) {
 inline int64_t setegid(uint64_t egid) {
 	return (int64_t)syscall(
 	    abi::callnums::process, (uint64_t)abi::process::procmgmt_ops::SETEGID, egid
+	);
+}
+
+inline int64_t setgroups(uint64_t size, const gid_t *list) {
+	return (int64_t)syscall(
+	    abi::callnums::process,
+	    (uint64_t)abi::process::procmgmt_ops::SETGROUPS,
+	    size,
+	    (uint64_t)(uintptr_t)list
 	);
 }
 

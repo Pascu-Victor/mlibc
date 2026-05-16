@@ -497,12 +497,14 @@ bool parse_tzfile(const char *tz) {
 
 	if (tzfile_time.magic[0] != 'T' || tzfile_time.magic[1] != 'Z' || tzfile_time.magic[2] != 'i'
 	    || tzfile_time.magic[3] != 'f') {
-		mlibc::infoLogger() << "mlibc: " << tzFileCachePath << " is not a valid TZinfo file" << frg::endlog;
+		mlibc::infoLogger() << "mlibc: " << tzFileCachePath << " is not a valid TZinfo file"
+		                    << frg::endlog;
 		return true;
 	}
 
 	if (tzfile_time.version != '\0' && tzfile_time.version != '2' && tzfile_time.version != '3') {
-		mlibc::infoLogger() << "mlibc: " << tzFileCachePath << " has an invalid TZinfo version" << frg::endlog;
+		mlibc::infoLogger() << "mlibc: " << tzFileCachePath << " has an invalid TZinfo version"
+		                    << frg::endlog;
 		return true;
 	}
 
@@ -550,7 +552,9 @@ bool parse_tzfile(const char *tz) {
 	return false;
 }
 
-bool env_value_matches_cache(const frg::string<MemoryAllocator> &cached, bool cached_unset, const char *current) {
+bool env_value_matches_cache(
+    const frg::string<MemoryAllocator> &cached, bool cached_unset, const char *current
+) {
 	if (!current)
 		return cached_unset;
 	if (cached_unset)
@@ -562,17 +566,18 @@ bool env_value_matches_cache(const frg::string<MemoryAllocator> &cached, bool ca
 void snapshot_tz_env_locked() {
 	const char *tz = getenv("TZ");
 	cachedTzEnvUnset = !tz;
-	cachedTzEnv = tz ? frg::string<MemoryAllocator>{tz, getAllocator()} : frg::string<MemoryAllocator>{getAllocator()};
+	cachedTzEnv = tz ? frg::string<MemoryAllocator>{tz, getAllocator()}
+	                 : frg::string<MemoryAllocator>{getAllocator()};
 
 	const char *tzdir = getenv("TZDIR");
 	cachedTzDirEnvUnset = !tzdir;
-	cachedTzDirEnv =
-	    tzdir ? frg::string<MemoryAllocator>{tzdir, getAllocator()} : frg::string<MemoryAllocator>{getAllocator()};
+	cachedTzDirEnv = tzdir ? frg::string<MemoryAllocator>{tzdir, getAllocator()}
+	                       : frg::string<MemoryAllocator>{getAllocator()};
 }
 
 bool tz_env_changed_locked() {
 	return !env_value_matches_cache(cachedTzEnv, cachedTzEnvUnset, getenv("TZ"))
-	    || !env_value_matches_cache(cachedTzDirEnv, cachedTzDirEnvUnset, getenv("TZDIR"));
+	       || !env_value_matches_cache(cachedTzDirEnv, cachedTzDirEnvUnset, getenv("TZDIR"));
 }
 
 void do_tzset(void);
@@ -860,12 +865,14 @@ int unix_local_from_gmt_tzfile(
 
 	if (tzfile_time.magic[0] != 'T' || tzfile_time.magic[1] != 'Z' || tzfile_time.magic[2] != 'i'
 	    || tzfile_time.magic[3] != 'f') {
-		mlibc::infoLogger() << "mlibc: " << tzFileCachePath << " is not a valid TZinfo file" << frg::endlog;
+		mlibc::infoLogger() << "mlibc: " << tzFileCachePath << " is not a valid TZinfo file"
+		                    << frg::endlog;
 		return -1;
 	}
 
 	if (tzfile_time.version != '\0' && tzfile_time.version != '2' && tzfile_time.version != '3') {
-		mlibc::infoLogger() << "mlibc: " << tzFileCachePath << " has an invalid TZinfo version" << frg::endlog;
+		mlibc::infoLogger() << "mlibc: " << tzFileCachePath << " has an invalid TZinfo version"
+		                    << frg::endlog;
 		return -1;
 	}
 

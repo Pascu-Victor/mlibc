@@ -5,11 +5,14 @@
 #include <limits.h>
 #include <mlibc/all-sysdeps.hpp>
 #include <mlibc/debug.hpp>
+#include <mlibc/dlapi.hpp>
 #include <mlibc/fsfd_target.hpp>
 #include <mlibc/tcb.hpp>
 #include <sched.h>
 #include <signal.h>
 #include <stdarg.h>
+#include <stddef.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/callnums.h>
@@ -46,7 +49,269 @@
 extern "C" __attribute__((visibility("default"))) __thread void *__safestack_unsafe_stack_ptr =
     nullptr;
 
+extern "C" __attribute__((weak)) char *
+__cxa_demangle(const char *mangled_name, char *output_buffer, size_t *length, int *status);
+
 namespace [[gnu::visibility("hidden")]] mlibc {
+
+namespace {
+
+constexpr size_t kMaxStackWords = 32;
+constexpr size_t kMaxCallTraceFrames = 64;
+constexpr uintptr_t kMaxFrameStride = 1024 * 1024;
+
+bool panicActive = false;
+
+void panicLog(const char *message) {
+	ker::logging::logEx("mlibc", ker::abi::sys_log::sys_log_level::PANIC, message, strlen(message));
+}
+
+uintptr_t currentStackPointer() {
+#if defined(__x86_64__)
+	uintptr_t sp = 0;
+	asm volatile("mov %%rsp, %0" : "=r"(sp));
+	return sp;
+#else
+	return reinterpret_cast<uintptr_t>(__builtin_frame_address(0));
+#endif
+}
+
+bool isAligned(uintptr_t value) { return (value % alignof(uintptr_t)) == 0; }
+
+bool isReasonableNextFrame(uintptr_t current, uintptr_t next) {
+	if (next == 0) {
+		return false;
+	}
+	if (!isAligned(next)) {
+		return false;
+	}
+	if (next <= current) {
+		return false;
+	}
+	return (next - current) <= kMaxFrameStride;
+}
+
+struct PanicLine {
+	char buffer[ker::abi::sys_log::JOURNAL_MESSAGE_MAX]{};
+	size_t length = 0;
+
+	void append(char c) {
+		if (length < sizeof(buffer)) {
+			buffer[length++] = c;
+		}
+	}
+
+	void append(const char *text) {
+		if (text == nullptr) {
+			text = "(null)";
+		}
+		while (*text != '\0' && length < sizeof(buffer)) {
+			buffer[length++] = *text++;
+		}
+	}
+
+	void appendDecimal(size_t value, size_t minWidth = 0) {
+		char digits[32]{};
+		size_t count = 0;
+		do {
+			digits[count++] = static_cast<char>('0' + (value % 10));
+			value /= 10;
+		} while (value != 0 && count < sizeof(digits));
+
+		while (count < minWidth) {
+			append('0');
+			--minWidth;
+		}
+		while (count > 0) {
+			append(digits[--count]);
+		}
+	}
+
+	void appendHex(uintptr_t value, size_t minWidth = 0) {
+		constexpr char hexDigits[] = "0123456789abcdef";
+		char digits[sizeof(uintptr_t) * 2]{};
+		size_t count = 0;
+		do {
+			digits[count++] = hexDigits[value & 0xf];
+			value >>= 4;
+		} while (value != 0 && count < sizeof(digits));
+
+		while (count < minWidth) {
+			append('0');
+			--minWidth;
+		}
+		while (count > 0) {
+			append(digits[--count]);
+		}
+	}
+
+	void flush() const {
+		ker::logging::logEx("mlibc", ker::abi::sys_log::sys_log_level::PANIC, buffer, length);
+	}
+};
+
+struct ResolvedSymbol {
+	const char *file = nullptr;
+	const char *symbol = nullptr;
+	uintptr_t objectBase = 0;
+	uintptr_t symbolAddress = 0;
+};
+
+bool resolveSymbol(uintptr_t pc, ResolvedSymbol *resolved) {
+#if !MLIBC_BUILDING_RTLD
+	__dlapi_symbol info{};
+	if (__dlapi_reverse(reinterpret_cast<void *>(pc), &info) != 0) {
+		return false;
+	}
+
+	resolved->file = info.file;
+	resolved->symbol = info.symbol;
+	resolved->objectBase = reinterpret_cast<uintptr_t>(info.base);
+	resolved->symbolAddress = reinterpret_cast<uintptr_t>(info.address);
+	return true;
+#else
+	(void)pc;
+	(void)resolved;
+	return false;
+#endif
+}
+
+const char *maybeDemangle(const char *symbol, char **ownedBuffer) {
+	*ownedBuffer = nullptr;
+#if !MLIBC_BUILDING_RTLD
+	if (symbol == nullptr || symbol[0] != '_' || symbol[1] != 'Z') {
+		return symbol;
+	}
+	if (__cxa_demangle == nullptr) {
+		return symbol;
+	}
+
+	int status = 0;
+	char *demangled = __cxa_demangle(symbol, nullptr, nullptr, &status);
+	if (status == 0 && demangled != nullptr) {
+		*ownedBuffer = demangled;
+		return demangled;
+	}
+	free(demangled);
+#endif
+	return symbol;
+}
+
+void dumpStackWords() {
+	auto sp = currentStackPointer();
+	{
+		PanicLine line;
+		line.append("Stack dump: sp=0x");
+		line.appendHex(sp, sizeof(uintptr_t) * 2);
+		line.append('\n');
+		line.flush();
+	}
+
+	auto *words = reinterpret_cast<uintptr_t *>(sp);
+	for (size_t i = 0; i < kMaxStackWords; ++i) {
+		PanicLine line;
+		line.append("  sp+0x");
+		line.appendHex(i * sizeof(uintptr_t), 3);
+		line.append("  0x");
+		line.appendHex(words[i], sizeof(uintptr_t) * 2);
+		line.append('\n');
+		line.flush();
+	}
+}
+
+void printCallTraceFrame(size_t frameIndex, uintptr_t returnAddress) {
+	auto pc = returnAddress == 0 ? returnAddress : returnAddress - 1;
+
+	ResolvedSymbol resolved{};
+	if (!resolveSymbol(pc, &resolved)) {
+		PanicLine line;
+		line.append("  #");
+		line.appendDecimal(frameIndex, 2);
+		line.append(" pc=0x");
+		line.appendHex(pc, sizeof(uintptr_t) * 2);
+		line.append(" <unresolved>\n");
+		line.flush();
+		return;
+	}
+
+	const char *file = resolved.file != nullptr ? resolved.file : "<unknown object>";
+	if (resolved.symbol == nullptr) {
+		auto objectOffset =
+		    (resolved.objectBase != 0 && pc >= resolved.objectBase) ? pc - resolved.objectBase : 0;
+		PanicLine line;
+		line.append("  #");
+		line.appendDecimal(frameIndex, 2);
+		line.append(" pc=0x");
+		line.appendHex(pc, sizeof(uintptr_t) * 2);
+		line.append(' ');
+		line.append(file);
+		line.append("+0x");
+		line.appendHex(objectOffset);
+		line.append(" <no symbol>\n");
+		line.flush();
+		return;
+	}
+
+	char *demangled = nullptr;
+	const char *symbol = maybeDemangle(resolved.symbol, &demangled);
+	auto symbolOffset = (resolved.symbolAddress != 0 && pc >= resolved.symbolAddress)
+	                        ? pc - resolved.symbolAddress
+	                        : 0;
+	PanicLine line;
+	line.append("  #");
+	line.appendDecimal(frameIndex, 2);
+	line.append(" pc=0x");
+	line.appendHex(pc, sizeof(uintptr_t) * 2);
+	line.append(' ');
+	line.append(file);
+	line.append(':');
+	line.append(symbol);
+	line.append("+0x");
+	line.appendHex(symbolOffset);
+	line.append('\n');
+	line.flush();
+	free(demangled);
+}
+
+[[gnu::noinline]]
+void dumpCallTrace() {
+	auto *frame = static_cast<uintptr_t *>(__builtin_frame_address(0));
+	panicLog("Call trace:\n");
+
+	for (size_t i = 0; i < kMaxCallTraceFrames && frame != nullptr; ++i) {
+		auto frameAddress = reinterpret_cast<uintptr_t>(frame);
+		auto nextFrame = frame[0];
+		auto returnAddress = frame[1];
+
+		if (returnAddress == 0) {
+			PanicLine line;
+			line.append("  #");
+			line.appendDecimal(i, 2);
+			line.append(" <null return address>\n");
+			line.flush();
+			break;
+		}
+
+		printCallTraceFrame(i, returnAddress);
+
+		if (!isReasonableNextFrame(frameAddress, nextFrame)) {
+			if (nextFrame != 0) {
+				PanicLine line;
+				line.append("  stopped: invalid frame link from 0x");
+				line.appendHex(frameAddress, sizeof(uintptr_t) * 2);
+				line.append(" to 0x");
+				line.appendHex(nextFrame, sizeof(uintptr_t) * 2);
+				line.append('\n');
+				line.flush();
+			}
+			break;
+		}
+
+		frame = reinterpret_cast<uintptr_t *>(nextFrame);
+	}
+}
+
+} // namespace
 
 bool cpu_bit_is_set(const cpu_set_t *set, size_t cpusetsize, size_t cpu) {
 	size_t byte_index = cpu / CHAR_BIT;
@@ -104,7 +369,15 @@ void Sysdeps<LibcLog>::operator()(const char *message) {
 
 [[noreturn]]
 void Sysdeps<LibcPanic>::operator()() {
-	sysdep<LibcLog>("\nMLIBC PANIC\n");
+	if (__atomic_exchange_n(&panicActive, true, __ATOMIC_ACQ_REL)) {
+		panicLog("\nMLIBC PANIC (recursive)\n");
+		sysdep<Exit>(1);
+		__builtin_unreachable();
+	}
+
+	panicLog("\nMLIBC PANIC\n");
+	dumpStackWords();
+	dumpCallTrace();
 	sysdep<Exit>(1);
 	__builtin_unreachable();
 }
@@ -897,10 +1170,11 @@ int Sysdeps<SetEgid>::operator()(gid_t egid) {
 }
 
 int Sysdeps<GetGroups>::operator()(size_t size, gid_t *list, int *retval) {
-	(void)list;
-	(void)size;
+	int64_t r = ker::process::getgroups(size, list);
+	if (r < 0)
+		return static_cast<int>(-r);
 	if (retval)
-		*retval = 0;
+		*retval = static_cast<int>(r);
 	return 0;
 }
 
@@ -1462,8 +1736,9 @@ int Sysdeps<Sigsuspend>::operator()(const sigset_t *set) {
 }
 
 int Sysdeps<SetGroups>::operator()(size_t size, const gid_t *list) {
-	(void)size;
-	(void)list;
+	int64_t r = ker::process::setgroups(size, list);
+	if (r < 0)
+		return static_cast<int>(-r);
 	return 0;
 }
 

@@ -18,5 +18,13 @@ int main(void) {
 	assert(length == 19);
 	assert(!wcscmp(buf, L"2026-03-19 20:45:07"));
 
+	struct tm tm_copy = tm;
+	wchar_t expected[64];
+	swprintf(expected, sizeof(expected) / sizeof(expected[0]), L"%ld", (long)mktime(&tm_copy));
+
+	length = wcsftime(buf, sizeof(buf) / sizeof(buf[0]), L"%s", &tm);
+	assert(length == wcslen(expected));
+	assert(!wcscmp(buf, expected));
+
 	return 0;
 }

@@ -2,6 +2,7 @@
 #include <bits/ensure.h>
 #include <errno.h>
 #include <grp.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -283,9 +284,43 @@ int setgroups(size_t size, const gid_t *list) {
 	return 0;
 }
 
-int initgroups(const char *, gid_t) {
-	mlibc::infoLogger() << "mlibc: initgroups is a stub" << frg::endlog;
-	return 0;
+int initgroups(const char *user, gid_t gid) {
+	int ngroups = NGROUPS_MAX;
+	gid_t initial_groups[NGROUPS_MAX];
+	int old_errno = errno;
+
+	errno = 0;
+	if (getgrouplist(user, gid, initial_groups, &ngroups) >= 0) {
+		errno = old_errno;
+		return setgroups(static_cast<size_t>(ngroups), initial_groups);
+	}
+
+	int getgroups_errno = errno;
+	if (getgroups_errno) {
+		errno = getgroups_errno;
+		return -1;
+	}
+
+	auto groups = reinterpret_cast<gid_t *>(malloc(sizeof(gid_t) * static_cast<size_t>(ngroups)));
+	if (!groups) {
+		errno = ENOMEM;
+		return -1;
+	}
+
+	if (getgrouplist(user, gid, groups, &ngroups) < 0) {
+		int err = errno ? errno : ERANGE;
+		free(groups);
+		errno = err;
+		return -1;
+	}
+
+	errno = old_errno;
+	int result = setgroups(static_cast<size_t>(ngroups), groups);
+	int err = errno;
+	free(groups);
+	if (result < 0)
+		errno = err;
+	return result;
 }
 
 int putgrent(const struct group *g, FILE *f) {

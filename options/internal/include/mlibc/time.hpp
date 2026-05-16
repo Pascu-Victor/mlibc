@@ -20,6 +20,7 @@ struct StrftimePolicy<char> {
 	static constexpr const char *Tab = "\t";
 	static constexpr const char *D = "%d";
 	static constexpr const char *S = "%s";
+	static constexpr const char *LongD = "%ld";
 	static constexpr const char *TwoD = "%2d";
 	static constexpr const char *Dot2D = "%.2d";
 	static constexpr const char *Dot3D = "%.3d";
@@ -46,6 +47,7 @@ struct StrftimePolicy<wchar_t> {
 	static constexpr const wchar_t *Tab = L"\t";
 	static constexpr const wchar_t *D = L"%d";
 	static constexpr const wchar_t *S = L"%s";
+	static constexpr const wchar_t *LongD = L"%ld";
 	static constexpr const wchar_t *TwoD = L"%2d";
 	static constexpr const wchar_t *Dot2D = L"%.2d";
 	static constexpr const wchar_t *Dot3D = L"%.3d";
@@ -214,6 +216,15 @@ size_t strftime(
 			}
 			case 'S': {
 				chunk = nprintf(p, space, P::Dot2D, tm->tm_sec);
+				if (chunk >= space)
+					return 0;
+				p += chunk;
+				c++;
+				break;
+			}
+			case 's': {
+				struct tm tm_copy = *tm;
+				chunk = nprintf(p, space, P::LongD, static_cast<long>(mktime(&tm_copy)));
 				if (chunk >= space)
 					return 0;
 				p += chunk;

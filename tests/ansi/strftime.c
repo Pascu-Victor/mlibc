@@ -22,6 +22,7 @@ int main() {
 	tm.tm_year = 121;
 	tm.tm_wday = 2;
 	tm.tm_yday = 39;
+	tm.tm_isdst = 0;
 	tm.tm_zone = "CET";
 	tm.tm_gmtoff = 3600;
 	strftime(timebuf, sizeof(timebuf), "%e", &tm);
@@ -76,6 +77,13 @@ int main() {
 	strftime(timebuf, sizeof(timebuf), "%U", &tm);
 	fprintf(stderr, "'%s'\n", timebuf);
 	assert(!strcmp(timebuf, "06"));
+
+	struct tm tm_copy = tm;
+	snprintf(result, sizeof(result), "%ld", (long)mktime(&tm_copy));
+	memset(timebuf, 0, sizeof(timebuf));
+	size_t epoch_len = strftime(timebuf, sizeof(timebuf), "%s", &tm);
+	assert(epoch_len == strlen(result));
+	assert(!strcmp(timebuf, result));
 
 	char *locale = setlocale(LC_ALL, "de_DE.utf8");
 	assert(locale && strlen(locale));

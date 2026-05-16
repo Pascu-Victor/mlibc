@@ -118,6 +118,7 @@ int abstract_file::read(char *buffer, size_t max_size, size_t *actual_size) {
 	}
 
 	if (globallyDisableBuffering || _bufmode == buffer_mode::no_buffer) {
+		__io_mode = 0;
 		size_t io_size;
 		if (int e = io_read(buffer, max_size, &io_size); e) {
 			__status_bits |= __MLIBC_ERROR_BIT;
@@ -179,6 +180,7 @@ int abstract_file::write(const char *buffer, size_t max_size, size_t *actual_siz
 	if (globallyDisableBuffering || _bufmode == buffer_mode::no_buffer) {
 		// As we do not buffer, nothing can be dirty.
 		__ensure(__dirty_begin == __dirty_end);
+		__io_mode = 1;
 		size_t io_size;
 		if (int e = io_write(buffer, max_size, &io_size); e) {
 			__status_bits |= __MLIBC_ERROR_BIT;
@@ -284,8 +286,10 @@ int abstract_file::flush() {
 			return e;
 	}
 
-	if (int e = _save_pos(); e)
-		return e;
+	if (__offset != __valid_limit || __unget_ptr != __buffer_ptr) {
+		if (int e = _save_pos(); e)
+			return e;
+	}
 	purge();
 	return post_flush();
 }
@@ -507,6 +511,13 @@ int fd_file::reopen(const char *path, const char *mode) {
 }
 
 int fd_file::determine_type(stream_type *type) {
+	if constexpr (mlibc::IsImplemented<Isatty>) {
+		if (mlibc::sysdep<Isatty>(_fd) == 0) {
+			*type = stream_type::pipe_like;
+			return 0;
+		}
+	}
+
 	off_t offset;
 	int e = mlibc::sysdep<Seek>(_fd, 0, SEEK_CUR, &offset);
 	if (!e) {
@@ -636,6 +647,8 @@ struct stdio_guard {
 	~stdio_guard() {
 		// Only flush the files but do not close them.
 		for (auto it : mlibc::global_file_list()) {
+			if (it->__io_mode != 1 && it->__dirty_begin == it->__dirty_end)
+				continue;
 			if (int e = it->flush(); e && !mlibc::processIsExiting.load(std::memory_order_relaxed))
 				mlibc::infoLogger()
 				    << "mlibc warning: Failed to flush file before exit()" << frg::endlog;
@@ -713,6 +726,8 @@ int fflush_unlocked(FILE *file_base) {
 	if (file_base == nullptr) {
 		// Only flush the files but do not close them.
 		for (auto it : mlibc::global_file_list()) {
+			if (it->__io_mode != 1 && it->__dirty_begin == it->__dirty_end)
+				continue;
 			if (int e = it->flush(); e)
 				mlibc::infoLogger() << "mlibc warning: Failed to flush file" << frg::endlog;
 		}
@@ -728,6 +743,8 @@ int fflush(FILE *file_base) {
 		// Only flush the files but do not close them.
 		for (auto it : mlibc::global_file_list()) {
 			frg::unique_lock lock(it->_lock);
+			if (it->__io_mode != 1 && it->__dirty_begin == it->__dirty_end)
+				continue;
 			if (int e = it->flush(); e)
 				mlibc::infoLogger() << "mlibc warning: Failed to flush file" << frg::endlog;
 		}
