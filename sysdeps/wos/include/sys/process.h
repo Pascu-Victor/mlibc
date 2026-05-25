@@ -76,6 +76,14 @@ inline int64_t sigprocmask(int how, const void *set, void *oldset) {
 	);
 }
 
+inline int64_t sigsuspend(const void *set) {
+	return (int64_t)syscall(
+	    abi::callnums::process,
+	    (uint64_t)abi::process::procmgmt_ops::SIGSUSPEND,
+	    (uint64_t)(uintptr_t)set
+	);
+}
+
 inline int64_t kill(int64_t pid, int sig) {
 	return (int64_t)syscall(
 	    abi::callnums::process,

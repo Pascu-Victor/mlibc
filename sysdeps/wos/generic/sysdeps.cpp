@@ -1724,14 +1724,9 @@ int Sysdeps<Fchownat>::operator()(
 }
 
 int Sysdeps<Sigsuspend>::operator()(const sigset_t *set) {
-	sigset_t old;
-	int r = sysdep<Sigprocmask>(SIG_SETMASK, set, &old);
-	if (r)
-		return r;
-	for (int i = 0; i < 10000; i++) {
-		ker::multiproc::yield();
-	}
-	sysdep<Sigprocmask>(SIG_SETMASK, &old, nullptr);
+	int64_t r = ker::process::sigsuspend(set);
+	if (r < 0)
+		return static_cast<int>(-r);
 	return EINTR;
 }
 
