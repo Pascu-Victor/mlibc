@@ -63,6 +63,7 @@ enum class ops : uint64_t {
 	wki_rule_get_default,
 	statvfs,
 	fstatvfs,
+	lstat,
 };
 
 constexpr uint32_t WKI_VFS_ROUTE_LOCAL = 0;
@@ -185,6 +186,16 @@ static inline int stat_path(const char *path, void *statbuf) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::vfs,
 	    static_cast<uint64_t>(ops::stat),
+	    reinterpret_cast<uint64_t>(path),
+	    reinterpret_cast<uint64_t>(statbuf)
+	);
+	return static_cast<int>((int64_t)r);
+}
+
+static inline int lstat_path(const char *path, void *statbuf) {
+	uint64_t r = syscall(
+	    ker::abi::callnums::vfs,
+	    static_cast<uint64_t>(ops::lstat),
 	    reinterpret_cast<uint64_t>(path),
 	    reinterpret_cast<uint64_t>(statbuf)
 	);
@@ -512,8 +523,9 @@ static inline int wki_rule_clear_vfs() {
 	return static_cast<int>((int64_t)r);
 }
 
-static inline int
-wki_rule_get_default_vfs(uint32_t index, char *prefix_buf, size_t prefix_buf_size, uint32_t *route_out) {
+static inline int wki_rule_get_default_vfs(
+    uint32_t index, char *prefix_buf, size_t prefix_buf_size, uint32_t *route_out
+) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::vfs,
 	    static_cast<uint64_t>(ops::wki_rule_get_default),

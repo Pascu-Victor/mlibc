@@ -489,8 +489,8 @@ int Sysdeps<Stat>::operator()(
 				}
 				r = ker::abi::vfs::stat_path(resolved, statbuf);
 			} else {
-				// lstat() — do not follow symlinks
-				r = ker::abi::vfs::stat_path(path, statbuf);
+				// lstat() do not follow symlinks
+				r = ker::abi::vfs::lstat_path(path, statbuf);
 			}
 			break;
 		case fsfd_target::fd:
@@ -530,7 +530,7 @@ int Sysdeps<Stat>::operator()(
 				}
 				r = ker::abi::vfs::stat_path(resolved, statbuf);
 			} else {
-				r = ker::abi::vfs::stat_path(path, statbuf);
+				r = ker::abi::vfs::lstat_path(path, statbuf);
 			}
 			break;
 		default:
