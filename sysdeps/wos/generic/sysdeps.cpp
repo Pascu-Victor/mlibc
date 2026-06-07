@@ -270,7 +270,11 @@ void printCallTraceFrame(size_t frameIndex, uintptr_t returnAddress) {
 	line.appendHex(symbolOffset);
 	line.append('\n');
 	line.flush();
+#if !MLIBC_BUILDING_RTLD
 	free(demangled);
+#else
+	(void)demangled;
+#endif
 }
 
 [[gnu::noinline]]
