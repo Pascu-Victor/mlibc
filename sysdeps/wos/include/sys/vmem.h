@@ -13,6 +13,7 @@ enum class ops : uint64_t {
 	anon_allocate = 0,
 	anon_free = 1,
 	protect = 2,
+	mremap = 3,
 };
 
 } // namespace abi::vmem
@@ -101,6 +102,26 @@ static inline int64_t protect(void *addr, uint64_t size, uint64_t prot) {
 	);
 
 	return static_cast<int64_t>(result);
+}
+
+static inline int64_t
+remap(void **addr, void *old_addr, uint64_t old_size, uint64_t new_size, uint64_t flags) {
+	uint64_t result = syscall(
+	    abi::callnums::vmem,
+	    static_cast<uint64_t>(abi::vmem::ops::mremap),
+	    reinterpret_cast<uint64_t>(old_addr),
+	    old_size,
+	    new_size,
+	    flags
+	);
+
+	int64_t signed_result = static_cast<int64_t>(result);
+	if (signed_result < 0) {
+		return signed_result;
+	}
+
+	*addr = reinterpret_cast<void *>(result);
+	return 0;
 }
 
 } // namespace vmem

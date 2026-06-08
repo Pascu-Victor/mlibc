@@ -867,16 +867,18 @@ frg::expected<LinkerError, void> ObjectRepository::_fetchFromFile(SharedObject *
 				initial_prot = prot;
 
 			void *map_pointer;
-			if (mlibc::sysdep<VmMap>(
-			        reinterpret_cast<void *>(map_address),
-			        backed_map_size,
-			        initial_prot,
-			        MAP_PRIVATE | MAP_FIXED,
-			        fd,
-			        phdr->p_offset - misalign,
-			        &map_pointer
-			    ))
-				__ensure(!"sys_vm_map failed");
+			if (backed_map_size) {
+				if (mlibc::sysdep<VmMap>(
+				        reinterpret_cast<void *>(map_address),
+				        backed_map_size,
+				        initial_prot,
+				        MAP_PRIVATE | MAP_FIXED,
+				        fd,
+				        phdr->p_offset - misalign,
+				        &map_pointer
+				    ))
+					__ensure(!"sys_vm_map failed");
+			}
 			if (total_map_size > backed_map_size)
 				if (mlibc::sysdep<VmMap>(
 				        reinterpret_cast<void *>(map_address + backed_map_size),

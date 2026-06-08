@@ -5,6 +5,7 @@
 #include <sys/callnums.h>
 #include <sys/resource.h>
 #include <sys/syscall.h>
+#include <sys/utsname.h>
 #include <unistd.h>
 
 namespace ker::process {
@@ -256,6 +257,69 @@ inline int64_t ptrace(uint64_t request, uint64_t pid, uint64_t addr, uint64_t da
 	    pid,
 	    addr,
 	    data
+	);
+}
+
+struct CloneVmArgs {
+	uint64_t fn;
+	uint64_t child_stack;
+	uint64_t flags;
+	uint64_t arg;
+	uint64_t parent_tidptr;
+	uint64_t newtls;
+	uint64_t child_tidptr;
+};
+
+inline int64_t uname(struct utsname *buf) {
+	return (int64_t)syscall(
+	    abi::callnums::process,
+	    (uint64_t)abi::process::procmgmt_ops::UNAME,
+	    (uint64_t)(uintptr_t)buf
+	);
+}
+
+inline int64_t clone_vm(const CloneVmArgs *args) {
+	return (int64_t)syscall(
+	    abi::callnums::process,
+	    (uint64_t)abi::process::procmgmt_ops::CLONE_VM_PROC,
+	    (uint64_t)(uintptr_t)args
+	);
+}
+
+inline int64_t prctl(int option, uint64_t arg2, uint64_t arg3, uint64_t arg4, uint64_t arg5) {
+	return (int64_t)syscall(
+	    abi::callnums::process,
+	    (uint64_t)abi::process::procmgmt_ops::PRCTL,
+	    (uint64_t)option,
+	    arg2,
+	    arg3,
+	    arg4,
+	    arg5
+	);
+}
+
+inline int64_t arch_prctl(int option, uint64_t arg2) {
+	return (int64_t)syscall(
+	    abi::callnums::process,
+	    (uint64_t)abi::process::procmgmt_ops::ARCH_PRCTL,
+	    (uint64_t)option,
+	    arg2
+	);
+}
+
+inline int64_t sigaltstack(const void *ss, void *old_ss) {
+	return (int64_t)syscall(
+	    abi::callnums::process,
+	    (uint64_t)abi::process::procmgmt_ops::SIGALTSTACK,
+	    (uint64_t)(uintptr_t)ss,
+	    (uint64_t)(uintptr_t)old_ss
+	);
+}
+
+inline int64_t personality(unsigned long persona) {
+	return (int64_t)syscall(
+	    abi::callnums::personality,
+	    (uint64_t)persona
 	);
 }
 

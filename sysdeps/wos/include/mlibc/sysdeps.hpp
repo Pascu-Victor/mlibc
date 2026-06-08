@@ -111,6 +111,10 @@ struct WosSysdepTags :
     Fstatvfs,
 #endif // __MLIBC_POSIX_OPTION
 
+#if __MLIBC_GLIBC_OPTION
+    Personality,
+#endif // __MLIBC_GLIBC_OPTION
+
     LibcLog,
     LibcPanic,
     FutexTid,
@@ -120,6 +124,7 @@ struct WosSysdepTags :
     VmMap,
     VmUnmap,
     VmProtect,
+    VmRemap,
     TcbSet,
     Exit,
     ThreadExit,
@@ -147,12 +152,14 @@ struct WosSysdepTags :
     Rename,
     Sigprocmask,
     Sigaction,
+    Sigaltstack,
     Fork,
     Waitpid,
     Execve,
     Yield,
     GetPid,
     Ptrace,
+    Prctl,
     Kill {
 };
 

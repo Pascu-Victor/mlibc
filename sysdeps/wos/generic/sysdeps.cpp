@@ -20,6 +20,7 @@
 #include <sys/futex.h>
 #include <sys/ioctl.h>
 #include <sys/logging.h>
+#include <sys/mman.h>
 #include <sys/multiproc.h>
 #include <sys/net.h>
 #include <sys/poll.h>
@@ -214,7 +215,6 @@ void dumpStackWords() {
 		line.appendHex(i * sizeof(uintptr_t), 3);
 		line.append("  0x");
 		line.appendHex(words[i], sizeof(uintptr_t) * 2);
-		line.append('\n');
 		line.flush();
 	}
 }
@@ -229,7 +229,7 @@ void printCallTraceFrame(size_t frameIndex, uintptr_t returnAddress) {
 		line.appendDecimal(frameIndex, 2);
 		line.append(" pc=0x");
 		line.appendHex(pc, sizeof(uintptr_t) * 2);
-		line.append(" <unresolved>\n");
+		line.append(" <unresolved>");
 		line.flush();
 		return;
 	}
@@ -268,7 +268,6 @@ void printCallTraceFrame(size_t frameIndex, uintptr_t returnAddress) {
 	line.append(symbol);
 	line.append("+0x");
 	line.appendHex(symbolOffset);
-	line.append('\n');
 	line.flush();
 #if !MLIBC_BUILDING_RTLD
 	free(demangled);
@@ -280,7 +279,7 @@ void printCallTraceFrame(size_t frameIndex, uintptr_t returnAddress) {
 [[gnu::noinline]]
 void dumpCallTrace() {
 	auto *frame = static_cast<uintptr_t *>(__builtin_frame_address(0));
-	panicLog("Call trace:\n");
+	panicLog("Call trace:");
 
 	for (size_t i = 0; i < kMaxCallTraceFrames && frame != nullptr; ++i) {
 		auto frameAddress = reinterpret_cast<uintptr_t>(frame);
@@ -291,7 +290,7 @@ void dumpCallTrace() {
 			PanicLine line;
 			line.append("  #");
 			line.appendDecimal(i, 2);
-			line.append(" <null return address>\n");
+			line.append(" <null return address>");
 			line.flush();
 			break;
 		}
@@ -305,7 +304,6 @@ void dumpCallTrace() {
 				line.appendHex(frameAddress, sizeof(uintptr_t) * 2);
 				line.append(" to 0x");
 				line.appendHex(nextFrame, sizeof(uintptr_t) * 2);
-				line.append('\n');
 				line.flush();
 			}
 			break;
@@ -1699,6 +1697,17 @@ int Sysdeps<GetEntropy>::operator()(void *buffer, size_t length) {
 	return 0;
 }
 
+#if __MLIBC_GLIBC_OPTION
+int Sysdeps<Personality>::operator()(unsigned long persona, int *out) {
+	int64_t r = ker::process::personality(persona);
+	if (r < 0)
+		return static_cast<int>(-r);
+	if (out)
+		*out = static_cast<int>(r);
+	return 0;
+}
+#endif // __MLIBC_GLIBC_OPTION
+
 int Sysdeps<Umask>::operator()(mode_t mode, mode_t *old) {
 	uint64_t prev = ker::process::setumask(static_cast<uint64_t>(mode & 0777));
 	if (old)
@@ -1775,12 +1784,36 @@ int Sysdeps<Times>::operator()(struct tms *tms, clock_t *out) {
 int Sysdeps<Uname>::operator()(struct utsname *buf) {
 	if (!buf)
 		return EINVAL;
-	memset(buf, 0, sizeof(*buf));
-	memcpy(buf->sysname, "WOS", 4);
-	ker::process::gethostname(buf->nodename, sizeof(buf->nodename));
-	memcpy(buf->release, "0.1.0", 6);
-	memcpy(buf->version, "0.1.0", 6);
-	memcpy(buf->machine, "x86_64", 7);
+	int64_t res = ker::process::uname(buf);
+	if (res < 0)
+		return -res;
+	return 0;
+}
+
+int Sysdeps<VmRemap>::operator()(void *pointer, size_t size, size_t new_size, void **window) {
+	int64_t res = ker::vmem::remap(window, pointer, size, new_size, MREMAP_MAYMOVE);
+	if (res < 0)
+		return -res;
+	return 0;
+}
+
+int Sysdeps<Sigaltstack>::operator()(const stack_t *ss, stack_t *oss) {
+	int64_t res = ker::process::sigaltstack(ss, oss);
+	if (res < 0)
+		return -res;
+	return 0;
+}
+
+int Sysdeps<Prctl>::operator()(int option, va_list va, int *out) {
+	uint64_t arg2 = va_arg(va, uint64_t);
+	uint64_t arg3 = va_arg(va, uint64_t);
+	uint64_t arg4 = va_arg(va, uint64_t);
+	uint64_t arg5 = va_arg(va, uint64_t);
+	int64_t res = ker::process::prctl(option, arg2, arg3, arg4, arg5);
+	if (res < 0)
+		return -res;
+	if (out)
+		*out = static_cast<int>(res);
 	return 0;
 }
 
