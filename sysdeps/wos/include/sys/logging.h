@@ -17,6 +17,32 @@ uint64_t logLine(const char *str, uint64_t len, abi::sys_log::sys_log_device dev
 uint64_t
 logEx(const char *module, abi::sys_log::sys_log_level level, const char *str, uint64_t len);
 
+uint64_t beginLogBlock();
+
+uint64_t endLogBlock(uint64_t cookie);
+
+uint64_t logBlock(
+    uint64_t cookie,
+    const char *str,
+    uint64_t len,
+    abi::sys_log::sys_log_device device
+);
+
+uint64_t logLineBlock(
+    uint64_t cookie,
+    const char *str,
+    uint64_t len,
+    abi::sys_log::sys_log_device device
+);
+
+uint64_t logExBlock(
+    uint64_t cookie,
+    const char *module,
+    abi::sys_log::sys_log_level level,
+    const char *str,
+    uint64_t len
+);
+
 inline uint64_t
 vlogExf(const char *module, abi::sys_log::sys_log_level level, const char *fmt, va_list args) {
 	if (fmt == nullptr) {
@@ -30,6 +56,29 @@ vlogExf(const char *module, abi::sys_log::sys_log_level level, const char *fmt, 
 	}
 
 	return logEx(module, level, buf, strlen(buf));
+}
+
+inline uint64_t logExfBlock(
+    uint64_t cookie,
+    const char *module,
+    abi::sys_log::sys_log_level level,
+    const char *fmt,
+    ...
+) {
+	if (fmt == nullptr) {
+		return 0;
+	}
+
+	char buf[abi::sys_log::JOURNAL_MESSAGE_MAX]{};
+	va_list args;
+	va_start(args, fmt);
+	int rc = vsnprintf(buf, sizeof(buf), fmt, args);
+	va_end(args);
+	if (rc < 0) {
+		return 0;
+	}
+
+	return logExBlock(cookie, module, level, buf, strlen(buf));
 }
 
 template <typename... Args>

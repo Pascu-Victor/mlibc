@@ -244,7 +244,7 @@ __attribute__((__noreturn__)) void thread_exit(thread_exit_return ret_val) {
 	mlibc::do_exit();
 }
 
-static constexpr size_t default_stacksize = 0x200000;
+static constexpr size_t default_stacksize = 0x800000;
 static constexpr size_t default_guardsize = 4096;
 
 int thread_attr_init(struct __mlibc_threadattr *attr) {

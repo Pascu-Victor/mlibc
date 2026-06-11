@@ -63,7 +63,18 @@ constexpr uintptr_t kMaxFrameStride = 1024 * 1024;
 
 bool panicActive = false;
 
-void panicLog(const char *message) {
+void panicLog(uint64_t cookie, const char *message) {
+	if (cookie != 0) {
+		ker::logging::logExBlock(
+		    cookie,
+		    "mlibc",
+		    ker::abi::sys_log::sys_log_level::PANIC,
+		    message,
+		    strlen(message)
+		);
+		return;
+	}
+
 	ker::logging::logEx("mlibc", ker::abi::sys_log::sys_log_level::PANIC, message, strlen(message));
 }
 
@@ -146,7 +157,18 @@ struct PanicLine {
 		}
 	}
 
-	void flush() const {
+	void flush(uint64_t cookie) const {
+		if (cookie != 0) {
+			ker::logging::logExBlock(
+			    cookie,
+			    "mlibc",
+			    ker::abi::sys_log::sys_log_level::PANIC,
+			    buffer,
+			    length
+			);
+			return;
+		}
+
 		ker::logging::logEx("mlibc", ker::abi::sys_log::sys_log_level::PANIC, buffer, length);
 	}
 };
@@ -198,14 +220,14 @@ const char *maybeDemangle(const char *symbol, char **ownedBuffer) {
 	return symbol;
 }
 
-void dumpStackWords() {
+void dumpStackWords(uint64_t cookie) {
 	auto sp = currentStackPointer();
 	{
 		PanicLine line;
 		line.append("Stack dump: sp=0x");
 		line.appendHex(sp, sizeof(uintptr_t) * 2);
 		line.append('\n');
-		line.flush();
+		line.flush(cookie);
 	}
 
 	auto *words = reinterpret_cast<uintptr_t *>(sp);
@@ -215,11 +237,11 @@ void dumpStackWords() {
 		line.appendHex(i * sizeof(uintptr_t), 3);
 		line.append("  0x");
 		line.appendHex(words[i], sizeof(uintptr_t) * 2);
-		line.flush();
+		line.flush(cookie);
 	}
 }
 
-void printCallTraceFrame(size_t frameIndex, uintptr_t returnAddress) {
+void printCallTraceFrame(uint64_t cookie, size_t frameIndex, uintptr_t returnAddress) {
 	auto pc = returnAddress == 0 ? returnAddress : returnAddress - 1;
 
 	ResolvedSymbol resolved{};
@@ -230,7 +252,7 @@ void printCallTraceFrame(size_t frameIndex, uintptr_t returnAddress) {
 		line.append(" pc=0x");
 		line.appendHex(pc, sizeof(uintptr_t) * 2);
 		line.append(" <unresolved>");
-		line.flush();
+		line.flush(cookie);
 		return;
 	}
 
@@ -248,7 +270,7 @@ void printCallTraceFrame(size_t frameIndex, uintptr_t returnAddress) {
 		line.append("+0x");
 		line.appendHex(objectOffset);
 		line.append(" <no symbol>\n");
-		line.flush();
+		line.flush(cookie);
 		return;
 	}
 
@@ -268,7 +290,7 @@ void printCallTraceFrame(size_t frameIndex, uintptr_t returnAddress) {
 	line.append(symbol);
 	line.append("+0x");
 	line.appendHex(symbolOffset);
-	line.flush();
+	line.flush(cookie);
 #if !MLIBC_BUILDING_RTLD
 	free(demangled);
 #else
@@ -277,9 +299,9 @@ void printCallTraceFrame(size_t frameIndex, uintptr_t returnAddress) {
 }
 
 [[gnu::noinline]]
-void dumpCallTrace() {
+void dumpCallTrace(uint64_t cookie) {
 	auto *frame = static_cast<uintptr_t *>(__builtin_frame_address(0));
-	panicLog("Call trace:");
+	panicLog(cookie, "Call trace:");
 
 	for (size_t i = 0; i < kMaxCallTraceFrames && frame != nullptr; ++i) {
 		auto frameAddress = reinterpret_cast<uintptr_t>(frame);
@@ -291,11 +313,11 @@ void dumpCallTrace() {
 			line.append("  #");
 			line.appendDecimal(i, 2);
 			line.append(" <null return address>");
-			line.flush();
+			line.flush(cookie);
 			break;
 		}
 
-		printCallTraceFrame(i, returnAddress);
+		printCallTraceFrame(cookie, i, returnAddress);
 
 		if (!isReasonableNextFrame(frameAddress, nextFrame)) {
 			if (nextFrame != 0) {
@@ -304,7 +326,7 @@ void dumpCallTrace() {
 				line.appendHex(frameAddress, sizeof(uintptr_t) * 2);
 				line.append(" to 0x");
 				line.appendHex(nextFrame, sizeof(uintptr_t) * 2);
-				line.flush();
+				line.flush(cookie);
 			}
 			break;
 		}
@@ -372,14 +394,18 @@ void Sysdeps<LibcLog>::operator()(const char *message) {
 [[noreturn]]
 void Sysdeps<LibcPanic>::operator()() {
 	if (__atomic_exchange_n(&panicActive, true, __ATOMIC_ACQ_REL)) {
-		panicLog("\nMLIBC PANIC (recursive)\n");
+		uint64_t const cookie = ker::logging::beginLogBlock();
+		panicLog(cookie, "\nMLIBC PANIC (recursive)\n");
+		ker::logging::endLogBlock(cookie);
 		sysdep<Exit>(1);
 		__builtin_unreachable();
 	}
 
-	panicLog("\nMLIBC PANIC\n");
-	dumpStackWords();
-	dumpCallTrace();
+	uint64_t const cookie = ker::logging::beginLogBlock();
+	panicLog(cookie, "\nMLIBC PANIC\n");
+	dumpStackWords(cookie);
+	dumpCallTrace(cookie);
+	ker::logging::endLogBlock(cookie);
 	sysdep<Exit>(1);
 	__builtin_unreachable();
 }

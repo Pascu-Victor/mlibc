@@ -57,7 +57,7 @@ static constexpr unsigned int mutex_excl_bit = static_cast<uint32_t>(1) << 30;
 static constexpr unsigned int rc_count_mask = (static_cast<uint32_t>(1) << 31) - 1;
 static constexpr unsigned int rc_waiters_bit = static_cast<uint32_t>(1) << 31;
 
-static constexpr size_t default_stacksize = 0x200000;
+static constexpr size_t default_stacksize = 0x800000;
 static constexpr size_t default_guardsize = 4096;
 
 // ----------------------------------------------------------------------------
@@ -265,6 +265,7 @@ pthread_attr_setsigmask_np(pthread_attr_t *__restrict attr, const sigset_t *__re
 
 	return 0;
 }
+#endif // __MLIBC_LINUX_OPTION
 
 namespace {
 int get_own_stackinfo(void **stack_addr, size_t *stack_size) {
@@ -315,10 +316,10 @@ int pthread_getattr_np(pthread_t thread, pthread_attr_t *attr) {
 
 	attr->__mlibc_guardsize = tcb->guardSize;
 	attr->__mlibc_detachstate = tcb->isJoinable ? PTHREAD_CREATE_JOINABLE : PTHREAD_CREATE_DETACHED;
-	mlibc::infoLogger() << "pthread_getattr_np(): Implementation is incomplete!" << frg::endlog;
 	return 0;
 }
 
+#if __MLIBC_LINUX_OPTION
 int pthread_getaffinity_np(pthread_t thread, size_t cpusetsize, cpu_set_t *mask) {
 	return mlibc::sysdep_or_enosys<GetThreadaffinity>(
 	    reinterpret_cast<Tcb *>(thread)->tid, cpusetsize, mask

@@ -3,6 +3,7 @@
 #include <mlibc/tcb.hpp>
 #include <mlibc/thread.hpp>
 #include <stddef.h>
+#include <stdint.h>
 #include <sys/mman.h>
 #include <sys/multiproc.h>
 #include <time.h>
@@ -17,7 +18,7 @@ void Sysdeps<ThreadExit>::operator()() {
 	__builtin_unreachable();
 }
 
-static constexpr size_t default_stacksize = 0x200000;
+static constexpr size_t default_stacksize = 0x800000;
 
 int Sysdeps<PrepareStack>::operator()(
     void **stack,
@@ -40,13 +41,29 @@ int Sysdeps<PrepareStack>::operator()(
 		*guard_size = 0;
 	} else {
 		void *p = nullptr;
-		int r = sysdep<AnonAllocate>(*stack_size + *guard_size, &p);
+		int r = sysdep<VmMap>(
+		    nullptr,
+		    *stack_size + *guard_size,
+		    PROT_READ | PROT_WRITE,
+		    MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE | MAP_STACK,
+		    -1,
+		    0,
+		    &p
+		);
 		if (r)
 			return r;
 		map = (uintptr_t)p;
+		if (*guard_size) {
+			int protect_result =
+			    sysdep<VmProtect>(reinterpret_cast<void *>(map), *guard_size, PROT_NONE);
+			if (protect_result) {
+				sysdep<AnonFree>(reinterpret_cast<void *>(map), *stack_size + *guard_size);
+				return protect_result;
+			}
+		}
 	}
 
-	*stack_base = (void *)map;
+	*stack_base = reinterpret_cast<void *>(map + *guard_size);
 
 	// Push entry and user_arg onto the stack (top of region, growing down).
 	// The kernel's threadCreate reads these two words and passes them as
@@ -79,14 +96,19 @@ int Sysdeps<Clone>::operator()(void *tcb, pid_t *tid_out, void *stack) {
 extern "C" void __mlibc_enter_thread(void *entry, void *user_arg) {
 	auto *tcb = mlibc::get_current_tcb();
 
-	// Spin until parent stores our TID (written after sys_clone returns).
-	while (!__atomic_load_n(&tcb->tid, __ATOMIC_RELAXED))
+	// THREAD_CREATE publishes tcb->tid before scheduling this thread. Keep the
+	// wait as a defensive ordering barrier for older kernels or failed handoff.
+	while (!__atomic_load_n(&tcb->tid, __ATOMIC_ACQUIRE))
 		mlibc::sysdep<FutexWait>(&tcb->tid, 0, nullptr);
 
 	tcb->invokeThreadFunc(entry, user_arg);
 
+#if MLIBC_BUILDING_RTLD
 	__atomic_store_n(&tcb->didExit, 1, __ATOMIC_RELEASE);
 	mlibc::sysdep<FutexWake>(&tcb->didExit, true);
 
 	mlibc::sysdep<ThreadExit>();
+#else
+	mlibc::thread_exit(tcb->returnValue);
+#endif
 }
