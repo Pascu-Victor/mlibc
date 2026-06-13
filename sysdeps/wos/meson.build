@@ -87,6 +87,7 @@ if not no_headers
 
     install_headers(
         'include/sys/callnums.h',
+        'include/sys/futex.h',
         'include/sys/multiproc.h',
         'include/sys/net.h',
         'include/sys/process.h',

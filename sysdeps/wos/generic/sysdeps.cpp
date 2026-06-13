@@ -415,8 +415,8 @@ pid_t Sysdeps<FutexTid>::operator()() {
 	return tid;
 }
 
-int Sysdeps<FutexWake>::operator()(int *pointer, bool) {
-	int64_t result = ker::futex::wake(pointer);
+int Sysdeps<FutexWake>::operator()(int *pointer, bool all) {
+	int64_t result = ker::futex::wake(pointer, all ? INT_MAX : 1);
 	if (result < 0) {
 		return static_cast<int>(-result);
 	}
