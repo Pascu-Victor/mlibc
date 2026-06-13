@@ -66,11 +66,7 @@ bool panicActive = false;
 void panicLog(uint64_t cookie, const char *message) {
 	if (cookie != 0) {
 		ker::logging::logExBlock(
-		    cookie,
-		    "mlibc",
-		    ker::abi::sys_log::sys_log_level::PANIC,
-		    message,
-		    strlen(message)
+		    cookie, "mlibc", ker::abi::sys_log::sys_log_level::PANIC, message, strlen(message)
 		);
 		return;
 	}
@@ -160,11 +156,7 @@ struct PanicLine {
 	void flush(uint64_t cookie) const {
 		if (cookie != 0) {
 			ker::logging::logExBlock(
-			    cookie,
-			    "mlibc",
-			    ker::abi::sys_log::sys_log_level::PANIC,
-			    buffer,
-			    length
+			    cookie, "mlibc", ker::abi::sys_log::sys_log_level::PANIC, buffer, length
 			);
 			return;
 		}
@@ -269,7 +261,7 @@ void printCallTraceFrame(uint64_t cookie, size_t frameIndex, uintptr_t returnAdd
 		line.append(file);
 		line.append("+0x");
 		line.appendHex(objectOffset);
-		line.append(" <no symbol>\n");
+		line.append(" <no symbol>");
 		line.flush(cookie);
 		return;
 	}
