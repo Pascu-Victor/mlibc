@@ -1925,6 +1925,8 @@ int Sysdeps<Mount>::operator()(
     unsigned long flags,
     const void *data
 ) {
+	// TODO(wos-mount): plumb MS_RDONLY/rw and other mount flags through
+	// ker::abi::vfs::mount instead of silently dropping userspace options.
 	(void)flags;
 	(void)data;
 	int r = ker::abi::vfs::mount(source, target, fstype);
