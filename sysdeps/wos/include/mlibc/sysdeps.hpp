@@ -56,6 +56,7 @@ struct WosSysdepTags :
     Fcntl,
     Ttyname,
     Fsync,
+    Sync,
     Chmod,
     Fchmod,
     Fchmodat,

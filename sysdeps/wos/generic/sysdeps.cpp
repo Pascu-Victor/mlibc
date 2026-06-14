@@ -1444,6 +1444,10 @@ int Sysdeps<Fsync>::operator()(int fd) {
 	return 0;
 }
 
+void Sysdeps<Sync>::operator()() {
+	(void)ker::abi::vfs::sync_vfs();
+}
+
 int Sysdeps<Chmod>::operator()(const char *pathname, mode_t mode) {
 	int r = ker::abi::vfs::chmod(pathname, mode);
 	if (r < 0)

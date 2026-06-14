@@ -64,6 +64,7 @@ enum class ops : uint64_t {
 	statvfs,
 	fstatvfs,
 	lstat,
+	sync,
 };
 
 constexpr uint32_t WKI_VFS_ROUTE_LOCAL = 0;
@@ -482,6 +483,11 @@ static inline int fsync_vfs(int fd) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::vfs, static_cast<uint64_t>(ops::fsync), static_cast<uint64_t>(fd)
 	);
+	return static_cast<int>((int64_t)r);
+}
+
+static inline int sync_vfs() {
+	uint64_t r = syscall(ker::abi::callnums::vfs, static_cast<uint64_t>(ops::sync));
 	return static_cast<int>((int64_t)r);
 }
 
