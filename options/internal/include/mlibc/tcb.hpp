@@ -96,6 +96,13 @@ struct Tcb {
 	uintptr_t stackCanary;
 	int cancelBits;
 
+#if defined(__x86_64__)
+	uint64_t wosSignalMaskCache;
+	uint64_t wosSignalMaskSeq;
+	uint32_t wosSignalMaskValid;
+	uint32_t wosSignalMaskReserved;
+#endif
+
 	mlibc::thread_exit_return returnValue;
 	TcbThreadReturnValue returnValueType;
 
@@ -155,6 +162,9 @@ struct Tcb {
 static_assert(offsetof(Tcb, stackCanary) == 0x28);
 // sysdeps/linux/x86_64/cp_syscall.S uses the offset of cancelBits.
 static_assert(offsetof(Tcb, cancelBits) == 0x30);
+static_assert(offsetof(Tcb, wosSignalMaskCache) == 0x38);
+static_assert(offsetof(Tcb, wosSignalMaskSeq) == 0x40);
+static_assert(offsetof(Tcb, wosSignalMaskValid) == 0x48);
 // options/linker/x86_64/runtime.S uses the offset of dtvPointers.
 static_assert(offsetof(Tcb, dtvPointers) == 16);
 #elif defined(__i386__)

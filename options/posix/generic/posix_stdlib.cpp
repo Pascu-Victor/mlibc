@@ -208,8 +208,30 @@ char *mkdtemp(char *pattern) {
 }
 
 char *realpath(const char *path, char *out) {
+	if (!path) {
+		errno = EINVAL;
+		return nullptr;
+	}
+
 	if (mlibc::globalConfig().debugPathResolution)
 		mlibc::infoLogger() << "mlibc realpath(): Called on '" << path << "'" << frg::endlog;
+
+	if constexpr (mlibc::IsImplemented<Realpath>) {
+		char fast_buf[PATH_MAX];
+		char *target = out ? out : fast_buf;
+		if (int e = mlibc::sysdep_or_enosys<Realpath>(path, target, PATH_MAX); !e) {
+			if (!out) {
+				auto len = strlen(fast_buf) + 1;
+				out = reinterpret_cast<char *>(getAllocator().allocate(len));
+				memcpy(out, fast_buf, len);
+			}
+			return out;
+		} else if (e != ENOSYS) {
+			errno = e;
+			return nullptr;
+		}
+	}
+
 	frg::string_view path_view{path};
 
 	// In case of the root, the string only contains the null-terminator.

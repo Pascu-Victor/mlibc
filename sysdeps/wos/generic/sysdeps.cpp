@@ -8,6 +8,7 @@
 #include <mlibc/dlapi.hpp>
 #include <mlibc/fsfd_target.hpp>
 #include <mlibc/tcb.hpp>
+#include <mlibc/thread.hpp>
 #include <sched.h>
 #include <signal.h>
 #include <stdarg.h>
@@ -704,6 +705,40 @@ int Sysdeps<ClockGet>::operator()(int clock_id, time_t *secs, long *nanos) {
 	return 0;
 }
 
+namespace {
+constexpr clock_t wosClockTicksPerSecond = 100;
+
+void ticks_to_timeval(clock_t ticks, timeval *tv) {
+	tv->tv_sec = ticks / wosClockTicksPerSecond;
+	tv->tv_usec = (ticks % wosClockTicksPerSecond) * (1000000 / wosClockTicksPerSecond);
+}
+} // namespace
+
+int Sysdeps<GetRusage>::operator()(int scope, struct rusage *usage) {
+	if (!usage)
+		return EFAULT;
+
+	tms times_buf{};
+	clock_t elapsed = 0;
+	uint64_t res = ker::time::times(&times_buf, &elapsed);
+	if ((int64_t)res < 0)
+		return static_cast<int>(-static_cast<int64_t>(res));
+
+	memset(usage, 0, sizeof(*usage));
+	switch (scope) {
+		case RUSAGE_SELF:
+			ticks_to_timeval(times_buf.tms_utime, &usage->ru_utime);
+			ticks_to_timeval(times_buf.tms_stime, &usage->ru_stime);
+			return 0;
+		case RUSAGE_CHILDREN:
+			ticks_to_timeval(times_buf.tms_cutime, &usage->ru_utime);
+			ticks_to_timeval(times_buf.tms_cstime, &usage->ru_stime);
+			return 0;
+		default:
+			return EINVAL;
+	}
+}
+
 int Sysdeps<Sleep>::operator()(time_t *secs, long *nanos) {
 	timespec req{};
 	req.tv_sec = secs ? *secs : 0;
@@ -754,6 +789,45 @@ int Sysdeps<Rename>::operator()(const char *old_path, const char *new_path) {
 int Sysdeps<Sigprocmask>::operator()(
     int how, const sigset_t *__restrict set, sigset_t *__restrict retrieve
 ) {
+	if (mlibc::tcb_available_flag) {
+		auto *tcb = mlibc::get_current_tcb();
+		if (tcb && __atomic_load_n(&tcb->wosSignalMaskValid, __ATOMIC_ACQUIRE)) {
+			uint64_t before_seq = __atomic_load_n(&tcb->wosSignalMaskSeq, __ATOMIC_ACQUIRE);
+			uint64_t cached_mask = __atomic_load_n(&tcb->wosSignalMaskCache, __ATOMIC_ACQUIRE);
+			uint64_t after_seq = __atomic_load_n(&tcb->wosSignalMaskSeq, __ATOMIC_ACQUIRE);
+			if (before_seq == after_seq
+			    && __atomic_load_n(&tcb->wosSignalMaskValid, __ATOMIC_ACQUIRE)) {
+				if (!set) {
+					if (retrieve)
+						*reinterpret_cast<uint64_t *>(retrieve) = cached_mask;
+					return 0;
+				}
+
+				uint64_t input = *reinterpret_cast<const uint64_t *>(set);
+				constexpr uint64_t unblockable = (1ULL << (9 - 1)) | (1ULL << (19 - 1));
+				input &= ~unblockable;
+
+				uint64_t new_mask = cached_mask;
+				bool valid_how = true;
+				if (how == SIG_BLOCK) {
+					new_mask |= input;
+				} else if (how == SIG_UNBLOCK) {
+					new_mask &= ~input;
+				} else if (how == SIG_SETMASK) {
+					new_mask = input;
+				} else {
+					valid_how = false;
+				}
+
+				if (valid_how && new_mask == cached_mask) {
+					if (retrieve)
+						*reinterpret_cast<uint64_t *>(retrieve) = cached_mask;
+					return 0;
+				}
+			}
+		}
+	}
+
 	int64_t r = ker::process::sigprocmask(how, (const void *)set, (void *)retrieve);
 	if (r < 0)
 		return (int)(-r);
@@ -944,6 +1018,13 @@ Sysdeps<Readlink>::operator()(const char *path, void *buffer, size_t max_size, s
 	if (length)
 		*length = r;
 	return 0;
+}
+
+int Sysdeps<Realpath>::operator()(const char *path, char *buffer, size_t size) {
+	int r = ker::abi::vfs::realpath(path, buffer, size);
+	if (r < 0)
+		return -r;
+	return r;
 }
 
 int Sysdeps<Readlinkat>::operator()(
@@ -1452,9 +1533,7 @@ int Sysdeps<Fsync>::operator()(int fd) {
 	return 0;
 }
 
-void Sysdeps<Sync>::operator()() {
-	(void)ker::abi::vfs::sync_vfs();
-}
+void Sysdeps<Sync>::operator()() { (void)ker::abi::vfs::sync_vfs(); }
 
 int Sysdeps<Chmod>::operator()(const char *pathname, mode_t mode) {
 	int r = ker::abi::vfs::chmod(pathname, mode);

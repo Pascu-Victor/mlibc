@@ -224,6 +224,8 @@ struct Statvfs {};
 struct Fstatvfs {};
 // int sys_readlink(const char *path, void *buffer, size_t max_size, ssize_t *length);
 struct Readlink {};
+// int sys_realpath(const char *path, char *buffer, size_t size);
+struct Realpath {};
 // int sys_readlinkat(int dirfd, const char *path, void *buffer, size_t max_size, ssize_t *length);
 struct Readlinkat {};
 // int sys_truncate(const char *path, off_t length);

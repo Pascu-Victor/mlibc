@@ -133,6 +133,7 @@ SYSDEP_FUNC(Dup2, int fd, int flags, int newfd);
 SYSDEP_FUNC(Statvfs, const char *path, struct statvfs *out);
 SYSDEP_FUNC(Fstatvfs, int fd, struct statvfs *out);
 SYSDEP_FUNC(Readlink, const char *path, void *buffer, size_t max_size, ssize_t *length);
+SYSDEP_FUNC(Realpath, const char *path, char *buffer, size_t size);
 SYSDEP_FUNC(
     Readlinkat, int dirfd, const char *path, void *buffer, size_t max_size, ssize_t *length
 );

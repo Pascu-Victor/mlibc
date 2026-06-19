@@ -65,6 +65,7 @@ enum class ops : uint64_t {
 	fstatvfs,
 	lstat,
 	sync,
+	realpath,
 };
 
 constexpr uint32_t WKI_VFS_ROUTE_LOCAL = 0;
@@ -569,6 +570,17 @@ static inline int fstatvfs_fd(int fd, void *buf) {
 	    static_cast<uint64_t>(ops::fstatvfs),
 	    static_cast<uint64_t>(fd),
 	    reinterpret_cast<uint64_t>(buf)
+	);
+	return static_cast<int>((int64_t)r);
+}
+
+static inline int realpath(const char *path, char *buf, size_t bufsize) {
+	uint64_t r = syscall(
+	    ker::abi::callnums::vfs,
+	    static_cast<uint64_t>(ops::realpath),
+	    reinterpret_cast<uint64_t>(path),
+	    reinterpret_cast<uint64_t>(buf),
+	    static_cast<uint64_t>(bufsize)
 	);
 	return static_cast<int>((int64_t)r);
 }
