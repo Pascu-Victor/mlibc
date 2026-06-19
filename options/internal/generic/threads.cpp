@@ -37,6 +37,7 @@ namespace mlibc {
 
 static constexpr unsigned int onceComplete = 1;
 static constexpr unsigned int onceLocked = 2;
+static constexpr unsigned int onceWaiters = 4;
 
 int thread_once(__mlibc_once *once, void (*func)(void)) {
 	auto expected = __atomic_load_n(&once->__mlibc_done, __ATOMIC_ACQUIRE);
@@ -58,17 +59,35 @@ int thread_once(__mlibc_once *once, void (*func)(void)) {
 			func();
 
 			// unlock the mutex.
-			__atomic_exchange_n(&once->__mlibc_done, onceComplete, __ATOMIC_RELEASE);
-			if (int e = mlibc::sysdep<FutexWake>((int *)&once->__mlibc_done, true); e)
-				__ensure(!"sys_futex_wake() failed");
+			auto state = __atomic_exchange_n(&once->__mlibc_done, onceComplete, __ATOMIC_RELEASE);
+			if (state & onceWaiters) {
+				if (int e = mlibc::sysdep<FutexWake>((int *)&once->__mlibc_done, true); e)
+					__ensure(!"sys_futex_wake() failed");
+			}
 			return 0;
 		} else {
 			// a different thread is currently running the initializer.
-			__ensure(expected == onceLocked);
+			__ensure(expected & onceLocked);
+
+			if (!(expected & onceWaiters)) {
+				auto desired = expected | onceWaiters;
+				if (!__atomic_compare_exchange_n(
+				        &once->__mlibc_done,
+				        &expected,
+				        desired,
+				        false,
+				        __ATOMIC_RELAXED,
+				        __ATOMIC_ACQUIRE
+				    ))
+					continue;
+
+				expected = desired;
+			}
+
 			// if the wait gets interrupted by a signal, check again.
 			// EAGAIN will also be a retry, as it means the other thread completed
 			// and changed the __mlibc_done variable to signal it before we actually went to sleep.
-			if (int e = sysdep<FutexWait>((int *)&once->__mlibc_done, onceLocked, nullptr);
+			if (int e = sysdep<FutexWait>((int *)&once->__mlibc_done, expected, nullptr);
 			    e && e != EINTR && e != EAGAIN)
 				__ensure(!"sys_futex_wait() failed");
 			expected = __atomic_load_n(&once->__mlibc_done, __ATOMIC_ACQUIRE);
@@ -262,6 +281,9 @@ static constexpr unsigned int mutexShared = 4;
 // TODO: either use uint32_t or determine the bit based on sizeof(int).
 static constexpr unsigned int mutex_owner_mask = (static_cast<uint32_t>(1) << 30) - 1;
 static constexpr unsigned int mutex_waiters_bit = static_cast<uint32_t>(1) << 31;
+static constexpr unsigned int condPsharedMask = __MLIBC_THREAD_PROCESS_SHARED;
+static constexpr unsigned int condWaiterIncrement = 2;
+static constexpr unsigned int condWaiterMask = ~condPsharedMask;
 
 int thread_mutex_init(
     struct __mlibc_mutex *__restrict mutex, const struct __mlibc_mutexattr *__restrict attr
@@ -310,7 +332,7 @@ int thread_mutex_timedlock(
 			if (__atomic_compare_exchange_n(
 			        &mutex->__mlibc_state,
 			        &expected,
-			        this_tid | mutex_waiters_bit,
+			        this_tid,
 			        false,
 			        __ATOMIC_ACQUIRE,
 			        __ATOMIC_ACQUIRE
@@ -491,6 +513,8 @@ int thread_cond_destroy(struct __mlibc_cond *) { return 0; }
 
 int thread_cond_signal(struct __mlibc_cond *cond) {
 	__atomic_fetch_add(&cond->__mlibc_seq, 1, __ATOMIC_RELEASE);
+	if ((__atomic_load_n(&cond->__mlibc_flags, __ATOMIC_ACQUIRE) & condWaiterMask) == 0)
+		return 0;
 	if (int e = mlibc::sysdep<FutexWake>((int *)&cond->__mlibc_seq, false); e)
 		__ensure(!"sys_futex_wake() failed");
 
@@ -499,6 +523,8 @@ int thread_cond_signal(struct __mlibc_cond *cond) {
 
 int thread_cond_broadcast(struct __mlibc_cond *cond) {
 	__atomic_fetch_add(&cond->__mlibc_seq, 1, __ATOMIC_RELEASE);
+	if ((__atomic_load_n(&cond->__mlibc_flags, __ATOMIC_ACQUIRE) & condWaiterMask) == 0)
+		return 0;
 	if (int e = mlibc::sysdep<FutexWake>((int *)&cond->__mlibc_seq, true); e)
 		__ensure(!"sys_futex_wake() failed");
 
@@ -517,7 +543,12 @@ int thread_cond_timedwait(
 	if (abstime && (abstime->tv_nsec < 0 || abstime->tv_nsec >= nanos_per_second))
 		return EINVAL;
 
+	__atomic_fetch_add(&cond->__mlibc_flags, condWaiterIncrement, __ATOMIC_ACQ_REL);
 	auto seq = __atomic_load_n(&cond->__mlibc_seq, __ATOMIC_ACQUIRE);
+	auto finish_wait = [cond](int result) {
+		__atomic_fetch_sub(&cond->__mlibc_flags, condWaiterIncrement, __ATOMIC_ACQ_REL);
+		return result;
+	};
 
 	// TODO: handle locking errors and cancellation properly.
 	while (true) {
@@ -532,11 +563,11 @@ int thread_cond_timedwait(
 			if (!mlibc::time_absolute_to_relative(clockid, abstime, &timeout)) {
 				if (thread_mutex_lock(mutex))
 					__ensure(!"Failed to lock the mutex");
-				return EINVAL;
+				return finish_wait(EINVAL);
 			} else if (timeout.tv_sec == 0 && timeout.tv_nsec == 0) {
 				if (thread_mutex_lock(mutex))
 					__ensure(!"Failed to lock the mutex");
-				return ETIMEDOUT;
+				return finish_wait(ETIMEDOUT);
 			}
 
 			e = sysdep<FutexWait>((int *)&cond->__mlibc_seq, seq, &timeout);
@@ -559,16 +590,16 @@ int thread_cond_timedwait(
 		if (e == 0) {
 			auto cur_seq = __atomic_load_n(&cond->__mlibc_seq, __ATOMIC_ACQUIRE);
 			if (cur_seq > seq)
-				return 0;
+				return finish_wait(0);
 		} else if (e == EAGAIN) {
 			__ensure(__atomic_load_n(&cond->__mlibc_seq, __ATOMIC_ACQUIRE) > seq);
-			return 0;
+			return finish_wait(0);
 		} else if (e == EINTR) {
 			mlibc::thread_testcancel();
 			continue;
 		} else if (e == ETIMEDOUT) {
 			__ensure(abstime);
-			return ETIMEDOUT;
+			return finish_wait(ETIMEDOUT);
 		} else {
 			mlibc::panicLogger() << "sys_futex_wait() failed with error " << e << frg::endlog;
 		}
