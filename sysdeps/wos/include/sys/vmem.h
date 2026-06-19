@@ -14,6 +14,7 @@ enum class ops : uint64_t {
 	anon_free = 1,
 	protect = 2,
 	mremap = 3,
+	msync = 4,
 };
 
 } // namespace abi::vmem
@@ -122,6 +123,19 @@ remap(void **addr, void *old_addr, uint64_t old_size, uint64_t new_size, uint64_
 
 	*addr = reinterpret_cast<void *>(result);
 	return 0;
+}
+
+static inline int64_t sync(void *addr, uint64_t size, uint64_t flags) {
+	uint64_t result = syscall(
+	    abi::callnums::vmem,
+	    static_cast<uint64_t>(abi::vmem::ops::msync),
+	    reinterpret_cast<uint64_t>(addr),
+	    size,
+	    flags,
+	    0 // unused
+	);
+
+	return static_cast<int64_t>(result);
 }
 
 } // namespace vmem

@@ -126,6 +126,7 @@ struct WosSysdepTags :
     VmUnmap,
     VmProtect,
     VmRemap,
+    Msync,
     TcbSet,
     Exit,
     ThreadExit,

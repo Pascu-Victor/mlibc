@@ -464,6 +464,14 @@ int Sysdeps<VmProtect>::operator()(void *pointer, size_t size, int prot) {
 	return 0;
 }
 
+int Sysdeps<Msync>::operator()(void *addr, size_t length, int flags) {
+	int64_t result = ker::vmem::sync(addr, length, static_cast<uint64_t>(flags));
+	if (result < 0) {
+		return static_cast<int>(-result);
+	}
+	return 0;
+}
+
 int Sysdeps<Stat>::operator()(
     fsfd_target fsfdt, int fd, const char *path, int flags, struct stat *statbuf
 ) {
