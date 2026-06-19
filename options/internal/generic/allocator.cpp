@@ -1,13 +1,193 @@
 
+#include <stdint.h>
 #include <string.h>
 
 #include <bits/ensure.h>
 #include <frg/eternal.hpp>
+#include <internal-config.h>
 #include <mlibc/all-sysdeps.hpp>
 #include <mlibc/allocator.hpp>
-#include <internal-config.h>
 
 #if !MLIBC_DEBUG_ALLOCATOR
+
+namespace {
+constexpr size_t pageSize = 0x1000;
+constexpr size_t smallSpanMaxSize = 1024 * 1024;
+constexpr size_t arenaSpanSize = 16 * 1024 * 1024;
+constexpr size_t arenaSpanEntries = 16;
+constexpr size_t arenaByteCap = arenaSpanSize * arenaSpanEntries;
+constexpr size_t arenaFreeChunkEntries = 1024;
+constexpr size_t retainedSpanEntries = 128;
+constexpr size_t retainedSpanMaxSize = smallSpanMaxSize;
+constexpr size_t retainedSpanByteCap = 64 * 1024 * 1024;
+
+struct ArenaSpan {
+	uintptr_t address = 0;
+	size_t used = 0;
+};
+
+struct FreeChunk {
+	uintptr_t address = 0;
+	size_t length = 0;
+};
+
+struct RetainedSpan {
+	uintptr_t address = 0;
+	size_t length = 0;
+	uint64_t lastUsed = 0;
+};
+
+FutexLock allocatorBackendLock;
+ArenaSpan arenaSpans[arenaSpanEntries];
+FreeChunk arenaFreeChunks[arenaFreeChunkEntries];
+RetainedSpan retainedSpans[retainedSpanEntries];
+size_t arenaSpanCount = 0;
+size_t arenaMappedBytes = 0;
+size_t retainedSpanBytes = 0;
+uint64_t retainedSpanClock = 0;
+bool arenaMapInProgress = false;
+
+size_t page_round(size_t length) { return (length + size_t{pageSize - 1}) & ~size_t{pageSize - 1}; }
+
+uintptr_t take_arena_span(size_t length) {
+	length = page_round(length);
+	if (!length || length > smallSpanMaxSize)
+		return 0;
+
+	allocatorBackendLock.lock();
+	for (auto &chunk : arenaFreeChunks) {
+		if (chunk.address && chunk.length == length) {
+			uintptr_t address = chunk.address;
+			chunk = {};
+			allocatorBackendLock.unlock();
+			memset(reinterpret_cast<void *>(address), 0, length);
+			return address;
+		}
+	}
+
+	for (size_t i = 0; i < arenaSpanCount; ++i) {
+		auto &arena = arenaSpans[i];
+		if (arena.address && arena.used + length <= arenaSpanSize) {
+			uintptr_t address = arena.address + arena.used;
+			arena.used += length;
+			allocatorBackendLock.unlock();
+			return address;
+		}
+	}
+
+	bool const canMapArena = !arenaMapInProgress && arenaSpanCount < arenaSpanEntries
+	                         && arenaMappedBytes + arenaSpanSize <= arenaByteCap;
+	if (canMapArena)
+		arenaMapInProgress = true;
+	allocatorBackendLock.unlock();
+
+	if (!canMapArena)
+		return 0;
+
+	void *arenaPointer = nullptr;
+	int const mapError = mlibc::sysdep<AnonAllocate>(arenaSpanSize, &arenaPointer);
+
+	allocatorBackendLock.lock();
+	arenaMapInProgress = false;
+	if (!mapError && arenaSpanCount < arenaSpanEntries
+	    && arenaMappedBytes + arenaSpanSize <= arenaByteCap) {
+		auto &arena = arenaSpans[arenaSpanCount++];
+		arena.address = reinterpret_cast<uintptr_t>(arenaPointer);
+		arena.used = length;
+		arenaMappedBytes += arenaSpanSize;
+		allocatorBackendLock.unlock();
+		return arena.address;
+	}
+	allocatorBackendLock.unlock();
+
+	if (!mapError)
+		__ensure(!mlibc::sysdep<AnonFree>(arenaPointer, arenaSpanSize));
+	return 0;
+}
+
+bool retain_arena_span(uintptr_t address, size_t length) {
+	length = page_round(length);
+	if (!address || !length || length > smallSpanMaxSize)
+		return false;
+
+	allocatorBackendLock.lock();
+	bool belongsToArena = false;
+	for (size_t i = 0; i < arenaSpanCount; ++i) {
+		auto const &arena = arenaSpans[i];
+		if (!arena.address || address < arena.address)
+			continue;
+
+		size_t const offset = address - arena.address;
+		if (length <= arena.used && offset <= arena.used - length) {
+			belongsToArena = true;
+			break;
+		}
+	}
+
+	if (!belongsToArena) {
+		allocatorBackendLock.unlock();
+		return false;
+	}
+
+	for (auto &chunk : arenaFreeChunks) {
+		if (!chunk.address) {
+			chunk = FreeChunk{address, length};
+			allocatorBackendLock.unlock();
+			return true;
+		}
+	}
+	allocatorBackendLock.unlock();
+	return false;
+}
+
+uintptr_t take_retained_span(size_t length) {
+	length = page_round(length);
+	if (!length || length > retainedSpanMaxSize)
+		return 0;
+
+	allocatorBackendLock.lock();
+	for (auto &span : retainedSpans) {
+		if (span.address && span.length == length) {
+			uintptr_t address = span.address;
+			span = {};
+			retainedSpanBytes -= length;
+			allocatorBackendLock.unlock();
+			return address;
+		}
+	}
+	allocatorBackendLock.unlock();
+	return 0;
+}
+
+bool retain_span(uintptr_t address, size_t length) {
+	length = page_round(length);
+	if (!address || !length || length > retainedSpanMaxSize)
+		return false;
+
+	allocatorBackendLock.lock();
+	if (retainedSpanBytes + length > retainedSpanByteCap) {
+		allocatorBackendLock.unlock();
+		return false;
+	}
+
+	RetainedSpan *slot = nullptr;
+	for (auto &span : retainedSpans) {
+		if (!span.address) {
+			slot = &span;
+			break;
+		}
+	}
+	if (!slot) {
+		allocatorBackendLock.unlock();
+		return false;
+	}
+
+	*slot = RetainedSpan{address, length, ++retainedSpanClock};
+	retainedSpanBytes += length;
+	allocatorBackendLock.unlock();
+	return true;
+}
+} // namespace
 
 // --------------------------------------------------------
 // Globals
@@ -27,29 +207,40 @@ MemoryAllocator &getAllocator() {
 // --------------------------------------------------------
 
 uintptr_t VirtualAllocator::map(size_t length) {
+	if (uintptr_t retained = take_retained_span(length)) {
+		memset(reinterpret_cast<void *>(retained), 0, page_round(length));
+		return retained;
+	}
+	if (uintptr_t arenaSpan = take_arena_span(length))
+		return arenaSpan;
+
 	void *ptr;
 	__ensure(!mlibc::sysdep<AnonAllocate>(length, &ptr));
 	return (uintptr_t)ptr;
 }
 
 void VirtualAllocator::unmap(uintptr_t address, size_t length) {
+	if (retain_arena_span(address, length))
+		return;
+	if (retain_span(address, length))
+		return;
+
 	__ensure(!mlibc::sysdep<AnonFree>((void *)address, length));
 }
 
 #else
 
 namespace {
-	struct AllocatorMeta {
-		size_t allocatedSize;
-		size_t pagesSize;
-		frg::array<uint64_t, 4> magic;
-	};
+struct AllocatorMeta {
+	size_t allocatedSize;
+	size_t pagesSize;
+	frg::array<uint64_t, 4> magic;
+};
 
-	constexpr frg::array<uint64_t, 4> allocatorMagic {
-		0x6d4bbb9f3446e83f, 0x25e213a7a7f9f954,
-		0x1a3c667586538bef, 0x994f34ff71c090bc
-	};
-} // namespace anonymous
+constexpr frg::array<uint64_t, 4> allocatorMagic{
+    0x6d4bbb9f3446e83f, 0x25e213a7a7f9f954, 0x1a3c667586538bef, 0x994f34ff71c090bc
+};
+} // namespace
 
 // Turn vm_unmap calls in free into vm_map(..., PROT_NONE, ...) calls to prevent
 // those addresses from being reused. This is useful for detecting situations like this:
@@ -78,8 +269,9 @@ constexpr size_t pointerAlignment = 16;
 // TODO(qookie): Support this. Perhaps by overallocating by 2x and then picking
 // an offset that guarantees the desired alignment.
 static_assert(pointerAlignment <= 4096, "Pointer aligment of more than 4096 bytes is unsupported");
-static_assert(!(pointerAlignment & (pointerAlignment - 1)),
-		"Pointer aligment must be a power of 2");
+static_assert(
+    !(pointerAlignment & (pointerAlignment - 1)), "Pointer aligment must be a power of 2"
+);
 
 constexpr size_t pageSize = 0x1000;
 
@@ -91,12 +283,24 @@ void *MemoryAllocator::allocate(size_t size) {
 
 	// Two extra pages for metadata in front and guard page at the end
 	// Reserve the whole region as PROT_NONE...
-	if (int e = mlibc::sysdep<VmMap>(nullptr, pg_size + pageSize * 2, PROT_NONE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0, &ptr))
-		mlibc::panicLogger() << "sys_vm_map failed in MemoryAllocator::allocate (errno " << e << ")" << frg::endlog;
+	if (int e = mlibc::sysdep<VmMap>(
+	        nullptr, pg_size + pageSize * 2, PROT_NONE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0, &ptr
+	    ))
+		mlibc::panicLogger() << "sys_vm_map failed in MemoryAllocator::allocate (errno " << e << ")"
+		                     << frg::endlog;
 
 	// ...Then replace pages to make them accessible, excluding the guard page
-	if (int e = mlibc::sysdep<VmMap>(ptr, pg_size + pageSize, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE | MAP_FIXED, -1, 0, &ptr))
-		mlibc::panicLogger() << "sys_vm_map failed in MemoryAllocator::allocate (errno " << e << ")" << frg::endlog;
+	if (int e = mlibc::sysdep<VmMap>(
+	        ptr,
+	        pg_size + pageSize,
+	        PROT_READ | PROT_WRITE,
+	        MAP_ANONYMOUS | MAP_PRIVATE | MAP_FIXED,
+	        -1,
+	        0,
+	        &ptr
+	    ))
+		mlibc::panicLogger() << "sys_vm_map failed in MemoryAllocator::allocate (errno " << e << ")"
+		                     << frg::endlog;
 
 	void *meta = ptr;
 	void *out_page = reinterpret_cast<void *>(reinterpret_cast<uintptr_t>(ptr) + pageSize);
@@ -129,7 +333,8 @@ void MemoryAllocator::free(void *ptr) {
 	AllocatorMeta *meta = reinterpret_cast<AllocatorMeta *>(page_addr - pageSize);
 
 	if (meta->magic != allocatorMagic)
-		mlibc::panicLogger() << "Invalid allocator metadata magic in MemoryAllocator::free" << frg::endlog;
+		mlibc::panicLogger() << "Invalid allocator metadata magic in MemoryAllocator::free"
+		                     << frg::endlog;
 
 	deallocate(ptr, meta->allocatedSize);
 }
@@ -139,24 +344,38 @@ void MemoryAllocator::deallocate(void *ptr, size_t size) {
 		return;
 
 	if constexpr (logAllocations)
-		mlibc::infoLogger() << "MemoryAllocator::deallocate(" << ptr << ", " << size << ")" << frg::endlog;
+		mlibc::infoLogger() << "MemoryAllocator::deallocate(" << ptr << ", " << size << ")"
+		                    << frg::endlog;
 
 	uintptr_t page_addr = reinterpret_cast<uintptr_t>(ptr) & ~size_t{pageSize - 1};
 	AllocatorMeta *meta = reinterpret_cast<AllocatorMeta *>(page_addr - pageSize);
 
 	if (meta->magic != allocatorMagic)
-		mlibc::panicLogger() << "Invalid allocator metadata magic in MemoryAllocator::deallocate" << frg::endlog;
+		mlibc::panicLogger() << "Invalid allocator metadata magic in MemoryAllocator::deallocate"
+		                     << frg::endlog;
 
 	if (size != meta->allocatedSize)
-		mlibc::panicLogger() << "Invalid allocated size in metadata in MemoryAllocator::deallocate (given " << size << ", stored " << meta->allocatedSize << ")" << frg::endlog;
+		mlibc::panicLogger()
+		    << "Invalid allocated size in metadata in MemoryAllocator::deallocate (given " << size
+		    << ", stored " << meta->allocatedSize << ")" << frg::endlog;
 
 	if constexpr (neverReleaseVa) {
 		void *unused;
-		if (int e = mlibc::sysdep<VmMap>(meta, meta->pagesSize + pageSize * 2, PROT_NONE, MAP_ANONYMOUS | MAP_PRIVATE | MAP_FIXED, -1, 0, &unused))
-			mlibc::panicLogger() << "sys_vm_map failed in MemoryAllocator::deallocate (errno " << e << ")" << frg::endlog;
+		if (int e = mlibc::sysdep<VmMap>(
+		        meta,
+		        meta->pagesSize + pageSize * 2,
+		        PROT_NONE,
+		        MAP_ANONYMOUS | MAP_PRIVATE | MAP_FIXED,
+		        -1,
+		        0,
+		        &unused
+		    ))
+			mlibc::panicLogger() << "sys_vm_map failed in MemoryAllocator::deallocate (errno " << e
+			                     << ")" << frg::endlog;
 	} else {
 		if (int e = mlibc::sysdep<VmUnmap>(meta, meta->pagesSize + pageSize * 2))
-			mlibc::panicLogger() << "sys_vm_unmap failed in MemoryAllocator::deallocate (errno " << e << ")" << frg::endlog;
+			mlibc::panicLogger() << "sys_vm_unmap failed in MemoryAllocator::deallocate (errno "
+			                     << e << ")" << frg::endlog;
 	}
 }
 
@@ -173,7 +392,8 @@ void *MemoryAllocator::reallocate(void *ptr, size_t size) {
 		AllocatorMeta *meta = reinterpret_cast<AllocatorMeta *>(page_addr - pageSize);
 
 		if (meta->magic != allocatorMagic)
-			mlibc::panicLogger() << "Invalid allocator metadata magic in MemoryAllocator::reallocate" << frg::endlog;
+			mlibc::panicLogger()
+			    << "Invalid allocator metadata magic in MemoryAllocator::reallocate" << frg::endlog;
 
 		memcpy(newArea, ptr, frg::min(meta->allocatedSize, size));
 
@@ -181,7 +401,8 @@ void *MemoryAllocator::reallocate(void *ptr, size_t size) {
 	}
 
 	if constexpr (logAllocations)
-		mlibc::infoLogger() << "MemoryAllocator::reallocate(" << ptr << ", " << size << ") = " << newArea << frg::endlog;
+		mlibc::infoLogger() << "MemoryAllocator::reallocate(" << ptr << ", " << size
+		                    << ") = " << newArea << frg::endlog;
 
 	return newArea;
 }
@@ -194,7 +415,8 @@ size_t MemoryAllocator::get_size(void *ptr) {
 	AllocatorMeta *meta = reinterpret_cast<AllocatorMeta *>(page_addr - pageSize);
 
 	if (meta->magic != allocatorMagic)
-		mlibc::panicLogger() << "Invalid allocator metadata magic in MemoryAllocator::get_size" << frg::endlog;
+		mlibc::panicLogger() << "Invalid allocator metadata magic in MemoryAllocator::get_size"
+		                     << frg::endlog;
 
 	return meta->allocatedSize;
 }
