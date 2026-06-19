@@ -104,6 +104,11 @@ if not no_headers
         'include/asm/ioctl.h',
         subdir: 'asm',
     )
+
+    install_headers(
+        'include/machine/endian.h',
+        subdir: 'machine',
+    )
 endif
 
 if not headers_only

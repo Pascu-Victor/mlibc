@@ -5,10 +5,14 @@
 #include <asm/ioctl.h>
 #include <mlibc-config.h>
 
+/* On Linux and WOS, sys/ioctl.h includes the terminal winsize type. */
+#if __MLIBC_LINUX_OPTION || __MLIBC_WOS_OPTION
+#include <bits/winsize.h>
+#endif
+
 /* On Linux, sys/ioctl.h includes the termios ioctls. */
 #if __MLIBC_LINUX_OPTION
 #include <asm/ioctls.h>
-#include <bits/winsize.h>
 #include <sys/ttydefaults.h>
 #endif
 
