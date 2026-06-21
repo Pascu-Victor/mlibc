@@ -2,6 +2,7 @@ if not wos_option
 	subdir_done()
 endif
 libc_sources += files(
+	'generic/cpuset.cpp',
 	'generic/epoll.cpp',
 	'generic/ifaddrs.cpp',
 	'generic/mntent.cpp',
