@@ -12,6 +12,7 @@
 #include <mlibc/time-helpers.hpp>
 
 extern "C" Tcb *__rtld_allocateTcb();
+extern "C" void __mlibc_run_thread_dtors();
 
 namespace {
 
@@ -236,6 +237,8 @@ __attribute__((__noreturn__)) void thread_exit(thread_exit_return ret_val) {
 		hand->func(hand->arg);
 		frg::destruct(getAllocator(), hand);
 	}
+
+	__mlibc_run_thread_dtors();
 
 	for (size_t j = 0; j < __MLIBC_THREAD_DESTRUCTOR_ITERATIONS; j++) {
 		for (size_t i = 0; i < PTHREAD_KEYS_MAX; i++) {

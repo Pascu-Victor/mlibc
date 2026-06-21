@@ -3,10 +3,16 @@
 #include <string.h>
 
 #include <bits/ensure.h>
+#include <bits/threads.h>
+#include <bits/types.h>
 #include <mlibc/allocator.hpp>
+#include <mlibc/threads.hpp>
 
+#include <frg/allocation.hpp>
 #include <frg/eternal.hpp>
 #include <frg/vector.hpp>
+
+namespace {
 
 struct ExitHandler {
 	void (*function)(void *);
@@ -16,12 +22,78 @@ struct ExitHandler {
 
 using ExitQueue = frg::vector<ExitHandler, MemoryAllocator>;
 
+struct ThreadExitHandler {
+	void (*function)(void *);
+	void *argument;
+	void *dsoHandle;
+	ThreadExitHandler *next;
+};
+
+__mlibc_once threadExitKeyOnce = __MLIBC_THREAD_ONCE_INITIALIZER;
+__mlibc_uintptr threadExitKey;
+int threadExitKeyError;
+int threadExitKeyReady;
+
 ExitQueue &getExitQueue() {
 	// use frg::eternal to prevent the compiler from scheduling the destructor
 	// by generating a call to __cxa_atexit().
 	static frg::eternal<ExitQueue> singleton(getAllocator());
 	return singleton.get();
 }
+
+void runThreadExitHandlers(void *value) {
+	auto pending = static_cast<ThreadExitHandler *>(value);
+	mlibc::thread_key_set(threadExitKey, nullptr);
+
+	while (pending) {
+		auto handler = pending;
+		pending = handler->next;
+
+		handler->function(handler->argument);
+		frg::destruct(getAllocator(), handler);
+
+		auto recursive = static_cast<ThreadExitHandler *>(mlibc::thread_key_get(threadExitKey));
+		if (!recursive)
+			continue;
+
+		mlibc::thread_key_set(threadExitKey, nullptr);
+		auto tail = recursive;
+		while (tail->next)
+			tail = tail->next;
+		tail->next = pending;
+		pending = recursive;
+	}
+}
+
+void initializeThreadExitKey() {
+	threadExitKeyError = mlibc::thread_key_create(&threadExitKey, runThreadExitHandlers);
+	__atomic_store_n(&threadExitKeyReady, !threadExitKeyError, __ATOMIC_RELEASE);
+}
+
+int registerThreadExitHandler(void (*function)(void *), void *argument, void *dsoHandle) {
+	if (mlibc::thread_once(&threadExitKeyOnce, initializeThreadExitKey))
+		return -1;
+	if (threadExitKeyError)
+		return -1;
+
+	auto handler = frg::construct<ThreadExitHandler>(getAllocator());
+	if (!handler)
+		return -1;
+
+	handler->function = function;
+	handler->argument = argument;
+	handler->dsoHandle = dsoHandle;
+	handler->next = static_cast<ThreadExitHandler *>(mlibc::thread_key_get(threadExitKey));
+
+	if (mlibc::thread_key_set(threadExitKey, handler)) {
+		frg::destruct(getAllocator(), handler);
+		return -1;
+	}
+
+	return 0;
+}
+
+} // namespace
 
 extern "C" int __cxa_atexit(void (*function)(void *), void *argument, void *handle) {
 	ExitHandler handler;
@@ -30,6 +102,20 @@ extern "C" int __cxa_atexit(void (*function)(void *), void *argument, void *hand
 	handler.dsoHandle = handle;
 	getExitQueue().push(handler);
 	return 0;
+}
+
+extern "C" int
+__cxa_thread_atexit_impl(void (*function)(void *), void *argument, void *dsoHandle) {
+	return registerThreadExitHandler(function, argument, dsoHandle);
+}
+
+extern "C" void __mlibc_run_thread_dtors() {
+	if (!__atomic_load_n(&threadExitKeyReady, __ATOMIC_ACQUIRE))
+		return;
+
+	auto pending = static_cast<ThreadExitHandler *>(mlibc::thread_key_get(threadExitKey));
+	if (pending)
+		runThreadExitHandlers(pending);
 }
 
 extern "C" void __dlapi_exit();
@@ -66,6 +152,8 @@ extern "C" void *__dso_handle;
 }
 
 void __mlibc_do_finalize() {
+	__mlibc_run_thread_dtors();
+
 	// Invoke any handlers registered with atexit (NOT associated with a DSO).
 	// Note that we deliberately do not invoke other handlers here, since
 	// that would destroy mlibc's global objects including stdout and flushing
