@@ -1026,7 +1026,8 @@ long sysconf(int number) {
 }
 
 pid_t tcgetpgrp(int fd) {
-	int pgrp, scratch;
+	pid_t pgrp;
+	int scratch;
 	if (int e = mlibc::sysdep_or_enosys<Ioctl>(fd, TIOCGPGRP, &pgrp, &scratch); e) {
 		errno = e;
 		return -1;

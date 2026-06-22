@@ -29,8 +29,18 @@ constexpr unsigned int RECORD_A = 1;
 constexpr unsigned int RECORD_CNAME = 5;
 constexpr unsigned int RECORD_PTR = 12;
 constexpr unsigned int RECORD_AAAA = 28;
+constexpr size_t DNS_UDP_RESPONSE_SIZE = 512;
+constexpr int DNS_QUERY_ATTEMPTS = 2;
+constexpr int DNS_QUERY_TIMEOUT_MS = 5000;
+constexpr int MSEC_PER_SEC = 1000;
+constexpr uint16_t DNS_FLAG_RESPONSE = 0x8000;
 
-int get_poll_timeout(struct timespec *original_time) {
+auto next_dns_query_id() -> uint16_t {
+	static uint32_t next_id = 123;
+	return static_cast<uint16_t>(__atomic_add_fetch(&next_id, 1, __ATOMIC_RELAXED));
+}
+
+int get_poll_timeout(struct timespec *original_time, int timeout_ms) {
 	struct timespec current_time;
 	if (int e =
 	        mlibc::sysdep<ClockGet>(CLOCK_MONOTONIC, &current_time.tv_sec, &current_time.tv_nsec);
@@ -46,9 +56,11 @@ int get_poll_timeout(struct timespec *original_time) {
 	}
 
 	// poll timeout unit is msec
-	// default timeout is 5 seconds
-	// TODO resolv.conf can specify a timeout and we ignore it currently.
-	return frg::max(5000l - (current_time.tv_sec * 1000 + current_time.tv_nsec / 1000000), 0l);
+	return frg::max(
+	    static_cast<long>(timeout_ms)
+	        - (current_time.tv_sec * 1000 + current_time.tv_nsec / 1000000),
+	    0l
+	);
 }
 } // namespace
 
@@ -78,17 +90,20 @@ static frg::string<MemoryAllocator> read_dns_name(char *buf, char *&it) {
 	return res;
 }
 
-int lookup_name_dns_one(
+int lookup_name_dns_one_at(
     struct lookup_result &buf,
     const char *name,
     frg::string<MemoryAllocator> &canon_name,
-    int family
+    int family,
+    const char *nameserver_name,
+    int fd,
+    int timeout_ms
 ) {
 	frg::string<MemoryAllocator> request{getAllocator()};
 
 	int num_q = 1;
 	struct dns_header header;
-	header.identification = htons(123);
+	header.identification = htons(next_dns_query_id());
 	header.flags = htons(0x100);
 	header.no_q = htons(num_q);
 	header.no_ans = htons(0);
@@ -131,19 +146,10 @@ int lookup_name_dns_one(
 	sin.sin_family = AF_INET;
 	sin.sin_port = htons(serv_buf[0].port);
 
-	auto nameserver = get_nameserver();
-	if (!inet_aton(nameserver ? nameserver->name.data() : "127.0.0.1", &sin.sin_addr)) {
+	if (!inet_aton(nameserver_name, &sin.sin_addr)) {
 		mlibc::infoLogger() << "lookup_name_dns(): inet_aton() failed!" << frg::endlog;
 		return -EAI_SYSTEM;
 	}
-
-	int fd = socket(AF_INET, SOCK_DGRAM, 0);
-	if (fd < 0) {
-		mlibc::infoLogger() << "lookup_name_dns(): socket() failed" << frg::endlog;
-		return -EAI_SYSTEM;
-	}
-
-	frg::scope_exit close_fd{[&] { close(fd); }};
 
 	size_t sent =
 	    sendto(fd, request.data(), request.size(), 0, (struct sockaddr *)&sin, sizeof(sin));
@@ -153,7 +159,7 @@ int lookup_name_dns_one(
 		return -EAI_SYSTEM;
 	}
 
-	char response[256];
+	char response[DNS_UDP_RESPONSE_SIZE];
 	int num_ans = 0;
 	int fds_ready;
 	struct timespec start_time;
@@ -167,22 +173,37 @@ int lookup_name_dns_one(
 		mlibc::panicLogger() << "mlibc: sys_clock_get() failed with error code: " << e
 		                     << frg::endlog;
 
-	while ((fds_ready = poll(&pollfd, 1, get_poll_timeout(&start_time))) > 0) {
-		ssize_t rlen = recvfrom(fd, response, 256, 0, nullptr, nullptr);
+	while ((fds_ready = poll(&pollfd, 1, get_poll_timeout(&start_time, timeout_ms))) > 0) {
+		struct sockaddr_in peer = {};
+		socklen_t peer_len = sizeof(peer);
+		ssize_t rlen = recvfrom(
+		    fd, response, sizeof(response), 0, reinterpret_cast<struct sockaddr *>(&peer), &peer_len
+		);
 		if (rlen < 0) {
 			mlibc::infoLogger() << "lookup_name_dns(): recvfrom() failed" << frg::endlog;
 			return -EAI_SYSTEM;
 		}
+
+		if (peer_len < sizeof(peer) || peer.sin_family != AF_INET || peer.sin_port != sin.sin_port
+		    || peer.sin_addr.s_addr != sin.sin_addr.s_addr)
+			continue;
 
 		if ((size_t)rlen < sizeof(struct dns_header))
 			continue;
 
 		auto response_header = reinterpret_cast<struct dns_header *>(response);
 		if (response_header->identification != header.identification)
-			return -EAI_FAIL;
+			continue;
 
-		if ((ntohs(response_header->flags) & 0xF) == RETURN_NXDOMAIN)
+		uint16_t const flags = ntohs(response_header->flags);
+		if ((flags & DNS_FLAG_RESPONSE) == 0)
+			continue;
+
+		uint16_t const rcode = flags & 0xF;
+		if (rcode == RETURN_NXDOMAIN)
 			return -EAI_NONAME;
+		if (rcode != RETURN_NOERROR)
+			return -EAI_AGAIN;
 
 		auto it = response + sizeof(struct dns_header);
 		for (int i = 0; i < ntohs(response_header->no_q); i++) {
@@ -191,7 +212,11 @@ int lookup_name_dns_one(
 			it += 4;
 		}
 
-		for (int i = 0; i < ntohs(response_header->no_ans); i++) {
+		uint16_t const answer_count = ntohs(response_header->no_ans);
+		if (answer_count == 0)
+			return 0;
+
+		for (int i = 0; i < answer_count; i++) {
 			struct dns_addr_buf buffer;
 			auto dns_name = read_dns_name(response, it);
 
@@ -199,15 +224,18 @@ int lookup_name_dns_one(
 			uint16_t rr_class = (it[2] << 8) | it[3];
 			uint16_t rr_length = (it[8] << 8) | it[9];
 			it += 10;
+			char *rr_data = it;
+			it += rr_length;
 			(void)rr_class;
 
 			switch (rr_type) {
 				case RECORD_A:
 					if (family != AF_UNSPEC && family != AF_INET)
 						continue;
+					if (rr_length != 4)
+						continue;
 
-					memcpy(buffer.addr, it, rr_length);
-					it += rr_length;
+					memcpy(buffer.addr, rr_data, rr_length);
 					buffer.family = AF_INET;
 					buffer.name = std::move(dns_name);
 					buf.buf.push(std::move(buffer));
@@ -215,15 +243,16 @@ int lookup_name_dns_one(
 				case RECORD_AAAA:
 					if (family != AF_UNSPEC && family != AF_INET6)
 						continue;
+					if (rr_length != 16)
+						continue;
 
-					memcpy(buffer.addr, it, rr_length);
-					it += rr_length;
+					memcpy(buffer.addr, rr_data, rr_length);
 					buffer.family = AF_INET6;
 					buffer.name = std::move(dns_name);
 					buf.buf.push(std::move(buffer));
 					break;
 				case RECORD_CNAME:
-					canon_name = read_dns_name(response, it);
+					canon_name = read_dns_name(response, rr_data);
 					buf.aliases.push(std::move(dns_name));
 					break;
 				default:
@@ -240,8 +269,76 @@ int lookup_name_dns_one(
 
 	if (fds_ready == 0)
 		return -EAI_AGAIN;
+	if (fds_ready < 0)
+		return -EAI_SYSTEM;
 
 	return buf.buf.size();
+}
+
+int lookup_name_dns_one_at_with_retries(
+    struct lookup_result &buf,
+    const char *name,
+    frg::string<MemoryAllocator> &canon_name,
+    int family,
+    const char *nameserver_name,
+    int attempts,
+    int timeout_ms
+) {
+	int fallback = -EAI_AGAIN;
+	for (int attempt = 0; attempt < attempts; attempt++) {
+		int fd = socket(AF_INET, SOCK_DGRAM, 0);
+		if (fd < 0) {
+			mlibc::infoLogger() << "lookup_name_dns(): socket() failed" << frg::endlog;
+			return -EAI_SYSTEM;
+		}
+
+		frg::scope_exit close_fd{[&] { close(fd); }};
+
+		int count =
+		    lookup_name_dns_one_at(buf, name, canon_name, family, nameserver_name, fd, timeout_ms);
+		if (count != -EAI_AGAIN)
+			return count;
+		fallback = count;
+	}
+	return fallback;
+}
+
+int lookup_name_dns_one(
+    struct lookup_result &buf,
+    const char *name,
+    frg::string<MemoryAllocator> &canon_name,
+    int family
+) {
+	auto conf = get_resolv_conf();
+	int const attempts = conf ? conf->attempts : DNS_QUERY_ATTEMPTS;
+	int const timeout_ms = conf ? conf->timeout * MSEC_PER_SEC : DNS_QUERY_TIMEOUT_MS;
+	if (!conf || (conf->nameservers.empty() && conf->name.empty()))
+		return lookup_name_dns_one_at_with_retries(
+		    buf, name, canon_name, family, "127.0.0.1", attempts, timeout_ms
+		);
+
+	int fallback = -EAI_AGAIN;
+	if (!conf->nameservers.empty()) {
+		for (auto &nameserver : conf->nameservers) {
+			if (nameserver.empty())
+				continue;
+
+			int count = lookup_name_dns_one_at_with_retries(
+			    buf, name, canon_name, family, nameserver.data(), attempts, timeout_ms
+			);
+			if (count > 0)
+				return count;
+			if (count == -EAI_SYSTEM || count == -EAI_SERVICE)
+				return count;
+			if (count == 0 || count == -EAI_NONAME || fallback == -EAI_AGAIN)
+				fallback = count;
+		}
+		return fallback;
+	}
+
+	return lookup_name_dns_one_at_with_retries(
+	    buf, name, canon_name, family, conf->name.data(), attempts, timeout_ms
+	);
 }
 
 int lookup_name_dns(
@@ -252,6 +349,15 @@ int lookup_name_dns(
 ) {
 	auto conf = get_resolv_conf();
 	bool const has_trailing_dot = name[0] && name[strlen(name) - 1] == '.';
+	bool const try_absolute_first = !has_trailing_dot && strchr(name, '.') != nullptr;
+
+	if (try_absolute_first) {
+		int count = lookup_name_dns_one(buf, name, canon_name, family);
+		if (count > 0)
+			return count;
+		if (count < 0 && count != -EAI_NONAME)
+			return count;
+	}
 
 	if (!has_trailing_dot && conf && !conf->search.empty()) {
 		for (auto &domain : conf->search) {
@@ -264,31 +370,42 @@ int lookup_name_dns(
 
 			struct lookup_result qualified_buf;
 			frg::string<MemoryAllocator> qualified_canon{getAllocator()};
-			int count = lookup_name_dns_one(qualified_buf, qualified.data(), qualified_canon, family);
+			int count =
+			    lookup_name_dns_one(qualified_buf, qualified.data(), qualified_canon, family);
 			if (count > 0) {
 				for (auto &entry : qualified_buf.buf)
 					buf.buf.push(std::move(entry));
 				for (auto &alias : qualified_buf.aliases)
 					buf.aliases.push(std::move(alias));
-				canon_name = qualified_canon.empty() ? std::move(qualified) : std::move(qualified_canon);
+				canon_name =
+				    qualified_canon.empty() ? std::move(qualified) : std::move(qualified_canon);
 				return count;
 			}
 		}
 	}
 
-	if (!has_trailing_dot)
+	if (!has_trailing_dot && !try_absolute_first)
 		return lookup_name_dns_one(buf, name, canon_name, family);
+	if (try_absolute_first)
+		return 0;
 
 	frg::string<MemoryAllocator> absolute{name, strlen(name) - 1, getAllocator()};
 	return lookup_name_dns_one(buf, absolute.data(), canon_name, family);
 }
 
-int lookup_addr_dns(frg::span<char> name, frg::array<uint8_t, 16> &addr, int family) {
+int lookup_addr_dns_at(
+    frg::span<char> name,
+    frg::array<uint8_t, 16> &addr,
+    int family,
+    const char *nameserver_name,
+    int fd,
+    int timeout_ms
+) {
 	frg::string<MemoryAllocator> request{getAllocator()};
 
 	int num_q = 1;
 	struct dns_header header;
-	header.identification = htons(123);
+	header.identification = htons(next_dns_query_id());
 	header.flags = htons(0x100);
 	header.no_q = htons(num_q);
 	header.no_ans = htons(0);
@@ -342,19 +459,10 @@ int lookup_addr_dns(frg::span<char> name, frg::array<uint8_t, 16> &addr, int fam
 	sin.sin_family = AF_INET;
 	sin.sin_port = htons(serv_buf[0].port);
 
-	auto nameserver = get_nameserver();
-	if (!inet_aton(nameserver ? nameserver->name.data() : "127.0.0.1", &sin.sin_addr)) {
+	if (!inet_aton(nameserver_name, &sin.sin_addr)) {
 		mlibc::infoLogger() << "lookup_name_dns(): inet_aton() failed!" << frg::endlog;
 		return -EAI_SYSTEM;
 	}
-
-	int fd = socket(AF_INET, SOCK_DGRAM, 0);
-	if (fd < 0) {
-		mlibc::infoLogger() << "lookup_name_dns(): socket() failed" << frg::endlog;
-		return -EAI_SYSTEM;
-	}
-
-	frg::scope_exit close_fd{[&] { close(fd); }};
 
 	size_t sent =
 	    sendto(fd, request.data(), request.size(), 0, (struct sockaddr *)&sin, sizeof(sin));
@@ -365,7 +473,7 @@ int lookup_addr_dns(frg::span<char> name, frg::array<uint8_t, 16> &addr, int fam
 		return -EAI_SYSTEM;
 	}
 
-	char response[256];
+	char response[DNS_UDP_RESPONSE_SIZE];
 	int num_ans = 0;
 	int fds_ready;
 	struct timespec start_time;
@@ -379,19 +487,37 @@ int lookup_addr_dns(frg::span<char> name, frg::array<uint8_t, 16> &addr, int fam
 		mlibc::panicLogger() << "mlibc: sys_clock_get() failed with error code: " << e
 		                     << frg::endlog;
 
-	while ((fds_ready = poll(&pollfd, 1, get_poll_timeout(&start_time))) > 0) {
-		ssize_t rlen = recvfrom(fd, response, 256, 0, nullptr, nullptr);
+	while ((fds_ready = poll(&pollfd, 1, get_poll_timeout(&start_time, timeout_ms))) > 0) {
+		struct sockaddr_in peer = {};
+		socklen_t peer_len = sizeof(peer);
+		ssize_t rlen = recvfrom(
+		    fd, response, sizeof(response), 0, reinterpret_cast<struct sockaddr *>(&peer), &peer_len
+		);
 		if (rlen < 0) {
 			mlibc::infoLogger() << "lookup_name_dns(): recvfrom() failed" << frg::endlog;
 			return -EAI_SYSTEM;
 		}
+
+		if (peer_len < sizeof(peer) || peer.sin_family != AF_INET || peer.sin_port != sin.sin_port
+		    || peer.sin_addr.s_addr != sin.sin_addr.s_addr)
+			continue;
 
 		if ((size_t)rlen < sizeof(struct dns_header))
 			continue;
 
 		auto response_header = reinterpret_cast<struct dns_header *>(response);
 		if (response_header->identification != header.identification)
-			return -EAI_FAIL;
+			continue;
+
+		uint16_t const flags = ntohs(response_header->flags);
+		if ((flags & DNS_FLAG_RESPONSE) == 0)
+			continue;
+
+		uint16_t const rcode = flags & 0xF;
+		if (rcode == RETURN_NXDOMAIN)
+			return -EAI_NONAME;
+		if (rcode != RETURN_NOERROR)
+			return -EAI_AGAIN;
 
 		auto it = response + sizeof(struct dns_header);
 		for (int i = 0; i < ntohs(response_header->no_q); i++) {
@@ -400,7 +526,11 @@ int lookup_addr_dns(frg::span<char> name, frg::array<uint8_t, 16> &addr, int fam
 			it += 4;
 		}
 
-		for (int i = 0; i < ntohs(response_header->no_ans); i++) {
+		uint16_t const answer_count = ntohs(response_header->no_ans);
+		if (answer_count == 0)
+			return 0;
+
+		for (int i = 0; i < answer_count; i++) {
 			struct dns_addr_buf buffer;
 			auto dns_name = read_dns_name(response, it);
 
@@ -408,6 +538,8 @@ int lookup_addr_dns(frg::span<char> name, frg::array<uint8_t, 16> &addr, int fam
 			uint16_t rr_class = (it[2] << 8) | it[3];
 			uint16_t rr_length = (it[8] << 8) | it[9];
 			it += 10;
+			char *rr_data = it;
+			it += rr_length;
 			(void)rr_class;
 			(void)rr_length;
 
@@ -415,7 +547,7 @@ int lookup_addr_dns(frg::span<char> name, frg::array<uint8_t, 16> &addr, int fam
 
 			switch (rr_type) {
 				case RECORD_PTR: {
-					auto ptr_name = read_dns_name(response, it);
+					auto ptr_name = read_dns_name(response, rr_data);
 					if (ptr_name.size() >= name.size())
 						return -EAI_OVERFLOW;
 					std::copy(ptr_name.begin(), ptr_name.end(), name.data());
@@ -436,8 +568,69 @@ int lookup_addr_dns(frg::span<char> name, frg::array<uint8_t, 16> &addr, int fam
 
 	if (fds_ready == 0)
 		return -EAI_AGAIN;
+	if (fds_ready < 0)
+		return -EAI_SYSTEM;
 
 	return 0;
+}
+
+int lookup_addr_dns_at_with_retries(
+    frg::span<char> name,
+    frg::array<uint8_t, 16> &addr,
+    int family,
+    const char *nameserver_name,
+    int attempts,
+    int timeout_ms
+) {
+	int fallback = -EAI_AGAIN;
+	for (int attempt = 0; attempt < attempts; attempt++) {
+		int fd = socket(AF_INET, SOCK_DGRAM, 0);
+		if (fd < 0) {
+			mlibc::infoLogger() << "lookup_addr_dns(): socket() failed" << frg::endlog;
+			return -EAI_SYSTEM;
+		}
+
+		frg::scope_exit close_fd{[&] { close(fd); }};
+
+		int count = lookup_addr_dns_at(name, addr, family, nameserver_name, fd, timeout_ms);
+		if (count != -EAI_AGAIN)
+			return count;
+		fallback = count;
+	}
+	return fallback;
+}
+
+int lookup_addr_dns(frg::span<char> name, frg::array<uint8_t, 16> &addr, int family) {
+	auto conf = get_resolv_conf();
+	int const attempts = conf ? conf->attempts : DNS_QUERY_ATTEMPTS;
+	int const timeout_ms = conf ? conf->timeout * MSEC_PER_SEC : DNS_QUERY_TIMEOUT_MS;
+	if (!conf || (conf->nameservers.empty() && conf->name.empty()))
+		return lookup_addr_dns_at_with_retries(
+		    name, addr, family, "127.0.0.1", attempts, timeout_ms
+		);
+
+	int fallback = -EAI_AGAIN;
+	if (!conf->nameservers.empty()) {
+		for (auto &nameserver : conf->nameservers) {
+			if (nameserver.empty())
+				continue;
+
+			int count = lookup_addr_dns_at_with_retries(
+			    name, addr, family, nameserver.data(), attempts, timeout_ms
+			);
+			if (count > 0)
+				return count;
+			if (count == -EAI_SYSTEM || count == -EAI_SERVICE || count == -EAI_FAMILY)
+				return count;
+			if (count == 0 || count == -EAI_NONAME || fallback == -EAI_AGAIN)
+				fallback = count;
+		}
+		return fallback;
+	}
+
+	return lookup_addr_dns_at_with_retries(
+	    name, addr, family, conf->name.data(), attempts, timeout_ms
+	);
 }
 
 int lookup_name_hosts(

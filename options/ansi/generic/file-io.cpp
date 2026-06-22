@@ -632,9 +632,11 @@ int fd_file::parse_modestring(const char *mode) {
 } // namespace mlibc
 
 namespace {
-mlibc::fd_file stdin_file{0};
-mlibc::fd_file stdout_file{1};
-mlibc::fd_file stderr_file{2, nullptr, true};
+// Keep the exported standard streams valid until the kernel tears the process
+// down. exit() can run while sibling threads still emit diagnostics.
+[[clang::no_destroy]] mlibc::fd_file stdin_file{0};
+[[clang::no_destroy]] mlibc::fd_file stdout_file{1};
+[[clang::no_destroy]] mlibc::fd_file stderr_file{2, nullptr, true};
 
 struct stdio_guard {
 	stdio_guard() = default;

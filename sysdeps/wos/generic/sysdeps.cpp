@@ -473,6 +473,75 @@ int Sysdeps<Msync>::operator()(void *addr, size_t length, int flags) {
 	return 0;
 }
 
+int Sysdeps<Madvise>::operator()(void *addr, size_t length, int advice) {
+	(void)addr;
+	(void)length;
+
+	switch (advice) {
+		case MADV_NORMAL:
+		case MADV_RANDOM:
+		case MADV_SEQUENTIAL:
+		case MADV_WILLNEED:
+			return 0;
+		case MADV_DONTNEED:
+		case MADV_FREE:
+		case MADV_REMOVE:
+		case MADV_DONTFORK:
+		case MADV_DOFORK:
+		case MADV_MERGEABLE:
+		case MADV_UNMERGEABLE:
+		case MADV_HUGEPAGE:
+		case MADV_NOHUGEPAGE:
+		case MADV_DONTDUMP:
+		case MADV_DODUMP:
+		case MADV_WIPEONFORK:
+		case MADV_KEEPONFORK:
+		case MADV_COLD:
+		case MADV_PAGEOUT:
+		case MADV_HWPOISON:
+		case MADV_SOFT_OFFLINE:
+			return ENOSYS;
+		default:
+			return EINVAL;
+	}
+}
+
+int Sysdeps<PosixMadvise>::operator()(void *addr, size_t length, int advice) {
+	switch (advice) {
+		case POSIX_MADV_NORMAL:
+			return sysdep<Madvise>(addr, length, MADV_NORMAL);
+		case POSIX_MADV_RANDOM:
+			return sysdep<Madvise>(addr, length, MADV_RANDOM);
+		case POSIX_MADV_SEQUENTIAL:
+			return sysdep<Madvise>(addr, length, MADV_SEQUENTIAL);
+		case POSIX_MADV_WILLNEED:
+			return sysdep<Madvise>(addr, length, MADV_WILLNEED);
+		case POSIX_MADV_DONTNEED:
+			return 0;
+		default:
+			return EINVAL;
+	}
+}
+
+int Sysdeps<Sysconf>::operator()(int num, long *ret) {
+	switch (num) {
+		case _SC_CHILD_MAX:
+			*ret = 25;
+			return 0;
+		case _SC_CLK_TCK:
+			*ret = 100;
+			return 0;
+		case _SC_NPROCESSORS_CONF:
+		case _SC_NPROCESSORS_ONLN: {
+			auto const cpu_count = static_cast<long>(ker::multiproc::nativeThreadCount());
+			*ret = cpu_count > 0 ? cpu_count : 1;
+			return 0;
+		}
+		default:
+			return EINVAL;
+	}
+}
+
 int Sysdeps<Stat>::operator()(
     fsfd_target fsfdt, int fd, const char *path, int flags, struct stat *statbuf
 ) {
@@ -789,46 +858,14 @@ int Sysdeps<Rename>::operator()(const char *old_path, const char *new_path) {
 int Sysdeps<Sigprocmask>::operator()(
     int how, const sigset_t *__restrict set, sigset_t *__restrict retrieve
 ) {
-	if (mlibc::tcb_available_flag) {
-		auto *tcb = mlibc::get_current_tcb();
-		if (tcb && __atomic_load_n(&tcb->wosSignalMaskValid, __ATOMIC_ACQUIRE)) {
-			uint64_t before_seq = __atomic_load_n(&tcb->wosSignalMaskSeq, __ATOMIC_ACQUIRE);
-			uint64_t cached_mask = __atomic_load_n(&tcb->wosSignalMaskCache, __ATOMIC_ACQUIRE);
-			uint64_t after_seq = __atomic_load_n(&tcb->wosSignalMaskSeq, __ATOMIC_ACQUIRE);
-			if (before_seq == after_seq
-			    && __atomic_load_n(&tcb->wosSignalMaskValid, __ATOMIC_ACQUIRE)) {
-				if (!set) {
-					if (retrieve)
-						*reinterpret_cast<uint64_t *>(retrieve) = cached_mask;
-					return 0;
-				}
-
-				uint64_t input = *reinterpret_cast<const uint64_t *>(set);
-				constexpr uint64_t unblockable = (1ULL << (9 - 1)) | (1ULL << (19 - 1));
-				input &= ~unblockable;
-
-				uint64_t new_mask = cached_mask;
-				bool valid_how = true;
-				if (how == SIG_BLOCK) {
-					new_mask |= input;
-				} else if (how == SIG_UNBLOCK) {
-					new_mask &= ~input;
-				} else if (how == SIG_SETMASK) {
-					new_mask = input;
-				} else {
-					valid_how = false;
-				}
-
-				if (valid_how && new_mask == cached_mask) {
-					if (retrieve)
-						*reinterpret_cast<uint64_t *>(retrieve) = cached_mask;
-					return 0;
-				}
-			}
-		}
-	}
-
 	int64_t r = ker::process::sigprocmask(how, (const void *)set, (void *)retrieve);
+	if (r < 0)
+		return (int)(-r);
+	return 0;
+}
+
+int Sysdeps<Sigpending>::operator()(sigset_t *set) {
+	int64_t r = ker::process::sigpending((void *)set);
 	if (r < 0)
 		return (int)(-r);
 	return 0;
@@ -1218,6 +1255,20 @@ gid_t Sysdeps<GetGid>::operator()() { return static_cast<gid_t>(ker::process::ge
 gid_t Sysdeps<GetEgid>::operator()() { return static_cast<gid_t>(ker::process::getegid()); }
 uid_t Sysdeps<GetUid>::operator()() { return static_cast<uid_t>(ker::process::getuid()); }
 uid_t Sysdeps<GetEuid>::operator()() { return static_cast<uid_t>(ker::process::geteuid()); }
+
+int Sysdeps<GetResuid>::operator()(uid_t *ruid, uid_t *euid, uid_t *suid) {
+	int64_t r = ker::process::getresuid(ruid, euid, suid);
+	if (r < 0)
+		return static_cast<int>(-r);
+	return 0;
+}
+
+int Sysdeps<GetResgid>::operator()(gid_t *rgid, gid_t *egid, gid_t *sgid) {
+	int64_t r = ker::process::getresgid(rgid, egid, sgid);
+	if (r < 0)
+		return static_cast<int>(-r);
+	return 0;
+}
 
 pid_t Sysdeps<GetTid>::operator()() {
 	return static_cast<pid_t>(ker::multiproc::currentThreadId());
@@ -1674,6 +1725,16 @@ int Sysdeps<Ioctl>::operator()(int fd, unsigned long request, void *arg, int *re
 	if (result)
 		*result = r;
 	return 0;
+}
+
+int Sysdeps<Tcgetwinsize>::operator()(int fd, struct winsize *winsz) {
+	int result = 0;
+	return sysdep<Ioctl>(fd, TIOCGWINSZ, winsz, &result);
+}
+
+int Sysdeps<Tcsetwinsize>::operator()(int fd, const struct winsize *winsz) {
+	int result = 0;
+	return sysdep<Ioctl>(fd, TIOCSWINSZ, const_cast<struct winsize *>(winsz), &result);
 }
 
 int Sysdeps<GetSockopt>::operator()(

@@ -77,6 +77,14 @@ inline int64_t sigprocmask(int how, const void *set, void *oldset) {
 	);
 }
 
+inline int64_t sigpending(void *set) {
+	return (int64_t)syscall(
+	    abi::callnums::process,
+	    (uint64_t)abi::process::procmgmt_ops::SIGPENDING,
+	    (uint64_t)(uintptr_t)set
+	);
+}
+
 inline int64_t sigsuspend(const void *set) {
 	return (int64_t)syscall(
 	    abi::callnums::process,
@@ -114,6 +122,26 @@ inline uint64_t getgid() {
 
 inline uint64_t getegid() {
 	return syscall(abi::callnums::process, (uint64_t)abi::process::procmgmt_ops::GETEGID);
+}
+
+inline int64_t getresuid(uid_t *ruid, uid_t *euid, uid_t *suid) {
+	return (int64_t)syscall(
+	    abi::callnums::process,
+	    (uint64_t)abi::process::procmgmt_ops::GETRESUID,
+	    (uint64_t)(uintptr_t)ruid,
+	    (uint64_t)(uintptr_t)euid,
+	    (uint64_t)(uintptr_t)suid
+	);
+}
+
+inline int64_t getresgid(gid_t *rgid, gid_t *egid, gid_t *sgid) {
+	return (int64_t)syscall(
+	    abi::callnums::process,
+	    (uint64_t)abi::process::procmgmt_ops::GETRESGID,
+	    (uint64_t)(uintptr_t)rgid,
+	    (uint64_t)(uintptr_t)egid,
+	    (uint64_t)(uintptr_t)sgid
+	);
 }
 
 inline int64_t getgroups(uint64_t size, gid_t *list) {
@@ -317,10 +345,7 @@ inline int64_t sigaltstack(const void *ss, void *old_ss) {
 }
 
 inline int64_t personality(unsigned long persona) {
-	return (int64_t)syscall(
-	    abi::callnums::personality,
-	    (uint64_t)persona
-	);
+	return (int64_t)syscall(abi::callnums::personality, (uint64_t)persona);
 }
 
 // Read the hostname of the node that LAUNCHED this process (i.e. the submitter).
