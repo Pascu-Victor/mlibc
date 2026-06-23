@@ -1532,7 +1532,7 @@ int Sysdeps<Fcntl>::operator()(int fd, int request, va_list args, int *result) {
 	uint64_t arg = 0;
 	// F_DUPFD=0, F_GETFD=1, F_SETFD=2, F_GETFL=3, F_SETFL=4, F_DUPFD_CLOEXEC=1030
 	if (request == 0 || request == 2 || request == 4 || request == 1030) {
-		arg = va_arg(args, uint64_t);
+		arg = static_cast<uint64_t>(va_arg(args, int));
 	}
 
 	if (request == F_GETLK || request == F_SETLK || request == F_SETLKW || request == F_OFD_GETLK

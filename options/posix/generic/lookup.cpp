@@ -34,10 +34,81 @@ constexpr int DNS_QUERY_ATTEMPTS = 2;
 constexpr int DNS_QUERY_TIMEOUT_MS = 5000;
 constexpr int MSEC_PER_SEC = 1000;
 constexpr uint16_t DNS_FLAG_RESPONSE = 0x8000;
+constexpr const char *DNS_CACHE_PATH = "/run/mlibc-dns-cache";
+constexpr time_t DNS_CACHE_TTL_SECONDS = 300;
 
 auto next_dns_query_id() -> uint16_t {
 	static uint32_t next_id = 123;
 	return static_cast<uint16_t>(__atomic_add_fetch(&next_id, 1, __ATOMIC_RELAXED));
+}
+
+auto family_matches(int requested, int cached) -> bool {
+	return requested == AF_UNSPEC || requested == cached;
+}
+
+void append_dns_cache_entry(const char *name, const dns_addr_buf &entry) {
+	if (!name || !*name)
+		return;
+
+	char addr[INET6_ADDRSTRLEN];
+	if (!inet_ntop(entry.family, entry.addr, addr, sizeof(addr)))
+		return;
+
+	FILE *file = fopen(DNS_CACHE_PATH, "a");
+	if (!file)
+		return;
+
+	time_t const expires = time(nullptr) + DNS_CACHE_TTL_SECONDS;
+	fprintf(file, "%lld %d %s %s\n", static_cast<long long>(expires), entry.family, addr, name);
+	fclose(file);
+}
+
+void append_dns_cache_entries(
+    const char *name, const frg::vector<dns_addr_buf, MemoryAllocator> &entries, size_t first
+) {
+	for (size_t i = first; i < entries.size(); ++i)
+		append_dns_cache_entry(name, entries[i]);
+}
+
+auto lookup_name_dns_cache(
+    struct lookup_result &buf,
+    const char *name,
+    frg::string<MemoryAllocator> &canon_name,
+    int family
+) -> int {
+	FILE *file = fopen(DNS_CACHE_PATH, "r");
+	if (!file)
+		return 0;
+
+	frg::scope_exit close_file{[&] { fclose(file); }};
+
+	time_t const now = time(nullptr);
+	char line[512];
+	int count = 0;
+	while (fgets(line, sizeof(line), file)) {
+		long long expires = 0;
+		int cached_family = 0;
+		char addr[INET6_ADDRSTRLEN];
+		char cached_name[256];
+		if (sscanf(line, "%lld %d %45s %255s", &expires, &cached_family, addr, cached_name) != 4)
+			continue;
+		if (expires <= static_cast<long long>(now) || strcmp(cached_name, name) != 0
+		    || !family_matches(family, cached_family))
+			continue;
+
+		struct dns_addr_buf buffer;
+		if (inet_pton(cached_family, addr, buffer.addr) != 1)
+			continue;
+
+		buffer.family = cached_family;
+		buffer.name = frg::string<MemoryAllocator>{cached_name, getAllocator()};
+		buf.buf.push(std::move(buffer));
+		count++;
+	}
+
+	if (count > 0 && canon_name.empty())
+		canon_name = frg::string<MemoryAllocator>{name, getAllocator()};
+	return count;
 }
 
 int get_poll_timeout(struct timespec *original_time, int timeout_ms) {
@@ -67,10 +138,11 @@ int get_poll_timeout(struct timespec *original_time, int timeout_ms) {
 static frg::string<MemoryAllocator> read_dns_name(char *buf, char *&it) {
 	frg::string<MemoryAllocator> res{getAllocator()};
 	while (true) {
-		char code = *it++;
+		auto code = static_cast<unsigned char>(*it++);
 		if ((code & 0xC0) == 0xC0) {
 			// pointer
-			uint8_t offset = ((code & 0x3F) << 8) | *it++;
+			uint16_t offset =
+			    static_cast<uint16_t>(((code & 0x3F) << 8) | static_cast<unsigned char>(*it++));
 			auto offset_it = buf + offset;
 			return res + read_dns_name(buf, offset_it);
 		} else if (!(code & 0xC0)) {
@@ -209,6 +281,8 @@ int lookup_name_dns_one_at(
 		for (int i = 0; i < ntohs(response_header->no_q); i++) {
 			auto dns_name = read_dns_name(response, it);
 			(void)dns_name;
+			if (it + 4 > response + rlen)
+				return -EAI_AGAIN;
 			it += 4;
 		}
 
@@ -220,10 +294,17 @@ int lookup_name_dns_one_at(
 			struct dns_addr_buf buffer;
 			auto dns_name = read_dns_name(response, it);
 
-			uint16_t rr_type = (it[0] << 8) | it[1];
-			uint16_t rr_class = (it[2] << 8) | it[3];
-			uint16_t rr_length = (it[8] << 8) | it[9];
+			if (it + 10 > response + rlen)
+				return -EAI_AGAIN;
+			uint16_t rr_type =
+			    (static_cast<unsigned char>(it[0]) << 8) | static_cast<unsigned char>(it[1]);
+			uint16_t rr_class =
+			    (static_cast<unsigned char>(it[2]) << 8) | static_cast<unsigned char>(it[3]);
+			uint16_t rr_length =
+			    (static_cast<unsigned char>(it[8]) << 8) | static_cast<unsigned char>(it[9]);
 			it += 10;
+			if (it + rr_length > response + rlen)
+				return -EAI_AGAIN;
 			char *rr_data = it;
 			it += rr_length;
 			(void)rr_class;
@@ -294,8 +375,11 @@ int lookup_name_dns_one_at_with_retries(
 
 		frg::scope_exit close_fd{[&] { close(fd); }};
 
+		size_t const cache_first = buf.buf.size();
 		int count =
 		    lookup_name_dns_one_at(buf, name, canon_name, family, nameserver_name, fd, timeout_ms);
+		if (count > 0)
+			append_dns_cache_entries(name, buf.buf, cache_first);
 		if (count != -EAI_AGAIN)
 			return count;
 		fallback = count;
@@ -309,6 +393,10 @@ int lookup_name_dns_one(
     frg::string<MemoryAllocator> &canon_name,
     int family
 ) {
+	int cached = lookup_name_dns_cache(buf, name, canon_name, family);
+	if (cached > 0)
+		return cached;
+
 	auto conf = get_resolv_conf();
 	int const attempts = conf ? conf->attempts : DNS_QUERY_ATTEMPTS;
 	int const timeout_ms = conf ? conf->timeout * MSEC_PER_SEC : DNS_QUERY_TIMEOUT_MS;
@@ -523,6 +611,8 @@ int lookup_addr_dns_at(
 		for (int i = 0; i < ntohs(response_header->no_q); i++) {
 			auto dns_name = read_dns_name(response, it);
 			(void)dns_name;
+			if (it + 4 > response + rlen)
+				return -EAI_AGAIN;
 			it += 4;
 		}
 
@@ -534,10 +624,17 @@ int lookup_addr_dns_at(
 			struct dns_addr_buf buffer;
 			auto dns_name = read_dns_name(response, it);
 
-			uint16_t rr_type = (it[0] << 8) | it[1];
-			uint16_t rr_class = (it[2] << 8) | it[3];
-			uint16_t rr_length = (it[8] << 8) | it[9];
+			if (it + 10 > response + rlen)
+				return -EAI_AGAIN;
+			uint16_t rr_type =
+			    (static_cast<unsigned char>(it[0]) << 8) | static_cast<unsigned char>(it[1]);
+			uint16_t rr_class =
+			    (static_cast<unsigned char>(it[2]) << 8) | static_cast<unsigned char>(it[3]);
+			uint16_t rr_length =
+			    (static_cast<unsigned char>(it[8]) << 8) | static_cast<unsigned char>(it[9]);
 			it += 10;
+			if (it + rr_length > response + rlen)
+				return -EAI_AGAIN;
 			char *rr_data = it;
 			it += rr_length;
 			(void)rr_class;
