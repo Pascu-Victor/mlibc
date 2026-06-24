@@ -1040,8 +1040,7 @@ int Sysdeps<Dup>::operator()(int fd, int flags, int *newfd) {
 }
 
 int Sysdeps<Dup2>::operator()(int fd, int flags, int newfd) {
-	(void)flags;
-	int r = ker::abi::vfs::dup2(fd, newfd);
+	int r = ker::abi::vfs::dup2(fd, newfd, flags);
 	if (r < 0)
 		return -r;
 	return 0;
@@ -1670,8 +1669,7 @@ int Sysdeps<Tcdrain>::operator()(int fd) {
 }
 
 int Sysdeps<Pipe>::operator()(int *fds, int flags) {
-	(void)flags;
-	int r = ker::abi::vfs::pipe(fds);
+	int r = ker::abi::vfs::pipe(fds, flags);
 	if (r < 0)
 		return -r;
 	return 0;
@@ -1679,9 +1677,8 @@ int Sysdeps<Pipe>::operator()(int *fds, int flags) {
 
 int Sysdeps<Socketpair>::operator()(int domain, int type_and_flags, int proto, int *fds) {
 	(void)domain;
-	(void)type_and_flags;
 	(void)proto;
-	int r = ker::abi::vfs::pipe(fds);
+	int r = ker::abi::vfs::pipe(fds, type_and_flags & (SOCK_CLOEXEC | SOCK_NONBLOCK));
 	if (r < 0)
 		return -r;
 	return 0;

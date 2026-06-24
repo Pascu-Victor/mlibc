@@ -230,12 +230,13 @@ static inline int dup(int oldfd) {
 	return static_cast<int>((int64_t)r);
 }
 
-static inline int dup2(int oldfd, int newfd) {
+static inline int dup2(int oldfd, int newfd, int flags = 0) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::vfs,
 	    static_cast<uint64_t>(ops::dup2),
 	    static_cast<uint64_t>(oldfd),
-	    static_cast<uint64_t>(newfd)
+	    static_cast<uint64_t>(newfd),
+	    static_cast<uint64_t>(flags)
 	);
 	return static_cast<int>((int64_t)r);
 }
@@ -313,11 +314,12 @@ static inline int truncate(int fd, off_t length) {
 	return static_cast<int>((int64_t)r);
 }
 
-static inline int pipe(int pipefd[2]) {
+static inline int pipe(int pipefd[2], int flags = 0) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::vfs,
 	    static_cast<uint64_t>(ops::pipe),
-	    reinterpret_cast<uint64_t>(pipefd)
+	    reinterpret_cast<uint64_t>(pipefd),
+	    static_cast<uint64_t>(flags)
 	);
 	return static_cast<int>((int64_t)r);
 }
