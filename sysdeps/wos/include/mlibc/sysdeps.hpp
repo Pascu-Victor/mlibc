@@ -57,6 +57,7 @@ struct WosSysdepTags :
     Symlink,
     Symlinkat,
     Renameat,
+    Flock,
     Fcntl,
     Ttyname,
     Fsync,

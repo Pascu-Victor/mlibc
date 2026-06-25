@@ -18,6 +18,7 @@
 #include <string.h>
 #include <sys/callnums.h>
 #include <sys/epoll.h>
+#include <sys/file.h>
 #include <sys/futex.h>
 #include <sys/ioctl.h>
 #include <sys/logging.h>
@@ -73,6 +74,59 @@ void panicLog(uint64_t cookie, const char *message) {
 	}
 
 	ker::logging::logEx("mlibc", ker::abi::sys_log::sys_log_level::PANIC, message, strlen(message));
+}
+
+int pselect_sleep_for_timeout_ms(int timeout_ms, const sigset_t *sigmask) {
+	if (timeout_ms == 0)
+		return 0;
+
+	if (timeout_ms < 0) {
+		sigset_t active_mask{};
+		const sigset_t *wait_mask = sigmask;
+		if (!wait_mask) {
+			int64_t r = ker::process::sigprocmask(0, nullptr, &active_mask);
+			if (r < 0)
+				return static_cast<int>(-r);
+			wait_mask = &active_mask;
+		}
+
+		int64_t r = ker::process::sigsuspend(wait_mask);
+		if (r < 0)
+			return static_cast<int>(-r);
+		return EINTR;
+	}
+
+	sigset_t old_mask{};
+	bool restore_mask = false;
+	if (sigmask) {
+		int64_t r = ker::process::sigprocmask(SIG_SETMASK, sigmask, &old_mask);
+		if (r < 0)
+			return static_cast<int>(-r);
+		restore_mask = true;
+	}
+
+	timespec req{
+	    .tv_sec = timeout_ms / 1000,
+	    .tv_nsec = static_cast<long>((timeout_ms % 1000) * 1000000),
+	};
+	timespec rem{.tv_sec = 0, .tv_nsec = 0};
+	uint64_t r = syscall(
+	    ker::abi::callnums::time,
+	    static_cast<uint64_t>(ker::abi::sys_time_ops::nanosleep),
+	    reinterpret_cast<uint64_t>(&req),
+	    reinterpret_cast<uint64_t>(&rem)
+	);
+	int result = 0;
+	if (static_cast<int64_t>(r) < 0)
+		result = static_cast<int>(-static_cast<int64_t>(r));
+
+	if (restore_mask) {
+		int64_t restore = ker::process::sigprocmask(SIG_SETMASK, &old_mask, nullptr);
+		if (result == 0 && restore < 0)
+			result = static_cast<int>(-restore);
+	}
+
+	return result;
 }
 
 uintptr_t currentStackPointer() {
@@ -1346,7 +1400,8 @@ int Sysdeps<Pselect>::operator()(
     const sigset_t *sigmask,
     int *num_events
 ) {
-	(void)sigmask;
+	if (num_fds < 0)
+		return EINVAL;
 
 	auto fd_is_set = [](int fd, fd_set *s) -> bool {
 		return (s->fds_bits[fd / 8] >> (fd % 8)) & 1;
@@ -1366,6 +1421,7 @@ int Sysdeps<Pselect>::operator()(
 	if (epfd < 0)
 		return ENOMEM;
 
+	int watched_fds = 0;
 	for (int fd = 0; fd < num_fds; fd++) {
 		uint32_t events = 0;
 		if (read_set && fd_is_set(fd, read_set))
@@ -1380,11 +1436,31 @@ int Sysdeps<Pselect>::operator()(
 		epoll_event ev;
 		ev.events = events;
 		ev.data.fd = fd;
-		ker::abi::vfs::epoll_ctl_vfs(epfd, EPOLL_CTL_ADD, fd, &ev);
+		int ctl = ker::abi::vfs::epoll_ctl_vfs(epfd, EPOLL_CTL_ADD, fd, &ev);
+		if (ctl < 0) {
+			ker::abi::vfs::close(epfd);
+			return -ctl;
+		}
+		watched_fds++;
+	}
+
+	if (watched_fds == 0) {
+		ker::abi::vfs::close(epfd);
+		int wait_result = pselect_sleep_for_timeout_ms(timeout_ms, sigmask);
+		if (wait_result != 0)
+			return wait_result;
+		if (read_set)
+			fd_zero(read_set);
+		if (write_set)
+			fd_zero(write_set);
+		if (except_set)
+			fd_zero(except_set);
+		*num_events = 0;
+		return 0;
 	}
 
 	epoll_event out_events[64];
-	int max = num_fds < 64 ? num_fds : 64;
+	int max = watched_fds < 64 ? watched_fds : 64;
 	int ready = ker::abi::vfs::epoll_pwait_vfs(epfd, out_events, max, timeout_ms);
 
 	if (ready == -EINTR) {
@@ -1515,12 +1591,26 @@ int Sysdeps<Renameat>::operator()(
 	return 0;
 }
 
+int Sysdeps<Flock>::operator()(int fd, int options) {
+	constexpr int WOS_FLOCK_CMD = 0x5753464c;
+	int r = ker::abi::vfs::fcntl(fd, WOS_FLOCK_CMD, static_cast<uint64_t>(options));
+	if (r < 0)
+		return -r;
+	return 0;
+}
+
 int Sysdeps<Fcntl>::operator()(int fd, int request, va_list args, int *result) {
 	uint64_t arg = 0;
 	// F_DUPFD=0, F_GETFD=1, F_SETFD=2, F_GETFL=3, F_SETFL=4, F_DUPFD_CLOEXEC=1030
 	if (request == 0 || request == 2 || request == 4 || request == 1030) {
 		arg = va_arg(args, uint64_t);
 	}
+
+	if (request == F_GETLK || request == F_SETLK || request == F_SETLKW || request == F_OFD_GETLK
+	    || request == F_OFD_SETLK || request == F_OFD_SETLKW) {
+		arg = reinterpret_cast<uint64_t>(va_arg(args, struct flock *));
+	}
+
 	int r = ker::abi::vfs::fcntl(fd, request, arg);
 	if (r < 0) {
 		return -r;
