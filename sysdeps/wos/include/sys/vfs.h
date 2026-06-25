@@ -142,13 +142,21 @@ static inline ssize_t read_dir_entries(int fd, void *buffer, size_t max_size) {
 	return static_cast<ssize_t>((int64_t)r);
 }
 
-static inline int mount(const char *source, const char *target, const char *fstype) {
+static inline int mount(
+    const char *source,
+    const char *target,
+    const char *fstype,
+    unsigned long flags = 0,
+    const void *data = nullptr
+) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::vfs,
 	    static_cast<uint64_t>(ops::mount),
 	    reinterpret_cast<uint64_t>(source),
 	    reinterpret_cast<uint64_t>(target),
-	    reinterpret_cast<uint64_t>(fstype)
+	    reinterpret_cast<uint64_t>(fstype),
+	    static_cast<uint64_t>(flags),
+	    reinterpret_cast<uint64_t>(data)
 	);
 	return static_cast<int>((int64_t)r);
 }

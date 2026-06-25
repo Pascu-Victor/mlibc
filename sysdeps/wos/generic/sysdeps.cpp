@@ -2074,13 +2074,23 @@ int Sysdeps<Mount>::operator()(
     unsigned long flags,
     const void *data
 ) {
-	// TODO(wos-mount): plumb MS_RDONLY/rw and other mount flags through
-	// ker::abi::vfs::mount instead of silently dropping userspace options.
-	(void)flags;
-	(void)data;
-	int r = ker::abi::vfs::mount(source, target, fstype);
+	int r = ker::abi::vfs::mount(source, target, fstype, flags, data);
 	if (r < 0)
 		return -r;
+	return 0;
+}
+
+int Sysdeps<Swapon>::operator()(const char *path, int flags) {
+	int64_t r = ker::vmem::swapon(path, flags);
+	if (r < 0)
+		return static_cast<int>(-r);
+	return 0;
+}
+
+int Sysdeps<Swapoff>::operator()(const char *path) {
+	int64_t r = ker::vmem::swapoff(path);
+	if (r < 0)
+		return static_cast<int>(-r);
 	return 0;
 }
 

@@ -15,6 +15,8 @@ enum class ops : uint64_t {
 	protect = 2,
 	mremap = 3,
 	msync = 4,
+	swapon = 5,
+	swapoff = 6,
 };
 
 } // namespace abi::vmem
@@ -133,6 +135,32 @@ static inline int64_t sync(void *addr, uint64_t size, uint64_t flags) {
 	    size,
 	    flags,
 	    0 // unused
+	);
+
+	return static_cast<int64_t>(result);
+}
+
+static inline int64_t swapon(const char *path, int flags) {
+	uint64_t result = syscall(
+	    abi::callnums::vmem,
+	    static_cast<uint64_t>(abi::vmem::ops::swapon),
+	    reinterpret_cast<uint64_t>(path),
+	    static_cast<uint64_t>(flags),
+	    0,
+	    0
+	);
+
+	return static_cast<int64_t>(result);
+}
+
+static inline int64_t swapoff(const char *path) {
+	uint64_t result = syscall(
+	    abi::callnums::vmem,
+	    static_cast<uint64_t>(abi::vmem::ops::swapoff),
+	    reinterpret_cast<uint64_t>(path),
+	    0,
+	    0,
+	    0
 	);
 
 	return static_cast<int64_t>(result);

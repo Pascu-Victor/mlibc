@@ -106,6 +106,8 @@ struct WosSysdepTags :
     SetThreadaffinity,
     Getcpu,
     Mount,
+    Swapon,
+    Swapoff,
     Umount2,
     Sendfile,
     EpollCreate,
