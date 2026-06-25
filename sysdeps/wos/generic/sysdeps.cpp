@@ -604,86 +604,15 @@ int Sysdeps<Stat>::operator()(
 	bool follow_symlinks = !(flags & 0x100);
 	switch (fsfdt) {
 		case fsfd_target::path:
-			if (follow_symlinks) {
-				// stat() — follow symlinks by resolving the path first
-				char resolved[512];
-				size_t plen = 0;
-				while (path[plen] != '\0' && plen < 511) {
-					resolved[plen] = path[plen];
-					plen++;
-				}
-				resolved[plen] = '\0';
-				// Try to resolve symlinks via readlink loop
-				for (int depth = 0; depth < 8; depth++) {
-					char target[512];
-					ssize_t lr = ker::abi::vfs::readlink(resolved, target, 511);
-					if (lr <= 0)
-						break; // Not a symlink or error
-					target[lr] = '\0';
-					if (target[0] == '/') {
-						// Absolute target
-						for (size_t i = 0; i <= (size_t)lr; i++)
-							resolved[i] = target[i];
-					} else {
-						// Relative target: replace last component
-						size_t last_slash = 0;
-						bool found = false;
-						for (size_t i = 0; resolved[i]; i++) {
-							if (resolved[i] == '/') {
-								last_slash = i;
-								found = true;
-							}
-						}
-						size_t prefix = found ? last_slash + 1 : 0;
-						for (size_t i = 0; i <= (size_t)lr; i++)
-							resolved[prefix + i] = target[i];
-					}
-				}
-				r = ker::abi::vfs::stat_path(resolved, statbuf);
-			} else {
-				// lstat() do not follow symlinks
-				r = ker::abi::vfs::lstat_path(path, statbuf);
-			}
+			r = follow_symlinks ? ker::abi::vfs::stat_path(path, statbuf)
+			                    : ker::abi::vfs::lstat_path(path, statbuf);
 			break;
 		case fsfd_target::fd:
 			r = ker::abi::vfs::fstat_fd(fd, statbuf);
 			break;
 		case fsfd_target::fd_path:
-			if (follow_symlinks) {
-				char resolved[512];
-				size_t plen = 0;
-				while (path[plen] != '\0' && plen < 511) {
-					resolved[plen] = path[plen];
-					plen++;
-				}
-				resolved[plen] = '\0';
-				for (int depth = 0; depth < 8; depth++) {
-					char target[512];
-					ssize_t lr = ker::abi::vfs::readlink(resolved, target, 511);
-					if (lr <= 0)
-						break;
-					target[lr] = '\0';
-					if (target[0] == '/') {
-						for (size_t i = 0; i <= (size_t)lr; i++)
-							resolved[i] = target[i];
-					} else {
-						size_t last_slash = 0;
-						bool found = false;
-						for (size_t i = 0; resolved[i]; i++) {
-							if (resolved[i] == '/') {
-								last_slash = i;
-								found = true;
-							}
-						}
-						size_t prefix = found ? last_slash + 1 : 0;
-						for (size_t i = 0; i <= (size_t)lr; i++)
-							resolved[prefix + i] = target[i];
-					}
-				}
-				r = ker::abi::vfs::stat_path(resolved, statbuf);
-			} else {
-				r = ker::abi::vfs::lstat_path(path, statbuf);
-			}
+			r = follow_symlinks ? ker::abi::vfs::stat_path(path, statbuf)
+			                    : ker::abi::vfs::lstat_path(path, statbuf);
 			break;
 		default:
 			return EINVAL;
