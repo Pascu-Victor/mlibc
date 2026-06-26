@@ -611,8 +611,7 @@ int Sysdeps<Stat>::operator()(
 			r = ker::abi::vfs::fstat_fd(fd, statbuf);
 			break;
 		case fsfd_target::fd_path:
-			r = follow_symlinks ? ker::abi::vfs::stat_path(path, statbuf)
-			                    : ker::abi::vfs::lstat_path(path, statbuf);
+			r = ker::abi::vfs::statat_path(fd, path, flags, statbuf);
 			break;
 		default:
 			return EINVAL;
@@ -1074,10 +1073,11 @@ int Sysdeps<Truncate>::operator()(const char *path, off_t length) {
 }
 
 int Sysdeps<Openat>::operator()(int dirfd, const char *path, int flags, mode_t mode, int *fd) {
-	if (dirfd == -100 || (path && path[0] == '/')) {
-		return sysdep<Open>(path, flags, mode, fd);
-	}
-	return ENOSYS;
+	int r = ker::abi::vfs::openat(dirfd, path, flags, mode);
+	if (r < 0)
+		return -r;
+	*fd = r;
+	return 0;
 }
 
 int Sysdeps<IfIndextoname>::operator()(unsigned int index, char *name) {

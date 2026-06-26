@@ -66,6 +66,8 @@ enum class ops : uint64_t {
 	lstat,
 	sync,
 	realpath,
+	openat,
+	statat,
 };
 
 constexpr uint32_t WKI_VFS_ROUTE_LOCAL = 0;
@@ -77,6 +79,18 @@ static inline int open(const char *path, int flags, mode_t mode) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::vfs,
 	    static_cast<uint64_t>(ops::open),
+	    reinterpret_cast<uint64_t>(path),
+	    static_cast<uint64_t>(flags),
+	    static_cast<uint64_t>(mode)
+	);
+	return static_cast<int>((int64_t)r);
+}
+
+static inline int openat(int dirfd, const char *path, int flags, mode_t mode) {
+	uint64_t r = syscall(
+	    ker::abi::callnums::vfs,
+	    static_cast<uint64_t>(ops::openat),
+	    static_cast<uint64_t>(dirfd),
 	    reinterpret_cast<uint64_t>(path),
 	    static_cast<uint64_t>(flags),
 	    static_cast<uint64_t>(mode)
@@ -218,6 +232,18 @@ static inline int fstat_fd(int fd, void *statbuf) {
 	    static_cast<uint64_t>(ops::fstat),
 	    static_cast<uint64_t>(fd),
 	    reinterpret_cast<uint64_t>(statbuf)
+	);
+	return static_cast<int>((int64_t)r);
+}
+
+static inline int statat_path(int dirfd, const char *path, int flags, void *statbuf) {
+	uint64_t r = syscall(
+	    ker::abi::callnums::vfs,
+	    static_cast<uint64_t>(ops::statat),
+	    static_cast<uint64_t>(dirfd),
+	    reinterpret_cast<uint64_t>(path),
+	    reinterpret_cast<uint64_t>(statbuf),
+	    static_cast<uint64_t>(flags)
 	);
 	return static_cast<int>((int64_t)r);
 }
