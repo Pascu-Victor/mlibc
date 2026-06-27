@@ -1533,6 +1533,7 @@ int do_scanf(H &handler, const Char *fmt, __builtin_va_list args) {
 
 				if (c == '0') {
 					handler.consume();
+					++count;
 					c = handler.look_ahead();
 
 					if (c == 'x' || c == 'X') {
@@ -1540,6 +1541,7 @@ int do_scanf(H &handler, const Char *fmt, __builtin_va_list args) {
 						base = 16;
 						handler.consume();
 						c = handler.look_ahead();
+						count = 0;
 					}
 				}
 

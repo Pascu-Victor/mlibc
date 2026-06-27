@@ -452,6 +452,14 @@ int main() {
 	assert(long_double_value >= 1.123L - 0.01 && long_double_value <= 1.123L + 0.01);
 	assert(sscanf("1.1234", "%G", &float_value) == 1);
 	assert(float_value >= 1.1234f - 0.01 && float_value <= 1.1234f + 0.01);
+	assert(sscanf("0", "%lg", &double_value) == 1);
+	assert(double_value == 0.0);
+	assert(sscanf("-0", "%lg", &double_value) == 1);
+	assert(double_value == 0.0 && __builtin_signbit(double_value));
+	assert(sscanf("+0", "%lg", &double_value) == 1);
+	assert(double_value == 0.0 && !__builtin_signbit(double_value));
+	assert(sscanf("0e0", "%lg", &double_value) == 1);
+	assert(double_value == 0.0);
 	assert(sscanf("+1.1234", "%f", &float_value) == 1);
 	assert(float_value >= 1.1234f - 0.01 && float_value <= 1.1234f + 0.01);
 	assert(sscanf("-1.1234", "%f", &float_value) == 1);
