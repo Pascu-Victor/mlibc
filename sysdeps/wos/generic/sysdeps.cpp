@@ -129,6 +129,29 @@ int pselect_sleep_for_timeout_ms(int timeout_ms, const sigset_t *sigmask) {
 	return result;
 }
 
+int apply_wait_signal_mask(const sigset_t *sigmask, sigset_t *old_mask, bool *restore_mask) {
+	if (!sigmask) {
+		*restore_mask = false;
+		return 0;
+	}
+
+	int64_t r = ker::process::sigprocmask(SIG_SETMASK, sigmask, old_mask);
+	if (r < 0)
+		return static_cast<int>(-r);
+	*restore_mask = true;
+	return 0;
+}
+
+int restore_wait_signal_mask(const sigset_t *old_mask, bool restore_mask) {
+	if (!restore_mask)
+		return 0;
+
+	int64_t r = ker::process::sigprocmask(SIG_SETMASK, old_mask, nullptr);
+	if (r < 0)
+		return static_cast<int>(-r);
+	return 0;
+}
+
 uintptr_t currentStackPointer() {
 #if defined(__x86_64__)
 	uintptr_t sp = 0;
@@ -1390,12 +1413,28 @@ int Sysdeps<Pselect>::operator()(
 
 	epoll_event out_events[64];
 	int max = watched_fds < 64 ? watched_fds : 64;
+	sigset_t old_mask{};
+	bool restore_mask = false;
+	int mask_error = apply_wait_signal_mask(sigmask, &old_mask, &restore_mask);
+	if (mask_error != 0) {
+		ker::abi::vfs::close(epfd);
+		return mask_error;
+	}
 	int ready = ker::abi::vfs::epoll_pwait_vfs(epfd, out_events, max, timeout_ms);
+	int restore_error = restore_wait_signal_mask(&old_mask, restore_mask);
 
 	if (ready == -EINTR) {
 		ker::abi::vfs::close(epfd);
 		*num_events = 0;
-		return EINTR;
+		return restore_error != 0 ? restore_error : EINTR;
+	}
+	if (ready < 0) {
+		ker::abi::vfs::close(epfd);
+		return restore_error != 0 ? restore_error : -ready;
+	}
+	if (restore_error != 0) {
+		ker::abi::vfs::close(epfd);
+		return restore_error;
 	}
 
 	if (read_set)
@@ -2140,15 +2179,22 @@ int Sysdeps<EpollCtl>::operator()(int epfd, int mode, int fd, epoll_event *ev) {
 int Sysdeps<EpollPwait>::operator()(
     int epfd, epoll_event *ev, int n, int timeout, const sigset_t *sigmask, int *raised
 ) {
-	(void)sigmask;
+	sigset_t old_mask{};
+	bool restore_mask = false;
+	int mask_error = apply_wait_signal_mask(sigmask, &old_mask, &restore_mask);
+	if (mask_error != 0)
+		return mask_error;
 	int r = ker::abi::vfs::epoll_pwait_vfs(epfd, ev, n, timeout);
+	int restore_error = restore_wait_signal_mask(&old_mask, restore_mask);
 	if (r == -EINTR) {
 		if (raised)
 			*raised = 0;
-		return EINTR;
+		return restore_error != 0 ? restore_error : EINTR;
 	}
 	if (r < 0)
-		return -r;
+		return restore_error != 0 ? restore_error : -r;
+	if (restore_error != 0)
+		return restore_error;
 	if (raised)
 		*raised = r;
 	return 0;
