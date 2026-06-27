@@ -2,11 +2,19 @@
 #include <mlibc/debug.hpp>
 #include <resolv.h>
 
+#include <arpa/nameser.h>
 #include <string.h>
 
-int dn_expand(const unsigned char *, const unsigned char *, const unsigned char *, char *, int) {
-	__ensure(!"Not implemented");
-	__builtin_unreachable();
+int dn_expand(
+    const unsigned char *msg,
+    const unsigned char *eomorig,
+    const unsigned char *comp_dn,
+    char *exp_dn,
+    int length
+) {
+	if (length < 0)
+		return -1;
+	return ns_name_uncompress(msg, eomorig, comp_dn, exp_dn, static_cast<size_t>(length));
 }
 
 int res_mkquery(
