@@ -9,14 +9,15 @@
 
 int getpriority(int which, id_t who) {
 	int value = 0;
-	if(int e = mlibc::sysdep_or_enosys<GetPriority>(which, who, &value); e) {
+	if (int e = mlibc::sysdep_or_enosys<GetPriority>(which, who, &value); e) {
 		errno = e;
+		return -1;
 	}
 	return value;
 }
 
 int setpriority(int which, id_t who, int prio) {
-	if(int e = mlibc::sysdep_or_enosys<SetPriority>(which, who, prio); e) {
+	if (int e = mlibc::sysdep_or_enosys<SetPriority>(which, who, prio); e) {
 		errno = e;
 		return -1;
 	}
@@ -24,7 +25,7 @@ int setpriority(int which, id_t who, int prio) {
 }
 
 int getrusage(int scope, struct rusage *usage) {
-	if(int e = mlibc::sysdep_or_enosys<GetRusage>(scope, usage); e) {
+	if (int e = mlibc::sysdep_or_enosys<GetRusage>(scope, usage); e) {
 		errno = e;
 		return -1;
 	}
@@ -32,7 +33,7 @@ int getrusage(int scope, struct rusage *usage) {
 }
 
 int getrlimit(int resource, struct rlimit *limit) {
-	if(int e = mlibc::sysdep_or_enosys<GetRlimit>(resource, limit); e) {
+	if (int e = mlibc::sysdep_or_enosys<GetRlimit>(resource, limit); e) {
 		errno = e;
 		return -1;
 	}
@@ -44,7 +45,7 @@ int getrlimit(int resource, struct rlimit *limit) {
 #endif /* !__MLIBC_LINUX_OPTION */
 
 int setrlimit(int resource, const struct rlimit *limit) {
-	if(int e = mlibc::sysdep_or_enosys<SetRlimit>(resource, limit); e) {
+	if (int e = mlibc::sysdep_or_enosys<SetRlimit>(resource, limit); e) {
 		errno = e;
 		return -1;
 	}

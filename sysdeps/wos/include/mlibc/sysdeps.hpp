@@ -45,6 +45,7 @@ struct WosSysdepTags :
     Pselect,
     GetRlimit,
     SetRlimit,
+    GetPriority,
     SetPriority,
     GetRusage,
     GetCwd,

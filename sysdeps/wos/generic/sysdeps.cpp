@@ -1479,9 +1479,18 @@ int Sysdeps<SetRlimit>::operator()(int resource, const struct rlimit *limit) {
 }
 
 int Sysdeps<SetPriority>::operator()(int which, id_t who, int prio) {
-	(void)which;
-	(void)who;
-	(void)prio;
+	int64_t r = ker::process::setpriority(which, who, prio);
+	if (r < 0)
+		return -r;
+	return 0;
+}
+
+int Sysdeps<GetPriority>::operator()(int which, id_t who, int *value) {
+	int64_t r = ker::process::getpriority(which, who);
+	if (r < 0)
+		return -r;
+	if (value)
+		*value = static_cast<int>(r) - 20;
 	return 0;
 }
 

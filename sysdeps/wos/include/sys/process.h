@@ -257,6 +257,15 @@ inline int64_t setpriority(int which, int64_t who, int prio) {
 	);
 }
 
+inline int64_t getpriority(int which, int64_t who) {
+	return (int64_t)syscall(
+	    abi::callnums::process,
+	    (uint64_t)abi::process::procmgmt_ops::GETPRIORITY,
+	    (uint64_t)which,
+	    (uint64_t)who
+	);
+}
+
 inline int64_t setwkitarget(const char *hostname, uint64_t len, uint32_t flags) {
 	return (int64_t)syscall(
 	    abi::callnums::process,
