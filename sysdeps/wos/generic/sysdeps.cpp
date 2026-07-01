@@ -2229,16 +2229,18 @@ int Sysdeps<Getcpu>::operator()(int *cpu) {
 }
 
 int Sysdeps<Utimensat>::operator()(
-    int dirfd, const char *pathname, const struct timespec *, int flags
+    int dirfd, const char *pathname, const struct timespec *times, int flags
 ) {
-	// Timestamps are not tracked. Return ENOENT if the path doesn't exist so
-	// callers like `touch` fall back to open(O_CREAT) to create the file.
-	if (dirfd != AT_FDCWD && dirfd != -100)
-		return ENOSYS;
-	struct stat st;
-	if (int e = sysdep<Stat>(fsfd_target::path, -1, pathname, flags, &st); e) {
-		return e;
+	const char *effective_path = pathname;
+	int effective_flags = flags;
+	if (effective_path == nullptr) {
+		effective_path = "";
+		effective_flags |= AT_EMPTY_PATH;
 	}
+
+	int r = ker::abi::vfs::utimensat_path(dirfd, effective_path, times, effective_flags);
+	if (r < 0)
+		return -r;
 	return 0;
 }
 

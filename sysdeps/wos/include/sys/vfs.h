@@ -68,6 +68,7 @@ enum class ops : uint64_t {
 	realpath,
 	openat,
 	statat,
+	utimensat,
 };
 
 constexpr uint32_t WKI_VFS_ROUTE_LOCAL = 0;
@@ -243,6 +244,18 @@ static inline int statat_path(int dirfd, const char *path, int flags, void *stat
 	    static_cast<uint64_t>(dirfd),
 	    reinterpret_cast<uint64_t>(path),
 	    reinterpret_cast<uint64_t>(statbuf),
+	    static_cast<uint64_t>(flags)
+	);
+	return static_cast<int>((int64_t)r);
+}
+
+static inline int utimensat_path(int dirfd, const char *path, const void *times, int flags) {
+	uint64_t r = syscall(
+	    ker::abi::callnums::vfs,
+	    static_cast<uint64_t>(ops::utimensat),
+	    static_cast<uint64_t>(dirfd),
+	    reinterpret_cast<uint64_t>(path),
+	    reinterpret_cast<uint64_t>(times),
 	    static_cast<uint64_t>(flags)
 	);
 	return static_cast<int>((int64_t)r);
