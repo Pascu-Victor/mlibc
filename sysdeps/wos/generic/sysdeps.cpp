@@ -1,5 +1,6 @@
 #include <abi-bits/pid_t.h>
 #include <algorithm>
+#include <array>
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
@@ -928,11 +929,71 @@ int Sysdeps<Execve>::operator()(const char *path, char *const argv[], char *cons
 	return 0;
 }
 
-int
-Sysdeps<Spawn>::operator()(const char *path, char *const argv[], char *const envp[], pid_t *child) {
-	uint64_t r = ker::process::exec(
-	    path, const_cast<const char *const *>(argv), const_cast<const char *const *>(envp)
-	);
+int Sysdeps<Spawn>::operator()(
+    const char *path,
+    char *const argv[],
+    char *const envp[],
+    const SysdepSpawnOptions *options,
+    pid_t *child
+) {
+	constexpr size_t max_spawn_actions = 32;
+	std::array<ker::abi::process::SpawnFdAction, max_spawn_actions> kernel_actions{};
+	ker::abi::process::SpawnOptions kernel_options{};
+	const ker::abi::process::SpawnOptions *kernel_options_ptr = nullptr;
+
+	if (options) {
+		if (options->action_count > kernel_actions.size())
+			return ENOTSUP;
+
+		for (size_t i = 0; i < options->action_count; ++i) {
+			const auto &src = options->actions[i];
+			auto &dst = kernel_actions[i];
+			dst.fd = src.fd;
+			dst.srcfd = src.srcfd;
+			dst.oflag = src.oflag;
+			dst.mode = src.mode;
+			dst.path = src.path;
+			switch (src.cmd) {
+				case 1:
+					dst.type = static_cast<uint32_t>(ker::abi::process::SpawnFdActionType::CLOSE);
+					break;
+				case 2:
+					dst.type = static_cast<uint32_t>(ker::abi::process::SpawnFdActionType::DUP2);
+					break;
+				case 3:
+					dst.type = static_cast<uint32_t>(ker::abi::process::SpawnFdActionType::OPEN);
+					break;
+				default:
+					return ENOTSUP;
+			}
+		}
+
+		kernel_options.size = sizeof(kernel_options);
+		kernel_options.version = ker::abi::process::SPAWN_OPTIONS_VERSION;
+		if ((options->flags & SYSDEP_SPAWN_SETSIGMASK) != 0)
+			kernel_options.flags |= ker::abi::process::SPAWN_FLAG_SETSIGMASK;
+		if ((options->flags & SYSDEP_SPAWN_SETPGROUP) != 0)
+			kernel_options.flags |= ker::abi::process::SPAWN_FLAG_SETPGROUP;
+		if ((options->flags & SYSDEP_SPAWN_USEVFORK) != 0)
+			kernel_options.flags |= ker::abi::process::SPAWN_FLAG_USEVFORK;
+		kernel_options.sig_mask = options->sig_mask.__sig[0];
+		kernel_options.pgroup = options->pgroup;
+		kernel_options.actions = kernel_actions.data();
+		kernel_options.action_count = options->action_count;
+		kernel_options_ptr = &kernel_options;
+	}
+
+	uint64_t r =
+	    options
+	        ? ker::process::spawn(
+	              path,
+	              const_cast<const char *const *>(argv),
+	              const_cast<const char *const *>(envp),
+	              kernel_options_ptr
+	          )
+	        : ker::process::exec(
+	              path, const_cast<const char *const *>(argv), const_cast<const char *const *>(envp)
+	          );
 	if (r == 0)
 		return EAGAIN;
 	if (child)

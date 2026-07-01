@@ -41,6 +41,10 @@ static unsigned long handler_set[NSIG / (8 * sizeof(long))];
 
 static void __get_handler_set(sigset_t *set) { memcpy(set, handler_set, sizeof handler_set); }
 
+constexpr size_t kFastSpawnActionMax = 32;
+constexpr int kFastSpawnAttrFlags =
+    POSIX_SPAWN_SETSIGMASK | POSIX_SPAWN_SETPGROUP | POSIX_SPAWN_USEVFORK;
+
 struct args {
 	int p[2];
 	sigset_t oldmask;
@@ -193,6 +197,105 @@ fail:
 	_exit(127);
 }
 
+static bool fast_spawn_collect_actions(
+    const posix_spawn_file_actions_t *file_actions,
+    SysdepSpawnFdAction *actions,
+    size_t *action_count
+) {
+	*action_count = 0;
+	if (!file_actions || !file_actions->__actions)
+		return true;
+
+	struct fdop *op = (struct fdop *)file_actions->__actions;
+	size_t count = 0;
+	while (op) {
+		if (count == kFastSpawnActionMax)
+			return false;
+		++count;
+		if (!op->next)
+			break;
+		op = op->next;
+	}
+
+	size_t index = 0;
+	for (; op; op = op->prev) {
+		switch (op->cmd) {
+			case FDOP_CLOSE:
+			case FDOP_DUP2:
+				break;
+			case FDOP_OPEN:
+				if ((op->oflag & O_CLOEXEC) != 0)
+					return false;
+				if (strcmp(op->path, "/dev/null") != 0 || op->oflag != O_RDONLY)
+					return false;
+				break;
+			default:
+				return false;
+		}
+
+		actions[index++] = SysdepSpawnFdAction{
+		    .cmd = op->cmd,
+		    .fd = op->fd,
+		    .srcfd = op->srcfd,
+		    .oflag = op->oflag,
+		    .mode = op->mode,
+		    .path = op->cmd == FDOP_OPEN ? op->path : nullptr,
+		};
+	}
+
+	*action_count = count;
+	return index == count;
+}
+
+static bool fast_spawn_supported_attrs(const posix_spawnattr_t *attr) {
+	return !attr->__fn && (attr->__flags & ~kFastSpawnAttrFlags) == 0;
+}
+
+static bool try_fast_spawn(
+    pid_t *__restrict res,
+    const char *__restrict path,
+    const posix_spawn_file_actions_t *file_actions,
+    const posix_spawnattr_t *__restrict attr,
+    char *const argv[],
+    char *const envp[]
+) {
+	if constexpr (!mlibc::IsImplemented<Spawn>) {
+		return false;
+	}
+
+	if (!fast_spawn_supported_attrs(attr))
+		return false;
+
+	SysdepSpawnFdAction actions[kFastSpawnActionMax] = {};
+	size_t action_count = 0;
+	if (!fast_spawn_collect_actions(file_actions, actions, &action_count))
+		return false;
+
+	SysdepSpawnOptions options = {};
+	if ((attr->__flags & POSIX_SPAWN_SETSIGMASK) != 0) {
+		options.flags |= SYSDEP_SPAWN_SETSIGMASK;
+		options.sig_mask = attr->__mask;
+	}
+	if ((attr->__flags & POSIX_SPAWN_SETPGROUP) != 0) {
+		options.flags |= SYSDEP_SPAWN_SETPGROUP;
+		options.pgroup = attr->__pgrp;
+	}
+	if ((attr->__flags & POSIX_SPAWN_USEVFORK) != 0)
+		options.flags |= SYSDEP_SPAWN_USEVFORK;
+	options.actions = action_count ? actions : nullptr;
+	options.action_count = action_count;
+
+	const bool need_options = options.flags != 0 || action_count != 0;
+	pid_t spawned_pid = 0;
+	int ec =
+	    mlibc::sysdep<Spawn>(path, argv, envp, need_options ? &options : nullptr, &spawned_pid);
+	if (ec)
+		return false;
+	if (res)
+		*res = spawned_pid;
+	return true;
+}
+
 int posix_spawn(
     pid_t *__restrict res,
     const char *__restrict path,
@@ -215,18 +318,9 @@ int posix_spawn(
 	args.attr = attrs ? attrs : &empty_attr;
 	args.argv = argv;
 	args.envp = envp;
-	if constexpr (mlibc::IsImplemented<Spawn>) {
-		if (!file_actions && args.attr->__flags == 0 && !args.attr->__fn) {
-			pid_t spawned_pid = 0;
-			ec = mlibc::sysdep<Spawn>(path, argv, envp, &spawned_pid);
-			if (!ec) {
-				if (res)
-					*res = spawned_pid;
-				pthread_setcancelstate(cs, nullptr);
-				return 0;
-			}
-			ec = 0;
-		}
+	if (try_fast_spawn(res, path, file_actions, args.attr, argv, envp)) {
+		pthread_setcancelstate(cs, nullptr);
+		return 0;
 	}
 	pthread_sigmask(SIG_BLOCK, &full_sigset, &args.oldmask);
 

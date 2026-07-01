@@ -34,6 +34,22 @@ inline uint64_t exec(const char *path, const char *const argv[], const char *con
 	);
 }
 
+inline uint64_t spawn(
+    const char *path,
+    const char *const argv[],
+    const char *const envp[],
+    const abi::process::SpawnOptions *options
+) {
+	return syscall(
+	    abi::callnums::process,
+	    (uint64_t)abi::process::procmgmt_ops::SPAWN,
+	    (uint64_t)(uintptr_t)path,
+	    (uint64_t)(uintptr_t)argv,
+	    (uint64_t)(uintptr_t)envp,
+	    (uint64_t)(uintptr_t)options
+	);
+}
+
 inline int64_t waitpid(int64_t pid, int32_t *status, int32_t options, rusage *ru) {
 	return (int64_t)syscall(
 	    abi::callnums::process,

@@ -99,7 +99,29 @@ struct Fork {};
 struct Waitpid {};
 // int sys_execve(const char *path, char *const argv[], char *const envp[]);
 struct Execve {};
-// int sys_spawn(const char *path, char *const argv[], char *const envp[], pid_t *child);
+struct SysdepSpawnFdAction {
+	int cmd;
+	int fd;
+	int srcfd;
+	int oflag;
+	mode_t mode;
+	const char *path;
+};
+
+constexpr uint64_t SYSDEP_SPAWN_SETSIGMASK = 1ULL << 0;
+constexpr uint64_t SYSDEP_SPAWN_SETPGROUP = 1ULL << 1;
+constexpr uint64_t SYSDEP_SPAWN_USEVFORK = 1ULL << 2;
+
+struct SysdepSpawnOptions {
+	uint64_t flags;
+	sigset_t sig_mask;
+	pid_t pgroup;
+	const SysdepSpawnFdAction *actions;
+	size_t action_count;
+};
+
+// int sys_spawn(const char *path, char *const argv[], char *const envp[], const SysdepSpawnOptions
+// *options, pid_t *child);
 struct Spawn {};
 // void sys_yield();
 struct Yield {};
