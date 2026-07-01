@@ -99,6 +99,8 @@ struct Fork {};
 struct Waitpid {};
 // int sys_execve(const char *path, char *const argv[], char *const envp[]);
 struct Execve {};
+// int sys_spawn(const char *path, char *const argv[], char *const envp[], pid_t *child);
+struct Spawn {};
 // void sys_yield();
 struct Yield {};
 

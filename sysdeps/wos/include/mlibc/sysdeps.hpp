@@ -171,6 +171,7 @@ struct WosSysdepTags :
     Fork,
     Waitpid,
     Execve,
+    Spawn,
     Yield,
     Sysconf,
     GetPid,

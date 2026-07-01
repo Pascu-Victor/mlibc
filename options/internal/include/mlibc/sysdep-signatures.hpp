@@ -114,6 +114,7 @@ SYSDEP_FUNC(Sigaction, int, const struct sigaction *__restrict, struct sigaction
 SYSDEP_FUNC(Fork, pid_t *child);
 SYSDEP_FUNC(Waitpid, pid_t pid, int *status, int flags, struct rusage *ru, pid_t *ret_pid);
 SYSDEP_FUNC(Execve, const char *path, char *const argv[], char *const envp[]);
+SYSDEP_FUNC(Spawn, const char *path, char *const argv[], char *const envp[], pid_t *child);
 SYSDEP_FUNC_RET(void, Yield);
 SYSDEP_FUNC_RET(pid_t, GetPid);
 SYSDEP_FUNC(Kill, pid_t, int);

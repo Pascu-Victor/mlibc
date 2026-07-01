@@ -11,6 +11,7 @@
 #include <unistd.h>
 
 #include <bits/ensure.h>
+#include <mlibc/all-sysdeps.hpp>
 #include <mlibc/debug.hpp>
 
 /*
@@ -214,6 +215,19 @@ int posix_spawn(
 	args.attr = attrs ? attrs : &empty_attr;
 	args.argv = argv;
 	args.envp = envp;
+	if constexpr (mlibc::IsImplemented<Spawn>) {
+		if (!file_actions && args.attr->__flags == 0 && !args.attr->__fn) {
+			pid_t spawned_pid = 0;
+			ec = mlibc::sysdep<Spawn>(path, argv, envp, &spawned_pid);
+			if (!ec) {
+				if (res)
+					*res = spawned_pid;
+				pthread_setcancelstate(cs, nullptr);
+				return 0;
+			}
+			ec = 0;
+		}
+	}
 	pthread_sigmask(SIG_BLOCK, &full_sigset, &args.oldmask);
 
 	/* The lock guards both against seeing a SIGABRT disposition change
@@ -378,6 +392,9 @@ int posix_spawnp(
     char *const argv[],
     char *const envp[]
 ) {
+	if (strchr(file, '/'))
+		return posix_spawn(pid, file, file_actions, attrp, argv, envp);
+
 	posix_spawnattr_t spawnp_attr = {};
 	if (attrp)
 		spawnp_attr = *attrp;

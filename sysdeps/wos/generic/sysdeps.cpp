@@ -928,6 +928,18 @@ int Sysdeps<Execve>::operator()(const char *path, char *const argv[], char *cons
 	return 0;
 }
 
+int
+Sysdeps<Spawn>::operator()(const char *path, char *const argv[], char *const envp[], pid_t *child) {
+	uint64_t r = ker::process::exec(
+	    path, const_cast<const char *const *>(argv), const_cast<const char *const *>(envp)
+	);
+	if (r == 0)
+		return EAGAIN;
+	if (child)
+		*child = static_cast<pid_t>(r);
+	return 0;
+}
+
 void Sysdeps<Yield>::operator()() { ker::multiproc::yield(); }
 
 pid_t Sysdeps<GetPid>::operator()() { return ker::process::getpid(); }
