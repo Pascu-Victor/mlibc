@@ -29,6 +29,7 @@
 #include <sys/poll.h>
 #include <sys/process.h>
 #include <sys/resource.h>
+#include <sys/select.h>
 #include <sys/shm.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
@@ -944,6 +945,10 @@ int Sysdeps<Spawn>::operator()(
 	if (options) {
 		if (options->action_count > kernel_actions.size())
 			return ENOTSUP;
+		// Ninja relies on posix_spawn file actions for its stdio pipes; use the
+		// generic fork+exec fallback until the WOS fast-spawn fd action path is audited.
+		if (options->action_count != 0)
+			return ENOTSUP;
 
 		for (size_t i = 0; i < options->action_count; ++i) {
 			const auto &src = options->actions[i];
@@ -1427,6 +1432,8 @@ int Sysdeps<Pselect>::operator()(
 ) {
 	if (num_fds < 0)
 		return EINVAL;
+	if (num_fds > FD_SETSIZE)
+		return EINVAL;
 
 	auto fd_is_set = [](int fd, fd_set *s) -> bool {
 		return (s->fds_bits[fd / 8] >> (fd % 8)) & 1;
@@ -1442,35 +1449,26 @@ int Sysdeps<Pselect>::operator()(
 		timeout_ms = std::max(timeout_ms, 0);
 	}
 
-	int epfd = ker::abi::vfs::epoll_create_vfs(0);
-	if (epfd < 0)
-		return ENOMEM;
-
+	std::array<pollfd, FD_SETSIZE> poll_fds{};
 	int watched_fds = 0;
 	for (int fd = 0; fd < num_fds; fd++) {
-		uint32_t events = 0;
+		short events = 0;
 		if (read_set && fd_is_set(fd, read_set))
-			events |= EPOLLIN;
+			events |= POLLIN;
 		if (write_set && fd_is_set(fd, write_set))
-			events |= EPOLLOUT;
+			events |= POLLOUT;
 		if (except_set && fd_is_set(fd, except_set))
-			events |= EPOLLERR | EPOLLHUP;
+			events |= POLLPRI | POLLERR | POLLHUP;
 		if (events == 0)
 			continue;
 
-		epoll_event ev;
-		ev.events = events;
-		ev.data.fd = fd;
-		int ctl = ker::abi::vfs::epoll_ctl_vfs(epfd, EPOLL_CTL_ADD, fd, &ev);
-		if (ctl < 0) {
-			ker::abi::vfs::close(epfd);
-			return -ctl;
-		}
+		poll_fds[watched_fds].fd = fd;
+		poll_fds[watched_fds].events = events;
+		poll_fds[watched_fds].revents = 0;
 		watched_fds++;
 	}
 
 	if (watched_fds == 0) {
-		ker::abi::vfs::close(epfd);
 		int wait_result = pselect_sleep_for_timeout_ms(timeout_ms, sigmask);
 		if (wait_result != 0)
 			return wait_result;
@@ -1484,31 +1482,22 @@ int Sysdeps<Pselect>::operator()(
 		return 0;
 	}
 
-	epoll_event out_events[64];
-	int max = watched_fds < 64 ? watched_fds : 64;
 	sigset_t old_mask{};
 	bool restore_mask = false;
 	int mask_error = apply_wait_signal_mask(sigmask, &old_mask, &restore_mask);
-	if (mask_error != 0) {
-		ker::abi::vfs::close(epfd);
+	if (mask_error != 0)
 		return mask_error;
-	}
-	int ready = ker::abi::vfs::epoll_pwait_vfs(epfd, out_events, max, timeout_ms);
+	int ready = ker::abi::net::poll(poll_fds.data(), static_cast<size_t>(watched_fds), timeout_ms);
 	int restore_error = restore_wait_signal_mask(&old_mask, restore_mask);
 
 	if (ready == -EINTR) {
-		ker::abi::vfs::close(epfd);
 		*num_events = 0;
 		return restore_error != 0 ? restore_error : EINTR;
 	}
-	if (ready < 0) {
-		ker::abi::vfs::close(epfd);
+	if (ready < 0)
 		return restore_error != 0 ? restore_error : -ready;
-	}
-	if (restore_error != 0) {
-		ker::abi::vfs::close(epfd);
+	if (restore_error != 0)
 		return restore_error;
-	}
 
 	if (read_set)
 		fd_zero(read_set);
@@ -1519,19 +1508,30 @@ int Sysdeps<Pselect>::operator()(
 
 	int count = 0;
 	if (ready > 0) {
-		for (int i = 0; i < ready; i++) {
-			int fd = out_events[i].data.fd;
-			if (read_set && (out_events[i].events & (EPOLLIN | EPOLLHUP | EPOLLERR)))
+		for (int i = 0; i < watched_fds; i++) {
+			short const REVENTS = poll_fds[i].revents;
+			if (REVENTS == 0)
+				continue;
+
+			int const fd = poll_fds[i].fd;
+			bool selected = false;
+			if (read_set && (REVENTS & (POLLIN | POLLHUP | POLLERR))) {
 				fd_set_bit(fd, read_set);
-			if (write_set && (out_events[i].events & EPOLLOUT))
+				selected = true;
+			}
+			if (write_set && (REVENTS & (POLLOUT | POLLHUP | POLLERR))) {
 				fd_set_bit(fd, write_set);
-			if (except_set && (out_events[i].events & (EPOLLERR | EPOLLHUP)))
+				selected = true;
+			}
+			if (except_set && (REVENTS & (POLLPRI | POLLERR | POLLHUP))) {
 				fd_set_bit(fd, except_set);
-			count++;
+				selected = true;
+			}
+			if (selected)
+				count++;
 		}
 	}
 
-	ker::abi::vfs::close(epfd);
 	*num_events = count;
 	return 0;
 }
