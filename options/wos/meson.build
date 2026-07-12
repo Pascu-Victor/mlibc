@@ -3,6 +3,7 @@ if not wos_option
 endif
 libc_sources += files(
 	'generic/cpuset.cpp',
+	'generic/fd.cpp',
 	'generic/epoll.cpp',
 	'generic/ifaddrs.cpp',
 	'generic/mntent.cpp',
@@ -46,6 +47,7 @@ if not no_headers
 	# 	subdir: 'scsi'
 	# )
 	install_headers(
+		'include/wos/fd.h',
 		'include/wos/kd.h',
 		'include/wos/netctl.h',
 		'include/wos/vt.h',

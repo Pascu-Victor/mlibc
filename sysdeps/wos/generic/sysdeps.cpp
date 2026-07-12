@@ -34,6 +34,7 @@
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/syscall.h>
+#include <sys/sysmacros.h>
 #include <sys/time.h>
 #include <sys/time_calls.h>
 #include <sys/time_ops.h>
@@ -625,12 +626,9 @@ int Sysdeps<Stat>::operator()(
     fsfd_target fsfdt, int fd, const char *path, int flags, struct stat *statbuf
 ) {
 	int r = 0;
-	// AT_SYMLINK_NOFOLLOW = 0x100 — when set, do NOT follow symlinks (lstat)
-	bool follow_symlinks = !(flags & 0x100);
 	switch (fsfdt) {
 		case fsfd_target::path:
-			r = follow_symlinks ? ker::abi::vfs::stat_path(path, statbuf)
-			                    : ker::abi::vfs::lstat_path(path, statbuf);
+			r = ker::abi::vfs::statat_path(AT_FDCWD, path, flags, statbuf);
 			break;
 		case fsfd_target::fd:
 			r = ker::abi::vfs::fstat_fd(fd, statbuf);
@@ -647,6 +645,43 @@ int Sysdeps<Stat>::operator()(
 	return 0;
 }
 
+int Sysdeps<Statx>::operator()(
+    int dirfd, const char *pathname, int flags, unsigned int, struct statx *statxbuf
+) {
+	struct stat statbuf;
+	int r = ker::abi::vfs::statat_path(dirfd, pathname, flags, &statbuf);
+	if (r < 0) {
+		return -r;
+	}
+
+	memset(statxbuf, 0, sizeof(struct statx));
+	statxbuf->stx_blksize = statbuf.st_blksize;
+	statxbuf->stx_blocks = statbuf.st_blocks;
+	statxbuf->stx_gid = statbuf.st_gid;
+	statxbuf->stx_ino = statbuf.st_ino;
+	statxbuf->stx_mode = statbuf.st_mode;
+	statxbuf->stx_nlink = statbuf.st_nlink;
+	statxbuf->stx_size = statbuf.st_size;
+	statxbuf->stx_uid = statbuf.st_uid;
+
+	statxbuf->stx_atime.tv_sec = statbuf.st_atim.tv_sec;
+	statxbuf->stx_atime.tv_nsec = statbuf.st_atim.tv_nsec;
+	statxbuf->stx_btime.tv_sec = statbuf.st_mtim.tv_sec;
+	statxbuf->stx_btime.tv_nsec = statbuf.st_mtim.tv_nsec;
+	statxbuf->stx_ctime.tv_sec = statbuf.st_ctim.tv_sec;
+	statxbuf->stx_ctime.tv_nsec = statbuf.st_ctim.tv_nsec;
+	statxbuf->stx_mtime.tv_sec = statbuf.st_mtim.tv_sec;
+	statxbuf->stx_mtime.tv_nsec = statbuf.st_mtim.tv_nsec;
+
+	statxbuf->stx_rdev_major = major(statbuf.st_rdev);
+	statxbuf->stx_rdev_minor = minor(statbuf.st_rdev);
+	statxbuf->stx_dev_major = major(statbuf.st_dev);
+	statxbuf->stx_dev_minor = minor(statbuf.st_dev);
+	statxbuf->stx_mask = STATX_BASIC_STATS | STATX_BTIME;
+
+	return 0;
+}
+
 int Sysdeps<TcbSet>::operator()(void *tcb) {
 	if (!tcb)
 		return -1;
@@ -660,7 +695,7 @@ void Sysdeps<Exit>::operator()(int status) {
 }
 
 int Sysdeps<Open>::operator()(const char *pathname, int flags, mode_t mode, int *fd) {
-	int r = ker::abi::vfs::open(pathname, flags, mode);
+	int r = ker::abi::vfs::openat(AT_FDCWD, pathname, flags, mode);
 	if (r < 0)
 		return -r;
 	*fd = r;
@@ -842,7 +877,7 @@ int Sysdeps<Isatty>::operator()(int fd) {
 }
 
 int Sysdeps<Rmdir>::operator()(const char *path) {
-	int r = ker::abi::vfs::rmdir(path);
+	int r = ker::abi::vfs::unlinkat(AT_FDCWD, path, AT_REMOVEDIR);
 	if (r < 0)
 		return -r;
 	return 0;
@@ -856,7 +891,7 @@ int Sysdeps<Unlinkat>::operator()(int dirfd, const char *path, int flags) {
 }
 
 int Sysdeps<Rename>::operator()(const char *old_path, const char *new_path) {
-	int r = ker::abi::vfs::rename(old_path, new_path);
+	int r = ker::abi::vfs::renameat(AT_FDCWD, old_path, AT_FDCWD, new_path);
 	if (r < 0)
 		return -r;
 	return 0;
@@ -1100,7 +1135,7 @@ Sysdeps<Pwrite>::operator()(int fd, const void *buf, size_t n, off_t off, ssize_
 }
 
 int Sysdeps<Access>::operator()(const char *path, int mode) {
-	int r = ker::abi::vfs::access(path, mode);
+	int r = ker::abi::vfs::faccessat(AT_FDCWD, path, mode, 0);
 	if (r < 0)
 		return -r;
 	return 0;
@@ -1131,7 +1166,7 @@ int Sysdeps<Dup2>::operator()(int fd, int flags, int newfd) {
 
 int
 Sysdeps<Readlink>::operator()(const char *path, void *buffer, size_t max_size, ssize_t *length) {
-	ssize_t r = ker::abi::vfs::readlink(path, static_cast<char *>(buffer), max_size);
+	ssize_t r = ker::abi::vfs::readlinkat(AT_FDCWD, path, static_cast<char *>(buffer), max_size);
 	if (r < 0)
 		return static_cast<int>(-r);
 	if (length)
@@ -1149,10 +1184,12 @@ int Sysdeps<Realpath>::operator()(const char *path, char *buffer, size_t size) {
 int Sysdeps<Readlinkat>::operator()(
     int dirfd, const char *path, void *buffer, size_t max_size, ssize_t *length
 ) {
-	if (dirfd == -100 || (path && path[0] == '/')) {
-		return sysdep<Readlink>(path, buffer, max_size, length);
-	}
-	return ENOSYS;
+	ssize_t r = ker::abi::vfs::readlinkat(dirfd, path, static_cast<char *>(buffer), max_size);
+	if (r < 0)
+		return static_cast<int>(-r);
+	if (length)
+		*length = r;
+	return 0;
 }
 
 int Sysdeps<Ftruncate>::operator()(int fd, size_t size) {
@@ -1163,7 +1200,7 @@ int Sysdeps<Ftruncate>::operator()(int fd, size_t size) {
 }
 
 int Sysdeps<Truncate>::operator()(const char *path, off_t length) {
-	int fd = ker::abi::vfs::open(path, 1 /* O_WRONLY */, 0);
+	int fd = ker::abi::vfs::openat(AT_FDCWD, path, 1 /* O_WRONLY */, 0);
 	if (fd < 0)
 		return -fd;
 	int r = ker::abi::vfs::truncate(fd, length);
@@ -1582,26 +1619,28 @@ int Sysdeps<Chdir>::operator()(const char *path) {
 }
 
 int Sysdeps<Fchdir>::operator()(int fd) {
-	(void)fd;
+	int r = ker::abi::vfs::fchdir_vfs(fd);
+	if (r < 0)
+		return -r;
 	return 0;
 }
 
 int Sysdeps<Mkdir>::operator()(const char *path, mode_t mode) {
-	int r = ker::abi::vfs::mkdir(path, static_cast<int>(mode));
+	int r = ker::abi::vfs::mkdirat(AT_FDCWD, path, static_cast<int>(mode));
 	if (r < 0)
 		return -r;
 	return 0;
 }
 
 int Sysdeps<Mkdirat>::operator()(int dirfd, const char *path, mode_t mode) {
-	if (dirfd == -100 || (path && path[0] == '/')) {
-		return sysdep<Mkdir>(path, mode);
-	}
-	return ENOSYS;
+	int r = ker::abi::vfs::mkdirat(dirfd, path, static_cast<int>(mode));
+	if (r < 0)
+		return -r;
+	return 0;
 }
 
 int Sysdeps<Link>::operator()(const char *old_path, const char *new_path) {
-	int r = ker::abi::vfs::link_vfs(old_path, new_path);
+	int r = ker::abi::vfs::linkat_vfs(AT_FDCWD, old_path, AT_FDCWD, new_path, 0);
 	if (r < 0)
 		return -r;
 	return 0;
@@ -1610,26 +1649,24 @@ int Sysdeps<Link>::operator()(const char *old_path, const char *new_path) {
 int Sysdeps<Linkat>::operator()(
     int olddirfd, const char *oldpath, int newdirfd, const char *newpath, int flags
 ) {
-	(void)flags;
-	if ((olddirfd == AT_FDCWD || olddirfd == -100 || (oldpath && oldpath[0] == '/'))
-	    && (newdirfd == AT_FDCWD || newdirfd == -100 || (newpath && newpath[0] == '/'))) {
-		return sysdep<Link>(oldpath, newpath);
-	}
-	return ENOSYS;
+	int r = ker::abi::vfs::linkat_vfs(olddirfd, oldpath, newdirfd, newpath, flags);
+	if (r < 0)
+		return -r;
+	return 0;
 }
 
 int Sysdeps<Symlink>::operator()(const char *target, const char *linkpath) {
-	int r = ker::abi::vfs::symlink(target, linkpath);
+	int r = ker::abi::vfs::symlinkat_vfs(target, AT_FDCWD, linkpath);
 	if (r < 0)
 		return -r;
 	return 0;
 }
 
 int Sysdeps<Symlinkat>::operator()(const char *target, int dirfd, const char *linkpath) {
-	if (dirfd == -100 || (linkpath && linkpath[0] == '/')) {
-		return sysdep<Symlink>(target, linkpath);
-	}
-	return ENOSYS;
+	int r = ker::abi::vfs::symlinkat_vfs(target, dirfd, linkpath);
+	if (r < 0)
+		return -r;
+	return 0;
 }
 
 int Sysdeps<Renameat>::operator()(
@@ -1705,7 +1742,7 @@ int Sysdeps<Ttyname>::operator()(int fd, char *buf, size_t size) {
 		}
 		if (len + 1 > size)
 			continue;
-		int tfd = ker::abi::vfs::open(path, 0 /* O_RDONLY */, 0);
+		int tfd = ker::abi::vfs::openat(AT_FDCWD, path, 0 /* O_RDONLY */, 0);
 		if (tfd >= 0) {
 			ker::abi::vfs::close(tfd);
 			memcpy(buf, path, len + 1);
@@ -1726,7 +1763,7 @@ int Sysdeps<Fsync>::operator()(int fd) {
 void Sysdeps<Sync>::operator()() { (void)ker::abi::vfs::sync_vfs(); }
 
 int Sysdeps<Chmod>::operator()(const char *pathname, mode_t mode) {
-	int r = ker::abi::vfs::chmod(pathname, mode);
+	int r = ker::abi::vfs::fchmodat_vfs(AT_FDCWD, pathname, mode, 0);
 	if (r < 0)
 		return -r;
 	return 0;
@@ -1740,11 +1777,10 @@ int Sysdeps<Fchmod>::operator()(int fd, mode_t mode) {
 }
 
 int Sysdeps<Fchmodat>::operator()(int dirfd, const char *pathname, mode_t mode, int flags) {
-	(void)flags;
-	if (dirfd == AT_FDCWD || dirfd == -100 || (pathname && pathname[0] == '/')) {
-		return sysdep<Chmod>(pathname, mode);
-	}
-	return ENOSYS;
+	int r = ker::abi::vfs::fchmodat_vfs(dirfd, pathname, mode, flags);
+	if (r < 0)
+		return -r;
+	return 0;
 }
 
 int Sysdeps<SetSid>::operator()(pid_t *sid) {
@@ -1988,7 +2024,7 @@ int Sysdeps<SetHostname>::operator()(const char *buffer, size_t bufsize) {
 }
 
 int Sysdeps<GetEntropy>::operator()(void *buffer, size_t length) {
-	int fd = ker::abi::vfs::open("/dev/urandom", 0 /* O_RDONLY */, 0);
+	int fd = ker::abi::vfs::openat(AT_FDCWD, "/dev/urandom", 0 /* O_RDONLY */, 0);
 	if (fd < 0)
 		return EIO;
 	size_t total = 0;
@@ -2025,19 +2061,7 @@ int Sysdeps<Umask>::operator()(mode_t mode, mode_t *old) {
 int Sysdeps<Fchownat>::operator()(
     int dirfd, const char *pathname, uid_t owner, gid_t group, int flags
 ) {
-	if (dirfd == AT_FDCWD || dirfd == -100) {
-		int r = ker::abi::vfs::chown(pathname, owner, group);
-		if (r < 0)
-			return -r;
-		return 0;
-	}
-	if (flags & 0x1000 /* AT_EMPTY_PATH */) {
-		int r = ker::abi::vfs::fchown(dirfd, owner, group);
-		if (r < 0)
-			return -r;
-		return 0;
-	}
-	int r = ker::abi::vfs::chown(pathname, owner, group);
+	int r = ker::abi::vfs::fchownat_vfs(dirfd, pathname, owner, group, flags);
 	if (r < 0)
 		return -r;
 	return 0;
@@ -2126,7 +2150,7 @@ int Sysdeps<Prctl>::operator()(int option, va_list va, int *out) {
 
 int Sysdeps<Openpt>::operator()(int oflags, int *fd) {
 	(void)oflags;
-	int r = ker::abi::vfs::open("/dev/ptmx", 2 /* O_RDWR */, 0);
+	int r = ker::abi::vfs::openat(AT_FDCWD, "/dev/ptmx", 2 /* O_RDWR */, 0);
 	if (r < 0)
 		return -r;
 	if (fd)

@@ -121,6 +121,7 @@ struct WosSysdepTags :
     Shmget,
     Statvfs,
     Fstatvfs,
+    Statx,
 #endif // __MLIBC_POSIX_OPTION
 
 #if __MLIBC_GLIBC_OPTION

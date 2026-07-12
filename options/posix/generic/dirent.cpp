@@ -2,6 +2,7 @@
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -12,6 +13,22 @@
 #include <mlibc/allocator.hpp>
 #include <mlibc/debug.hpp>
 
+namespace {
+
+DIR *allocate_dir() {
+	auto dir = static_cast<DIR *>(getAllocator().allocate(sizeof(DIR)));
+	__ensure(dir);
+	dir->__handle = -1;
+	dir->__ent_next = 0;
+	dir->__ent_limit = 0;
+	dir->__seek_offset = 0;
+	return dir;
+}
+
+void free_dir(DIR *dir) { getAllocator().deallocate(dir, sizeof(DIR)); }
+
+} // namespace
+
 // Code taken from musl
 int alphasort(const struct dirent **a, const struct dirent **b) {
 	return strcoll((*a)->d_name, (*b)->d_name);
@@ -19,7 +36,7 @@ int alphasort(const struct dirent **a, const struct dirent **b) {
 
 int closedir(DIR *dir) {
 	close(dir->__handle);
-	frg::destruct<__mlibc_dir_struct>(getAllocator(), dir);
+	free_dir(dir);
 	return 0;
 }
 
@@ -40,11 +57,7 @@ DIR *fdopendir(int fd) {
 		errno = ENOTDIR;
 		return nullptr;
 	}
-	auto dir = frg::construct<__mlibc_dir_struct>(getAllocator());
-	__ensure(dir);
-	dir->__ent_next = 0;
-	dir->__ent_limit = 0;
-	dir->__seek_offset = 0;
+	auto dir = allocate_dir();
 	int flags = fcntl(fd, F_GETFD);
 	fcntl(fd, F_SETFD, flags | FD_CLOEXEC);
 	dir->__handle = fd;
@@ -52,14 +65,11 @@ DIR *fdopendir(int fd) {
 }
 
 DIR *opendir(const char *path) {
-	auto dir = frg::construct<__mlibc_dir_struct>(getAllocator());
-	__ensure(dir);
-	dir->__ent_next = 0;
-	dir->__ent_limit = 0;
+	auto dir = allocate_dir();
 
 	if (int e = mlibc::sysdep_or_enosys<OpenDir>(path, &dir->__handle); e) {
 		errno = e;
-		frg::destruct(getAllocator(), dir);
+		free_dir(dir);
 		return nullptr;
 	} else {
 		return dir;
@@ -70,7 +80,7 @@ struct dirent *readdir(DIR *dir) {
 	__ensure(dir->__ent_next <= dir->__ent_limit);
 	if (dir->__ent_next == dir->__ent_limit) {
 		if (int e = mlibc::sysdep_or_enosys<ReadEntries>(
-		        dir->__handle, dir->__ent_buffer, 2048, &dir->__ent_limit
+		        dir->__handle, dir->__ent_buffer, sizeof(dir->__ent_buffer), &dir->__ent_limit
 		    );
 		    e)
 			__ensure(!"mlibc::sys_read_entries() failed");
@@ -81,9 +91,15 @@ struct dirent *readdir(DIR *dir) {
 
 	auto entp = reinterpret_cast<struct dirent *>(dir->__ent_buffer + dir->__ent_next);
 	dir->__seek_offset = entp->d_off;
-	// We only copy as many bytes as we need to avoid buffer-overflows.
-	memcpy(&dir->__current, entp, offsetof(struct dirent, d_name) + strlen(entp->d_name) + 1);
+	__ensure(entp->d_reclen);
+	__ensure(entp->d_reclen <= dir->__ent_limit - dir->__ent_next);
 	dir->__ent_next += entp->d_reclen;
+
+	if ((reinterpret_cast<uintptr_t>(entp) & (alignof(struct dirent) - 1)) == 0)
+		return entp;
+
+	__ensure(entp->d_reclen <= sizeof(dir->__current));
+	memcpy(&dir->__current, entp, entp->d_reclen);
 	return &dir->__current;
 }
 
@@ -114,7 +130,7 @@ int readdir_r(DIR *dir, struct dirent *entry, struct dirent **result) {
 	__ensure(dir->__ent_next <= dir->__ent_limit);
 	if (dir->__ent_next == dir->__ent_limit) {
 		if (int e = mlibc::sysdep_or_panic<ReadEntries>(
-		        dir->__handle, dir->__ent_buffer, 2048, &dir->__ent_limit
+		        dir->__handle, dir->__ent_buffer, sizeof(dir->__ent_buffer), &dir->__ent_limit
 		    );
 		    e)
 			__ensure(!"mlibc::sys_read_entries() failed");
@@ -127,8 +143,8 @@ int readdir_r(DIR *dir, struct dirent *entry, struct dirent **result) {
 
 	auto entp = reinterpret_cast<struct dirent *>(dir->__ent_buffer + dir->__ent_next);
 	dir->__seek_offset = entp->d_off;
-	// We only copy as many bytes as we need to avoid buffer-overflows.
-	memcpy(entry, entp, offsetof(struct dirent, d_name) + strlen(entp->d_name) + 1);
+	__ensure(entp->d_reclen <= sizeof(*entry));
+	memcpy(entry, entp, entp->d_reclen);
 	dir->__ent_next += entp->d_reclen;
 	*result = entry;
 	return 0;
@@ -146,19 +162,44 @@ int scandir(
     int (*select)(const struct dirent *),
     int (*compare)(const struct dirent **, const struct dirent **)
 ) {
-	DIR *dir = opendir(path);
-	if (!dir)
-		return -1; // errno will be set by opendir()
+	int handle = -1;
+	if (int e = mlibc::sysdep_or_enosys<OpenDir>(path, &handle); e) {
+		errno = e;
+		return -1;
+	}
 
 	// we should save the errno
 	int old_errno = errno;
-	errno = 0;
 
-	struct dirent *dir_ent;
+	alignas(struct dirent) char ent_buffer[sizeof(static_cast<DIR *>(nullptr)->__ent_buffer)];
+	size_t ent_next = 0;
+	size_t ent_limit = 0;
 	struct dirent **array = nullptr, **tmp = nullptr;
 	int length = 0;
 	int count = 0;
-	while ((dir_ent = readdir(dir)) && !errno) {
+	int scan_errno = 0;
+
+	while (!scan_errno) {
+		if (ent_next == ent_limit) {
+			if (int e = mlibc::sysdep_or_enosys<ReadEntries>(
+			        handle, ent_buffer, sizeof(ent_buffer), &ent_limit
+			    );
+			    e) {
+				scan_errno = e;
+				break;
+			}
+			ent_next = 0;
+			if (!ent_limit)
+				break;
+		}
+
+		auto dir_ent = reinterpret_cast<struct dirent *>(ent_buffer + ent_next);
+		if (!dir_ent->d_reclen || dir_ent->d_reclen > ent_limit - ent_next) {
+			scan_errno = EINVAL;
+			break;
+		}
+		ent_next += dir_ent->d_reclen;
+
 		if (select && !select(dir_ent))
 			continue;
 
@@ -169,23 +210,30 @@ int scandir(
 			// before we overwrite array so that we can
 			// deallocate the already written entries should realloc()
 			// have failed
-			if (!tmp)
+			if (!tmp) {
+				scan_errno = ENOMEM;
 				break;
+			}
 			array = tmp;
 		}
 		array[count] = static_cast<struct dirent *>(malloc(dir_ent->d_reclen));
-		if (!array[count])
+		if (!array[count]) {
+			scan_errno = ENOMEM;
 			break;
+		}
 
 		memcpy(array[count], dir_ent, dir_ent->d_reclen);
 		count++;
 	}
 
-	if (errno) {
+	close(handle);
+
+	if (scan_errno) {
 		if (array)
 			while (count-- > 0)
 				free(array[count]);
 		free(array);
+		errno = scan_errno;
 		return -1;
 	}
 

@@ -69,6 +69,14 @@ enum class ops : uint64_t {
 	openat,
 	statat,
 	utimensat,
+	mkdirat,
+	readlinkat,
+	linkat,
+	symlinkat,
+	fchmodat,
+	fchdir,
+	fchownat,
+	fstat_close,
 };
 
 constexpr uint32_t WKI_VFS_ROUTE_LOCAL = 0;
@@ -186,10 +194,33 @@ static inline int mkdir(const char *path, int mode) {
 	return static_cast<int>((int64_t)r);
 }
 
+static inline int mkdirat(int dirfd, const char *path, int mode) {
+	uint64_t r = syscall(
+	    ker::abi::callnums::vfs,
+	    static_cast<uint64_t>(ops::mkdirat),
+	    static_cast<uint64_t>(dirfd),
+	    reinterpret_cast<uint64_t>(path),
+	    static_cast<uint64_t>(mode)
+	);
+	return static_cast<int>((int64_t)r);
+}
+
 static inline ssize_t readlink(const char *path, char *buf, size_t bufsize) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::vfs,
 	    static_cast<uint64_t>(ops::readlink),
+	    reinterpret_cast<uint64_t>(path),
+	    reinterpret_cast<uint64_t>(buf),
+	    static_cast<uint64_t>(bufsize)
+	);
+	return static_cast<ssize_t>((int64_t)r);
+}
+
+static inline ssize_t readlinkat(int dirfd, const char *path, char *buf, size_t bufsize) {
+	uint64_t r = syscall(
+	    ker::abi::callnums::vfs,
+	    static_cast<uint64_t>(ops::readlinkat),
+	    static_cast<uint64_t>(dirfd),
 	    reinterpret_cast<uint64_t>(path),
 	    reinterpret_cast<uint64_t>(buf),
 	    static_cast<uint64_t>(bufsize)
@@ -202,6 +233,17 @@ static inline int symlink(const char *target, const char *linkpath) {
 	    ker::abi::callnums::vfs,
 	    static_cast<uint64_t>(ops::symlink),
 	    reinterpret_cast<uint64_t>(target),
+	    reinterpret_cast<uint64_t>(linkpath)
+	);
+	return static_cast<int>((int64_t)r);
+}
+
+static inline int symlinkat_vfs(const char *target, int dirfd, const char *linkpath) {
+	uint64_t r = syscall(
+	    ker::abi::callnums::vfs,
+	    static_cast<uint64_t>(ops::symlinkat),
+	    reinterpret_cast<uint64_t>(target),
+	    static_cast<uint64_t>(dirfd),
 	    reinterpret_cast<uint64_t>(linkpath)
 	);
 	return static_cast<int>((int64_t)r);
@@ -233,6 +275,17 @@ static inline int fstat_fd(int fd, void *statbuf) {
 	    static_cast<uint64_t>(ops::fstat),
 	    static_cast<uint64_t>(fd),
 	    reinterpret_cast<uint64_t>(statbuf)
+	);
+	return static_cast<int>((int64_t)r);
+}
+
+static inline int fstat_close_fd(int fd, void *statbuf, int *stat_result) {
+	uint64_t r = syscall(
+	    ker::abi::callnums::vfs,
+	    static_cast<uint64_t>(ops::fstat_close),
+	    static_cast<uint64_t>(fd),
+	    reinterpret_cast<uint64_t>(statbuf),
+	    reinterpret_cast<uint64_t>(stat_result)
 	);
 	return static_cast<int>((int64_t)r);
 }
@@ -301,6 +354,13 @@ static inline int getcwd(char *buf, size_t size) {
 static inline int chdir(const char *path) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::vfs, static_cast<uint64_t>(ops::chdir), reinterpret_cast<uint64_t>(path)
+	);
+	return static_cast<int>((int64_t)r);
+}
+
+static inline int fchdir_vfs(int fd) {
+	uint64_t r = syscall(
+	    ker::abi::callnums::vfs, static_cast<uint64_t>(ops::fchdir), static_cast<uint64_t>(fd)
 	);
 	return static_cast<int>((int64_t)r);
 }
@@ -428,6 +488,18 @@ static inline int fchmod(int fd, mode_t mode) {
 	return static_cast<int>((int64_t)r);
 }
 
+static inline int fchmodat_vfs(int dirfd, const char *path, mode_t mode, int flags) {
+	uint64_t r = syscall(
+	    ker::abi::callnums::vfs,
+	    static_cast<uint64_t>(ops::fchmodat),
+	    static_cast<uint64_t>(dirfd),
+	    reinterpret_cast<uint64_t>(path),
+	    static_cast<uint64_t>(mode),
+	    static_cast<uint64_t>(flags)
+	);
+	return static_cast<int>((int64_t)r);
+}
+
 static inline int chown(const char *path, uid_t owner, gid_t group) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::vfs,
@@ -446,6 +518,19 @@ static inline int fchown(int fd, uid_t owner, gid_t group) {
 	    static_cast<uint64_t>(fd),
 	    static_cast<uint64_t>(owner),
 	    static_cast<uint64_t>(group)
+	);
+	return static_cast<int>((int64_t)r);
+}
+
+static inline int fchownat_vfs(int dirfd, const char *path, uid_t owner, gid_t group, int flags) {
+	uint64_t r = syscall(
+	    ker::abi::callnums::vfs,
+	    static_cast<uint64_t>(ops::fchownat),
+	    static_cast<uint64_t>(dirfd),
+	    reinterpret_cast<uint64_t>(path),
+	    static_cast<uint64_t>(owner),
+	    static_cast<uint64_t>(group),
+	    static_cast<uint64_t>(flags)
 	);
 	return static_cast<int>((int64_t)r);
 }
@@ -547,6 +632,20 @@ static inline int link_vfs(const char *oldpath, const char *newpath) {
 	    static_cast<uint64_t>(ops::link),
 	    reinterpret_cast<uint64_t>(oldpath),
 	    reinterpret_cast<uint64_t>(newpath)
+	);
+	return static_cast<int>((int64_t)r);
+}
+
+static inline int
+linkat_vfs(int olddirfd, const char *oldpath, int newdirfd, const char *newpath, int flags) {
+	uint64_t r = syscall(
+	    ker::abi::callnums::vfs,
+	    static_cast<uint64_t>(ops::linkat),
+	    static_cast<uint64_t>(olddirfd),
+	    reinterpret_cast<uint64_t>(oldpath),
+	    static_cast<uint64_t>(newdirfd),
+	    reinterpret_cast<uint64_t>(newpath),
+	    static_cast<uint64_t>(flags)
 	);
 	return static_cast<int>((int64_t)r);
 }

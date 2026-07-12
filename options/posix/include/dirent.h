@@ -59,7 +59,7 @@ struct __mlibc_dir_struct {
 	__mlibc_size __ent_next;
 	/* valid byte count for __ent_buffer */
 	__mlibc_size __ent_limit;
-	char __ent_buffer[2048];
+	char __ent_buffer[16384];
 	/* cached current dirent */
 	struct dirent __current;
 	/* current seek offset; should be equivalent to lseek(dirfd, 0, SEEK_CUR) */
@@ -112,4 +112,3 @@ ssize_t getdents64(int __fd, void *__dirp, size_t __count);
 #endif
 
 #endif /* _DIRENT_H */
-
