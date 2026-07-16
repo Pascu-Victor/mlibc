@@ -4,10 +4,12 @@
 #ifdef __cplusplus
 #include <abi-bits/gid_t.h>
 #include <abi-bits/mode_t.h>
+#include <abi-bits/stat.h>
 #include <abi-bits/uid_t.h>
 #include <bits/off_t.h>
 #include <bits/size_t.h>
 #include <bits/ssize_t.h>
+#include <stddef.h>
 #include <sys/callnums.h>
 #include <sys/syscall.h>
 
@@ -77,10 +79,48 @@ enum class ops : uint64_t {
 	fchdir,
 	fchownat,
 	fstat_close,
+	metadata_batch,
 };
+
+static_assert(static_cast<uint64_t>(ops::metadata_batch) == 62);
 
 constexpr uint32_t WKI_VFS_ROUTE_LOCAL = 0;
 constexpr uint32_t WKI_VFS_ROUTE_HOST = 1;
+
+constexpr uint16_t METADATA_BATCH_VERSION = 1;
+constexpr uint8_t METADATA_BATCH_MAX_ITEMS = 64;
+constexpr size_t METADATA_BATCH_MAX_PATH_CHARS = 511;
+
+enum class metadata_batch_operation : uint8_t {
+	invalid = 0,
+	create_close = 1,
+	stat_follow = 2,
+	unlink = 3,
+	rename = 4,
+};
+
+struct metadata_batch_header {
+	uint16_t version;
+	metadata_batch_operation operation;
+	uint8_t count;
+	uint32_t mode;
+};
+
+struct metadata_batch_entry {
+	const char *path;
+	const char *second_path;
+};
+
+struct metadata_batch_result {
+	int32_t status;
+	uint32_t reserved;
+	struct stat statbuf;
+};
+
+static_assert(sizeof(metadata_batch_header) == 8);
+static_assert(sizeof(metadata_batch_entry) == 16);
+static_assert(offsetof(metadata_batch_result, statbuf) == 8);
+static_assert(sizeof(metadata_batch_result) == 152);
 
 // Thin syscall veneers (similar to sys/logging.h) so userspace can
 // call VFS operations directly until higher-level libc paths are used.
@@ -286,6 +326,25 @@ static inline int fstat_close_fd(int fd, void *statbuf, int *stat_result) {
 	    static_cast<uint64_t>(fd),
 	    reinterpret_cast<uint64_t>(statbuf),
 	    reinterpret_cast<uint64_t>(stat_result)
+	);
+	return static_cast<int>((int64_t)r);
+}
+
+// EOPNOTSUPP guarantees that no batch request was attempted and permits a
+// scalar fallback. Any other negative return may leave completed results mixed
+// with EINPROGRESS entries because effects can precede a response or final
+// userspace result copy; callers must not replay mutating entries.
+static inline int metadata_batch(
+    const metadata_batch_header *header,
+    const metadata_batch_entry *entries,
+    metadata_batch_result *results
+) {
+	uint64_t r = syscall(
+	    ker::abi::callnums::vfs,
+	    static_cast<uint64_t>(ops::metadata_batch),
+	    reinterpret_cast<uint64_t>(header),
+	    reinterpret_cast<uint64_t>(entries),
+	    reinterpret_cast<uint64_t>(results)
 	);
 	return static_cast<int>((int64_t)r);
 }
