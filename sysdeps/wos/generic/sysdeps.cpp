@@ -980,10 +980,8 @@ int Sysdeps<Spawn>::operator()(
 	if (options) {
 		if (options->action_count > kernel_actions.size())
 			return ENOTSUP;
-		// Ninja relies on posix_spawn file actions for its stdio pipes; use the
-		// generic fork+exec fallback until the WOS fast-spawn fd action path is audited.
-		if (options->action_count != 0)
-			return ENOTSUP;
+		if (options->action_count != 0 && !options->actions)
+			return EINVAL;
 
 		for (size_t i = 0; i < options->action_count; ++i) {
 			const auto &src = options->actions[i];
@@ -1023,7 +1021,7 @@ int Sysdeps<Spawn>::operator()(
 		kernel_options_ptr = &kernel_options;
 	}
 
-	uint64_t r =
+	int64_t r = static_cast<int64_t>(
 	    options
 	        ? ker::process::spawn(
 	              path,
@@ -1033,7 +1031,10 @@ int Sysdeps<Spawn>::operator()(
 	          )
 	        : ker::process::exec(
 	              path, const_cast<const char *const *>(argv), const_cast<const char *const *>(envp)
-	          );
+	          )
+	);
+	if (r < 0)
+		return static_cast<int>(-r);
 	if (r == 0)
 		return EAGAIN;
 	if (child)
