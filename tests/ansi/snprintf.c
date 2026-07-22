@@ -43,6 +43,12 @@ int main() {
 	assert(strcmp(buf, "hello") == 0);
 	assert(snprintf(buf, 128, "%ls", L"hello") == 5);
 	assert(strcmp(buf, "hello") == 0);
+	assert(snprintf(buf, 128, "%7ls", L"hello") == 7);
+	assert(strcmp(buf, "  hello") == 0);
+	assert(snprintf(buf, 128, "%-7ls", L"hello") == 7);
+	assert(strcmp(buf, "hello  ") == 0);
+	assert(snprintf(buf, 128, "%.3ls", L"hello") == 3);
+	assert(strcmp(buf, "hel") == 0);
 
 	assert(snprintf(buf, 128, "%d", 1234) == 4);
 	assert(strcmp(buf, "1234") == 0);

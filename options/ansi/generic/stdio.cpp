@@ -79,7 +79,46 @@ struct PrintfAgent {
 			}
 			frg::do_printf_chars<Char, F>(*_formatter, t, opts, szmod, _vsp);
 			break;
-		case 'p': case 's':
+		case 'p':
+			frg::do_printf_chars<Char, F>(*_formatter, t, opts, szmod, _vsp);
+			break;
+		case 's':
+			if (szmod == frg::printf_size_mod::long_size) {
+				if constexpr (std::is_same_v<Char, char>) {
+					auto str = static_cast<const wchar_t *>(frg::pop_arg<void *>(_vsp, &opts));
+					if (!str)
+						str = L"(null)";
+
+					mbstate_t shift_state = {};
+					size_t wchar_count = 0;
+					size_t byte_count = 0;
+					while (str[wchar_count]) {
+						char c_buf[MB_LEN_MAX];
+						size_t res = wcrtomb(c_buf, str[wchar_count], &shift_state);
+						if (res == size_t(-1))
+							return frg::format_error::agent_error;
+						if (opts.precision && *opts.precision >= 0) {
+							size_t const precision = static_cast<size_t>(*opts.precision);
+							if (byte_count > precision || res > precision - byte_count)
+								break;
+						}
+						byte_count += res;
+						wchar_count++;
+					}
+
+					size_t padding = 0;
+					if (opts.minimum_width > 0 && static_cast<size_t>(opts.minimum_width) > byte_count)
+						padding = static_cast<size_t>(opts.minimum_width) - byte_count;
+					if (!opts.left_justify)
+						for (size_t i = 0; i < padding; i++)
+							_formatter->append(' ');
+					_formatter->append(str, wchar_count);
+					if (opts.left_justify)
+						for (size_t i = 0; i < padding; i++)
+							_formatter->append(' ');
+					break;
+				}
+			}
 			frg::do_printf_chars<Char, F>(*_formatter, t, opts, szmod, _vsp);
 			break;
 		case 'd': case 'i': case 'o': case 'x': case 'X': case 'b': case 'B': case 'u':
