@@ -84,6 +84,9 @@ int main() {
 	assert(wcrtomb(representation, L'1', &state) == 1);
 	assert(wcrtomb(representation, L'ß', &state) == 2);
 	assert(!strncmp(representation, "\xC3\x9F", 2));
+	assert(wcrtomb(representation, L'1', NULL) == 1);
+	assert(wcrtomb(NULL, L'1', &state) == 1);
+	assert(wcrtomb(NULL, L'1', NULL) == 1);
 	assert(wcrtomb(representation, L'ࠑ', &state) == 3);
 	assert(!strncmp(representation, "\xE0\xA0\x91", 3));
 	assert(wcrtomb(representation, L'𒂲', &state) == 4);

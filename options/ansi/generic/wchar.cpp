@@ -15,6 +15,7 @@ __mlibc_mbstate mbrlen_state = __MLIBC_MBSTATE_INITIALIZER;
 __mlibc_mbstate mbrtowc_state = __MLIBC_MBSTATE_INITIALIZER;
 __mlibc_mbstate mbsrtowcs_state = __MLIBC_MBSTATE_INITIALIZER;
 __mlibc_mbstate mbsnrtowcs_state = __MLIBC_MBSTATE_INITIALIZER;
+__mlibc_mbstate wcrtomb_state = __MLIBC_MBSTATE_INITIALIZER;
 __mlibc_mbstate wcsrtombs_state = __MLIBC_MBSTATE_INITIALIZER;
 } // namespace
 
@@ -110,11 +111,13 @@ size_t mbrtowc(
 size_t wcrtomb(char *__restrict mbs, wchar_t wc, mbstate_t *__restrict stp) {
 	auto cc = mlibc::current_charcode();
 
-	// wcrtomb() always takes a mbstate_t.
-	__ensure(stp);
-
-	// TODO: Implement the following case:
-	__ensure(mbs);
+	if (!stp)
+		stp = &wcrtomb_state;
+	char internal_buffer[MB_LEN_MAX];
+	if (!mbs) {
+		mbs = internal_buffer;
+		wc = L'\0';
+	}
 
 	mlibc::code_seq<const wchar_t> wseq{&wc, &wc + 1};
 	mlibc::code_seq<char> nseq{mbs, mbs + MB_LEN_MAX};
