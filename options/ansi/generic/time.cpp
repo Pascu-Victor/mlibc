@@ -519,13 +519,13 @@ bool parse_tzfile(const char *tz) {
 	bool found_std = false;
 	bool found_dst = false;
 	// start from the last ttinfo entry, this matches the behaviour of glibc and musl
-	for (int i = tzfile_time.tzh_typecnt; i > 0; i--) {
+	for (uint32_t i = tzfile_time.tzh_typecnt; i > 0; i--) {
 		ttinfo time_info;
 		memcpy(
 		    &time_info,
 		    reinterpret_cast<char *>(tzFileCache->get()) + sizeof(tzfile)
 		        + tzfile_time.tzh_timecnt * sizeof(int32_t)
-		        + tzfile_time.tzh_timecnt * sizeof(uint8_t) + i * sizeof(ttinfo),
+		        + tzfile_time.tzh_timecnt * sizeof(uint8_t) + (i - 1) * sizeof(ttinfo),
 		    sizeof(ttinfo)
 		);
 		time_info.tt_gmtoff = mlibc::bit_util<uint32_t>::be_to_host(time_info.tt_gmtoff);
@@ -939,9 +939,14 @@ int unix_local_from_gmt(time_t unix_gmt, time_t *offset, bool *dst, char **tm_zo
 
 	if (daylight && rules[0].type == TZFILE) {
 		int ret = unix_local_from_gmt_tzfile(unix_gmt, offset, dst, tznameStorage[tznameDST]);
-		if (ret == 0)
+		if (ret == 0) {
 			*tm_zone = tzname[tznameDST] = tznameStorage[tznameDST].data();
-		return ret;
+			return 0;
+		}
+		*offset = 0;
+		*dst = false;
+		*tm_zone = const_cast<char *>(__utc);
+		return 0;
 	}
 
 	if (daylight && is_in_dst(unix_gmt)) {
