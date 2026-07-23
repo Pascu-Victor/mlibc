@@ -157,9 +157,10 @@ int unsetenv(const char *name) {
 }
 
 int clearenv(void) {
-	auto vector = get_vector();
+	auto &vector = get_vector();
 	vector.clear();
-	update_vector();
+	vector.push(nullptr);
+	environ = vector.data();
 	return 0;
 }
 

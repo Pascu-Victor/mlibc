@@ -153,6 +153,7 @@ all_test_cases = [
 	'posix/wcpcpy',
 	'posix/wcpncpy',
 	'posix/getwchar',
+	'posix/environment',
 	'glibc/getopt',
 	'glibc/ffsl-ffsll',
 	'glibc/error_message_count',
