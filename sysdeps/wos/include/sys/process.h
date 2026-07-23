@@ -14,6 +14,7 @@ constexpr uint32_t WKI_TARGET_FLAG_STRICT = 1U << 0;
 constexpr uint32_t WKI_TARGET_FLAG_LOCAL = 1U << 1;     // pin task to local node
 constexpr uint32_t WKI_TARGET_FLAG_NOINHERIT = 1U << 2; // don't propagate to children
 constexpr uint32_t WKI_TARGET_FLAG_REMOTE = 1U << 3;    // prefer remote placement
+constexpr uint32_t WKI_TARGET_FLAG_BALANCED = 1U << 4;  // balance across local and connected nodes
 
 inline void exit(uint64_t status) {
 	syscall(abi::callnums::process, (uint64_t)abi::process::procmgmt_ops::EXIT, status);
