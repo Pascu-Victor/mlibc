@@ -26,7 +26,7 @@ char *strncpy(char *__restrict dest, const char *src, size_t max_size) {
 	auto dest_bytes = static_cast<char *>(dest);
 	auto src_bytes = static_cast<const char *>(src);
 	size_t i = 0;
-	while (*src_bytes && i < max_size) {
+	while (i < max_size && *src_bytes) {
 		*(dest_bytes++) = *(src_bytes++);
 		i++;
 	}

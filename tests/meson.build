@@ -104,6 +104,7 @@ all_test_cases = [
 	'posix/ffs',
 	'posix/getcwd',
 	'posix/memrchr',
+	'posix/strncpy',
 	'posix/wordexp',
 	'posix/rlimits',
 	'posix/accept4',
