@@ -3,6 +3,7 @@
 #include <fcntl.h>
 #include <stdint.h>
 #include <sys/callnums.h>
+#include <sys/init_control.h>
 #include <sys/resource.h>
 #include <sys/syscall.h>
 #include <sys/utsname.h>
@@ -15,7 +16,8 @@ constexpr uint32_t WKI_TARGET_FLAG_LOCAL = 1U << 1;     // pin task to local nod
 constexpr uint32_t WKI_TARGET_FLAG_NOINHERIT = 1U << 2; // don't propagate to children
 constexpr uint32_t WKI_TARGET_FLAG_REMOTE = 1U << 3;    // prefer remote placement
 constexpr uint32_t WKI_TARGET_FLAG_BALANCED = 1U << 4;  // balance across local and connected nodes
-constexpr uint32_t WKI_TARGET_FLAG_ONESHOT = 1U << 5;   // consume placement after the next successful exec attempt
+// Consume placement after the next successful exec attempt.
+constexpr uint32_t WKI_TARGET_FLAG_ONESHOT = 1U << 5;
 
 inline void exit(uint64_t status) {
 	syscall(abi::callnums::process, (uint64_t)abi::process::procmgmt_ops::EXIT, status);
@@ -49,6 +51,38 @@ inline uint64_t spawn(
 	    (uint64_t)(uintptr_t)argv,
 	    (uint64_t)(uintptr_t)envp,
 	    (uint64_t)(uintptr_t)options
+	);
+}
+
+inline int64_t init_control_submit(const abi::init_control::Request *request) {
+	return (int64_t)syscall(
+	    abi::callnums::process,
+	    (uint64_t)abi::process::procmgmt_ops::INIT_CONTROL_SUBMIT,
+	    (uint64_t)(uintptr_t)request
+	);
+}
+
+inline int64_t init_control_receive(abi::init_control::Request *request) {
+	return (int64_t)syscall(
+	    abi::callnums::process,
+	    (uint64_t)abi::process::procmgmt_ops::INIT_CONTROL_RECEIVE,
+	    (uint64_t)(uintptr_t)request
+	);
+}
+
+inline int64_t init_status_publish(const abi::init_control::StatusSnapshot *status) {
+	return (int64_t)syscall(
+	    abi::callnums::process,
+	    (uint64_t)abi::process::procmgmt_ops::INIT_STATUS_PUBLISH,
+	    (uint64_t)(uintptr_t)status
+	);
+}
+
+inline int64_t init_status_read(abi::init_control::StatusSnapshot *status) {
+	return (int64_t)syscall(
+	    abi::callnums::process,
+	    (uint64_t)abi::process::procmgmt_ops::INIT_STATUS_READ,
+	    (uint64_t)(uintptr_t)status
 	);
 }
 
