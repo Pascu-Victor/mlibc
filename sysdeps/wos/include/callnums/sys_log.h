@@ -55,10 +55,14 @@ static_assert(sizeof(JournalRecord) == 608, "JournalRecord ABI size changed");
 static_assert(alignof(JournalRecord) == 1, "JournalRecord ABI alignment changed");
 static_assert(offsetof(JournalRecord, magic) == 0, "JournalRecord::magic offset changed");
 static_assert(offsetof(JournalRecord, version) == 4, "JournalRecord::version offset changed");
-static_assert(offsetof(JournalRecord, header_size) == 6, "JournalRecord::header_size offset changed");
+static_assert(
+    offsetof(JournalRecord, header_size) == 6, "JournalRecord::header_size offset changed"
+);
 static_assert(offsetof(JournalRecord, sequence) == 8, "JournalRecord::sequence offset changed");
 static_assert(offsetof(JournalRecord, boot_id) == 16, "JournalRecord::boot_id offset changed");
-static_assert(offsetof(JournalRecord, monotonic_us) == 24, "JournalRecord::monotonic_us offset changed");
+static_assert(
+    offsetof(JournalRecord, monotonic_us) == 24, "JournalRecord::monotonic_us offset changed"
+);
 static_assert(offsetof(JournalRecord, pid) == 32, "JournalRecord::pid offset changed");
 static_assert(offsetof(JournalRecord, tid) == 40, "JournalRecord::tid offset changed");
 static_assert(offsetof(JournalRecord, cpu) == 48, "JournalRecord::cpu offset changed");
@@ -66,7 +70,9 @@ static_assert(offsetof(JournalRecord, level) == 52, "JournalRecord::level offset
 static_assert(offsetof(JournalRecord, reserved0) == 53, "JournalRecord::reserved0 offset changed");
 static_assert(offsetof(JournalRecord, flags) == 56, "JournalRecord::flags offset changed");
 static_assert(offsetof(JournalRecord, module) == 60, "JournalRecord::module offset changed");
-static_assert(offsetof(JournalRecord, message_len) == 92, "JournalRecord::message_len offset changed");
+static_assert(
+    offsetof(JournalRecord, message_len) == 92, "JournalRecord::message_len offset changed"
+);
 static_assert(offsetof(JournalRecord, reserved1) == 94, "JournalRecord::reserved1 offset changed");
 static_assert(offsetof(JournalRecord, message) == 96, "JournalRecord::message offset changed");
 } // namespace ker::abi::sys_log

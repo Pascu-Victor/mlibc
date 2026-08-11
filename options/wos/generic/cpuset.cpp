@@ -20,7 +20,7 @@ void __mlibc_cpu_zero(const size_t setsize, cpu_set_t *set) {
 }
 
 void __mlibc_cpu_set(const int cpu, const size_t setsize, cpu_set_t *set) {
-	if(cpu >= static_cast<int>(setsize * CHAR_BIT)) {
+	if (cpu >= static_cast<int>(setsize * CHAR_BIT)) {
 		return;
 	}
 
@@ -32,7 +32,7 @@ void __mlibc_cpu_set(const int cpu, const size_t setsize, cpu_set_t *set) {
 }
 
 void __mlibc_cpu_clear(const int cpu, const size_t setsize, cpu_set_t *set) {
-	if(cpu >= static_cast<int>(setsize * CHAR_BIT)) {
+	if (cpu >= static_cast<int>(setsize * CHAR_BIT)) {
 		return;
 	}
 
@@ -44,7 +44,7 @@ void __mlibc_cpu_clear(const int cpu, const size_t setsize, cpu_set_t *set) {
 }
 
 int __mlibc_cpu_isset(const int cpu, const size_t setsize, const cpu_set_t *set) {
-	if(cpu >= static_cast<int>(setsize * CHAR_BIT)) {
+	if (cpu >= static_cast<int>(setsize * CHAR_BIT)) {
 		return false;
 	}
 
@@ -59,9 +59,9 @@ int __mlibc_cpu_count(const size_t setsize, const cpu_set_t *set) {
 	size_t count = 0;
 	const unsigned char *ptr = reinterpret_cast<const unsigned char *>(set);
 
-	for(size_t i = 0; i < setsize; i++) {
-		for(size_t bit = 0; bit < CHAR_BIT; bit++) {
-			if((1 << bit) & ptr[i])
+	for (size_t i = 0; i < setsize; i++) {
+		for (size_t bit = 0; bit < CHAR_BIT; bit++) {
+			if ((1 << bit) & ptr[i])
 				count++;
 		}
 	}

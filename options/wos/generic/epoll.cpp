@@ -12,7 +12,9 @@ int epoll_create(int flags) {
 	return fd;
 }
 
-int epoll_pwait(int epfd, struct epoll_event *events, int maxevents, int timeout, const sigset_t *sigmask) {
+int epoll_pwait(
+    int epfd, struct epoll_event *events, int maxevents, int timeout, const sigset_t *sigmask
+) {
 	int raised;
 	if (int e =
 	        mlibc::sysdep_or_enosys<EpollPwait>(epfd, events, maxevents, timeout, sigmask, &raised);
@@ -42,7 +44,8 @@ int epoll_ctl(int epfd, int mode, int fd, struct epoll_event *event) {
 
 int epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeout) {
 	int raised;
-	if (int e = mlibc::sysdep_or_enosys<EpollPwait>(epfd, events, maxevents, timeout, nullptr, &raised);
+	if (int e =
+	        mlibc::sysdep_or_enosys<EpollPwait>(epfd, events, maxevents, timeout, nullptr, &raised);
 	    e) {
 		errno = e;
 		return -1;

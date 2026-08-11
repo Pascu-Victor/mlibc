@@ -1,37 +1,35 @@
-#include <stdio.h>
-#include <stdlib.h>
 #include <assert.h>
 #include <errno.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 #include <sys/xattr.h>
+#include <unistd.h>
 
-#define assert_perror(x)            \
-	({                          \
-		int res = (x);      \
-		if (res < 0) {      \
-			perror(#x); \
-			return 1;   \
-		}                   \
-		res;                \
+#define assert_perror(x)                                                                           \
+	({                                                                                             \
+		int res = (x);                                                                             \
+		if (res < 0) {                                                                             \
+			perror(#x);                                                                            \
+			return 1;                                                                              \
+		}                                                                                          \
+		res;                                                                                       \
 	})
 
-#define soft_assert(x, m)                                                   \
-	({                                                                  \
-		if (!(x)) {                                                 \
-			fprintf(stderr, "cond \"%s\" failed: %s\n", #x, m); \
-			return 1;                                           \
-		}                                                           \
+#define soft_assert(x, m)                                                                          \
+	({                                                                                             \
+		if (!(x)) {                                                                                \
+			fprintf(stderr, "cond \"%s\" failed: %s\n", #x, m);                                    \
+			return 1;                                                                              \
+		}                                                                                          \
 	})
 
-void remove_tmp(const char (*fname)[]) {
-	unlink(&(*fname)[0]);
-}
+void remove_tmp(const char (*fname)[]) { unlink(&(*fname)[0]); }
 #define _cleanup_file_ __attribute__((cleanup(remove_tmp)))
 
 int main(void) {
 	int ret;
-	char buf[32] = { 0 };
+	char buf[32] = {0};
 	_cleanup_file_ char filename[] = "xattr_test.XXXXXX";
 	_cleanup_file_ char filename2[] = "xattr_test.XXXXXX.2";
 

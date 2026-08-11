@@ -21,19 +21,11 @@ uint64_t beginLogBlock();
 
 uint64_t endLogBlock(uint64_t cookie);
 
-uint64_t logBlock(
-    uint64_t cookie,
-    const char *str,
-    uint64_t len,
-    abi::sys_log::sys_log_device device
-);
+uint64_t
+logBlock(uint64_t cookie, const char *str, uint64_t len, abi::sys_log::sys_log_device device);
 
-uint64_t logLineBlock(
-    uint64_t cookie,
-    const char *str,
-    uint64_t len,
-    abi::sys_log::sys_log_device device
-);
+uint64_t
+logLineBlock(uint64_t cookie, const char *str, uint64_t len, abi::sys_log::sys_log_device device);
 
 uint64_t logExBlock(
     uint64_t cookie,
@@ -59,11 +51,7 @@ vlogExf(const char *module, abi::sys_log::sys_log_level level, const char *fmt, 
 }
 
 inline uint64_t logExfBlock(
-    uint64_t cookie,
-    const char *module,
-    abi::sys_log::sys_log_level level,
-    const char *fmt,
-    ...
+    uint64_t cookie, const char *module, abi::sys_log::sys_log_level level, const char *fmt, ...
 ) {
 	if (fmt == nullptr) {
 		return 0;
@@ -108,8 +96,7 @@ struct fixed_string {
 	template <size_t N>
 	consteval fixed_string(const char (&str)[N]) : size(N - 1) {
 		static_assert(
-		    N <= (abi::sys_log::JOURNAL_MODULE_MAX + 1),
-		    "logger tag exceeds JOURNAL_MODULE_MAX"
+		    N <= (abi::sys_log::JOURNAL_MODULE_MAX + 1), "logger tag exceeds JOURNAL_MODULE_MAX"
 		);
 		for (size_t i = 0; i < N; i++) {
 			value[i] = str[i];
@@ -122,8 +109,7 @@ struct fixed_string {
 template <fixed_string Tag>
 struct logger {
 	static_assert(
-	    Tag.size <= abi::sys_log::JOURNAL_MODULE_MAX,
-	    "logger tag exceeds JOURNAL_MODULE_MAX"
+	    Tag.size <= abi::sys_log::JOURNAL_MODULE_MAX, "logger tag exceeds JOURNAL_MODULE_MAX"
 	);
 
 	template <typename... Args>

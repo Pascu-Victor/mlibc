@@ -72,7 +72,9 @@ static_assert(offsetof(struct shmid_ds, shm_dtime) == offsetof(ker::abi::shm::Sh
 static_assert(offsetof(struct shmid_ds, shm_ctime) == offsetof(ker::abi::shm::ShmidDs, shm_ctime));
 static_assert(offsetof(struct shmid_ds, shm_cpid) == offsetof(ker::abi::shm::ShmidDs, shm_cpid));
 static_assert(offsetof(struct shmid_ds, shm_lpid) == offsetof(ker::abi::shm::ShmidDs, shm_lpid));
-static_assert(offsetof(struct shmid_ds, shm_nattch) == offsetof(ker::abi::shm::ShmidDs, shm_nattch));
+static_assert(
+    offsetof(struct shmid_ds, shm_nattch) == offsetof(ker::abi::shm::ShmidDs, shm_nattch)
+);
 static_assert(offsetof(struct shmid_ds, __unused) == offsetof(ker::abi::shm::ShmidDs, unused));
 #endif
 

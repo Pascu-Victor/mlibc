@@ -12,10 +12,10 @@ extern "C" {
 #define WOS_NET_HWADDR_LEN 8
 #define WOS_NET_ADDR_LEN 16
 
-#define WOS_NET_LINK_SET_FLAGS  (1u << 0)
-#define WOS_NET_LINK_SET_MTU    (1u << 1)
+#define WOS_NET_LINK_SET_FLAGS (1u << 0)
+#define WOS_NET_LINK_SET_MTU (1u << 1)
 #define WOS_NET_LINK_SET_TXQLEN (1u << 2)
-#define WOS_NET_LINK_SET_NAME   (1u << 3)
+#define WOS_NET_LINK_SET_NAME (1u << 3)
 #define WOS_NET_LINK_SET_HWADDR (1u << 4)
 
 struct wos_net_if_info {

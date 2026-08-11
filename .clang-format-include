@@ -1,0 +1,10 @@
+# Meson's automatic clang-format targets otherwise scan mlibc's entire
+# partially formatted upstream tree. Keep the WOS fork gate on the maintained
+# WOS port and on generic sources changed by the current fork delta.
+options/wos/**/*
+sysdeps/wos/**/*
+options/internal/include/mlibc/lock.hpp
+tests/ansi/snprintf.c
+tests/ansi/sscanf.c
+tests/linux/xattr.c
+tests/posix/accept4.c
