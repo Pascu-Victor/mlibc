@@ -234,6 +234,7 @@ extra_cflags_test_cases = {
 test_sources = []
 test_objects = []
 test_link_args = []
+test_build_rpath = meson.global_build_root()
 test_c_args = ['-D_GNU_SOURCE', '-U__MLIBC_DEBUG', '-U__MLIBC_BUILDING_MLIBC', '-fhosted', '-fno-builtin']
 use_pie = false
 
@@ -315,7 +316,13 @@ else
 		link_with: libc_shared,
 		dependencies: [libc_deps, rtlib_deps]
 	)
-	test_link_args += ['-Wl,--dynamic-linker=' + meson.global_build_root() + '/ld.so']
+	if host_machine.system() == 'wos'
+		test_link_args += ['-Wl,--dynamic-linker=/usr/lib/ld.so']
+		test_build_rpath = '/usr/lib'
+	else
+		test_link_args += ['-Wl,--dynamic-linker=' + meson.global_build_root() + '/ld.so']
+		test_build_rpath = meson.global_build_root()
+	endif
 
 	if host_machine.system() in ['linux']
 		use_pie = true
@@ -325,8 +332,13 @@ else
 		test_sources += crt
 
 		# Meson doesn't set these for us (issue #4651).
-		test_c_args += '-no-pie'
-		test_link_args += '-no-pie'
+		if host_machine.system() == 'wos'
+			test_c_args += '-fno-pie'
+			test_link_args += '-Wl,--no-pie'
+		else
+			test_c_args += '-no-pie'
+			test_link_args += '-no-pie'
+		endif
 	endif
 
 	# Add the rtld tests.
@@ -358,7 +370,7 @@ foreach test_name : all_test_cases
 	exec = executable(test_exec_name, [test_name + '.c', test_sources],
 		dependencies: libc_dep,
 		objects: test_objects,
-		build_rpath: meson.global_build_root(),
+		build_rpath: test_build_rpath,
 		override_options: test_override_options,
 		c_args: mlibc_c_args + test_c_args,
 		link_args: mlibc_link_args + test_link_args,

@@ -13,7 +13,7 @@ int sys_open(const char *pathname, int flags, mode_t mode, int *fd) {
 	(void)mode; // not used in kernel yet
 	uint64_t r = syscall(
 	    ker::abi::callnums::vfs,
-	    static_cast<uint64_t>(ker::abi::vfs::ops::open),
+	    static_cast<uint64_t>(ker::abi::vfs::ops::OPEN),
 	    reinterpret_cast<uint64_t>(pathname),
 	    static_cast<uint64_t>(flags)
 	);
@@ -27,7 +27,7 @@ int sys_open(const char *pathname, int flags, mode_t mode, int *fd) {
 int sys_close(int fd) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::vfs,
-	    static_cast<uint64_t>(ker::abi::vfs::ops::close),
+	    static_cast<uint64_t>(ker::abi::vfs::ops::CLOSE),
 	    static_cast<uint64_t>(fd)
 	);
 	if (static_cast<int64_t>(r) < 0)
@@ -38,7 +38,7 @@ int sys_close(int fd) {
 int sys_read(int fd, void *buf, size_t count, ssize_t *bytes_read) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::vfs,
-	    static_cast<uint64_t>(ker::abi::vfs::ops::read),
+	    static_cast<uint64_t>(ker::abi::vfs::ops::READ),
 	    static_cast<uint64_t>(fd),
 	    reinterpret_cast<uint64_t>(buf),
 	    static_cast<uint64_t>(count),
@@ -54,7 +54,7 @@ int sys_read(int fd, void *buf, size_t count, ssize_t *bytes_read) {
 int sys_write(int fd, const void *buf, size_t count, ssize_t *bytes_written) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::vfs,
-	    static_cast<uint64_t>(ker::abi::vfs::ops::write),
+	    static_cast<uint64_t>(ker::abi::vfs::ops::WRITE),
 	    static_cast<uint64_t>(fd),
 	    reinterpret_cast<uint64_t>(buf),
 	    static_cast<uint64_t>(count),
@@ -70,7 +70,7 @@ int sys_write(int fd, const void *buf, size_t count, ssize_t *bytes_written) {
 int sys_seek(int fd, long offset, int whence, long *new_offset) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::vfs,
-	    static_cast<uint64_t>(ker::abi::vfs::ops::lseek),
+	    static_cast<uint64_t>(ker::abi::vfs::ops::LSEEK),
 	    static_cast<uint64_t>(fd),
 	    static_cast<uint64_t>(offset),
 	    static_cast<uint64_t>(whence),
@@ -86,7 +86,7 @@ int sys_seek(int fd, long offset, int whence, long *new_offset) {
 int sys_sendfile(int outfd, int infd, off_t *offset, size_t count, ssize_t *out) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::vfs,
-	    static_cast<uint64_t>(ker::abi::vfs::ops::sendfile),
+	    static_cast<uint64_t>(ker::abi::vfs::ops::SENDFILE),
 	    static_cast<uint64_t>(outfd),
 	    static_cast<uint64_t>(infd),
 	    reinterpret_cast<uint64_t>(offset),
@@ -106,7 +106,7 @@ int sys_writev(int fd, const struct iovec *iovs, int iovc, ssize_t *bytes_writte
 			continue;
 		uint64_t r = syscall(
 		    ker::abi::callnums::vfs,
-		    static_cast<uint64_t>(ker::abi::vfs::ops::write),
+		    static_cast<uint64_t>(ker::abi::vfs::ops::WRITE),
 		    static_cast<uint64_t>(fd),
 		    reinterpret_cast<uint64_t>(iovs[i].iov_base),
 		    static_cast<uint64_t>(iovs[i].iov_len),
@@ -135,7 +135,7 @@ int sys_readv(int fd, const struct iovec *iovs, int iovc, ssize_t *bytes_read) {
 			continue;
 		uint64_t r = syscall(
 		    ker::abi::callnums::vfs,
-		    static_cast<uint64_t>(ker::abi::vfs::ops::read),
+		    static_cast<uint64_t>(ker::abi::vfs::ops::READ),
 		    static_cast<uint64_t>(fd),
 		    reinterpret_cast<uint64_t>(iovs[i].iov_base),
 		    static_cast<uint64_t>(iovs[i].iov_len),

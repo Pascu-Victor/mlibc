@@ -14,5 +14,8 @@ enum class threadControlOps : uint64_t {
 	THREAD_EXIT = 0x103,   // Exit current thread without exiting the process
 	SET_AFFINITY = 0x104,  // Set a thread's CPU affinity mask
 	GET_AFFINITY = 0x105,  // Get a thread's CPU affinity mask
+	CREATE_DOMAIN = 0x106, // Create a named leaf CPU domain
+	SET_DOMAIN = 0x107,    // Assign a task to a domain
+	QUERY_DOMAIN = 0x108,  // Query domain info (cpu_mask + per-CPU loads)
 };
 } // namespace ker::abi::multiproc

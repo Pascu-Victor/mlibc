@@ -3,40 +3,11 @@
 
 #include <bits/size_t.h>
 #include <bits/ssize_t.h>
+#include <callnums/net.h>
 #include <sys/callnums.h>
 #include <sys/syscall.h>
 
 namespace ker::abi::net {
-
-// Operation codes for the kernel net syscall dispatcher.
-// Must match modules/kern/src/abi/callnums/net.h
-enum class ops : uint64_t { // NOLINT(performance-enum-size): syscall ABI passes op numbers in
-	                        // 64-bit registers.
-	SOCKET,
-	BIND,
-	LISTEN,
-	ACCEPT,
-	CONNECT,
-	SEND,
-	RECV,
-	CLOSE,
-	SENDTO,
-	RECVFROM,
-	SETSOCKOPT,
-	GETSOCKOPT,
-	SHUTDOWN,
-	GETPEERNAME,
-	GETSOCKNAME,
-	SELECT,
-	POLL,
-	IOCTL_NET,
-	SET_DEV_CPU_AFFINITY,
-	NETCTL_IF_LIST,
-	NETCTL_ADDR_LIST,
-	NETCTL_ADDR_SET,
-	NETCTL_ADDR_DEL,
-	NETCTL_LINK_SET,
-};
 
 // Syscall register layout:
 //   RAX = callnums::net

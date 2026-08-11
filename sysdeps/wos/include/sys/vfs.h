@@ -9,102 +9,15 @@
 #include <bits/off_t.h>
 #include <bits/size_t.h>
 #include <bits/ssize_t.h>
+#include <callnums/vfs.h>
 #include <stddef.h>
 #include <sys/callnums.h>
 #include <sys/syscall.h>
 
 namespace ker::abi::vfs {
 
-// Operation codes for the kernel VFS syscall dispatcher
-enum class ops : uint64_t {
-	open,
-	read,
-	write,
-	close,
-	lseek,
-	isatty,
-	read_dir_entries,
-	mount,
-	mkdir,
-	readlink,
-	symlink,
-	sendfile,
-	stat,
-	fstat,
-	umount,
-	dup,
-	dup2,
-	getcwd,
-	chdir,
-	access,
-	unlink,
-	rmdir,
-	rename,
-	chmod,
-	truncate,
-	pipe,
-	pread,
-	pwrite,
-	fcntl,
-	fchmod,
-	chown,
-	fchown,
-	faccessat,
-	unlinkat,
-	renameat,
-	epoll_create,
-	epoll_ctl,
-	epoll_pwait,
-	ioctl,
-	fsync,
-	link,
-	wki_rule_add,
-	wki_rule_get,
-	wki_rule_clear,
-	pivot_root,
-	wki_rule_get_default,
-	statvfs,
-	fstatvfs,
-	lstat,
-	sync,
-	realpath,
-	openat,
-	statat,
-	utimensat,
-	mkdirat,
-	readlinkat,
-	linkat,
-	symlinkat,
-	fchmodat,
-	fchdir,
-	fchownat,
-	fstat_close,
-	metadata_batch,
-};
-
-static_assert(static_cast<uint64_t>(ops::metadata_batch) == 62);
-
 constexpr uint32_t WKI_VFS_ROUTE_LOCAL = 0;
 constexpr uint32_t WKI_VFS_ROUTE_HOST = 1;
-
-constexpr uint16_t METADATA_BATCH_VERSION = 1;
-constexpr uint8_t METADATA_BATCH_MAX_ITEMS = 64;
-constexpr size_t METADATA_BATCH_MAX_PATH_CHARS = 511;
-
-enum class metadata_batch_operation : uint8_t {
-	invalid = 0,
-	create_close = 1,
-	stat_follow = 2,
-	unlink = 3,
-	rename = 4,
-};
-
-struct metadata_batch_header {
-	uint16_t version;
-	metadata_batch_operation operation;
-	uint8_t count;
-	uint32_t mode;
-};
 
 struct metadata_batch_entry {
 	const char *path;
@@ -117,7 +30,6 @@ struct metadata_batch_result {
 	struct stat statbuf;
 };
 
-static_assert(sizeof(metadata_batch_header) == 8);
 static_assert(sizeof(metadata_batch_entry) == 16);
 static_assert(offsetof(metadata_batch_result, statbuf) == 8);
 static_assert(sizeof(metadata_batch_result) == 152);
@@ -127,7 +39,7 @@ static_assert(sizeof(metadata_batch_result) == 152);
 static inline int open(const char *path, int flags, mode_t mode) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::vfs,
-	    static_cast<uint64_t>(ops::open),
+	    static_cast<uint64_t>(ops::OPEN),
 	    reinterpret_cast<uint64_t>(path),
 	    static_cast<uint64_t>(flags),
 	    static_cast<uint64_t>(mode)
@@ -138,7 +50,7 @@ static inline int open(const char *path, int flags, mode_t mode) {
 static inline int openat(int dirfd, const char *path, int flags, mode_t mode) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::vfs,
-	    static_cast<uint64_t>(ops::openat),
+	    static_cast<uint64_t>(ops::OPENAT),
 	    static_cast<uint64_t>(dirfd),
 	    reinterpret_cast<uint64_t>(path),
 	    static_cast<uint64_t>(flags),
@@ -149,7 +61,7 @@ static inline int openat(int dirfd, const char *path, int flags, mode_t mode) {
 
 static inline int close(int fd) {
 	uint64_t r = syscall(
-	    ker::abi::callnums::vfs, static_cast<uint64_t>(ops::close), static_cast<uint64_t>(fd)
+	    ker::abi::callnums::vfs, static_cast<uint64_t>(ops::CLOSE), static_cast<uint64_t>(fd)
 	);
 	return static_cast<int>((int64_t)r);
 }
@@ -157,7 +69,7 @@ static inline int close(int fd) {
 static inline ssize_t read(int fd, void *buf, size_t len) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::vfs,
-	    static_cast<uint64_t>(ops::read),
+	    static_cast<uint64_t>(ops::READ),
 	    static_cast<uint64_t>(fd),
 	    reinterpret_cast<uint64_t>(buf),
 	    static_cast<uint64_t>(len)
@@ -168,7 +80,7 @@ static inline ssize_t read(int fd, void *buf, size_t len) {
 static inline ssize_t write(int fd, const void *buf, size_t len) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::vfs,
-	    static_cast<uint64_t>(ops::write),
+	    static_cast<uint64_t>(ops::WRITE),
 	    static_cast<uint64_t>(fd),
 	    reinterpret_cast<uint64_t>(buf),
 	    static_cast<uint64_t>(len)
@@ -179,7 +91,7 @@ static inline ssize_t write(int fd, const void *buf, size_t len) {
 static inline off_t lseek(int fd, off_t offset, int whence) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::vfs,
-	    static_cast<uint64_t>(ops::lseek),
+	    static_cast<uint64_t>(ops::LSEEK),
 	    static_cast<uint64_t>(fd),
 	    static_cast<uint64_t>(offset),
 	    static_cast<uint64_t>(whence)
@@ -189,7 +101,7 @@ static inline off_t lseek(int fd, off_t offset, int whence) {
 
 static inline bool isatty(int fd) {
 	uint64_t r = syscall(
-	    ker::abi::callnums::vfs, static_cast<uint64_t>(ops::isatty), static_cast<uint64_t>(fd)
+	    ker::abi::callnums::vfs, static_cast<uint64_t>(ops::ISATTY), static_cast<uint64_t>(fd)
 	);
 	return r != 0;
 }
@@ -197,7 +109,7 @@ static inline bool isatty(int fd) {
 static inline ssize_t read_dir_entries(int fd, void *buffer, size_t max_size) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::vfs,
-	    static_cast<uint64_t>(ops::read_dir_entries),
+	    static_cast<uint64_t>(ops::READ_DIR_ENTRIES),
 	    static_cast<uint64_t>(fd),
 	    reinterpret_cast<uint64_t>(buffer),
 	    static_cast<uint64_t>(max_size)
@@ -214,7 +126,7 @@ static inline int mount(
 ) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::vfs,
-	    static_cast<uint64_t>(ops::mount),
+	    static_cast<uint64_t>(ops::MOUNT),
 	    reinterpret_cast<uint64_t>(source),
 	    reinterpret_cast<uint64_t>(target),
 	    reinterpret_cast<uint64_t>(fstype),
@@ -227,7 +139,7 @@ static inline int mount(
 static inline int mkdir(const char *path, int mode) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::vfs,
-	    static_cast<uint64_t>(ops::mkdir),
+	    static_cast<uint64_t>(ops::MKDIR),
 	    reinterpret_cast<uint64_t>(path),
 	    static_cast<uint64_t>(mode)
 	);
@@ -237,7 +149,7 @@ static inline int mkdir(const char *path, int mode) {
 static inline int mkdirat(int dirfd, const char *path, int mode) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::vfs,
-	    static_cast<uint64_t>(ops::mkdirat),
+	    static_cast<uint64_t>(ops::MKDIRAT),
 	    static_cast<uint64_t>(dirfd),
 	    reinterpret_cast<uint64_t>(path),
 	    static_cast<uint64_t>(mode)
@@ -248,7 +160,7 @@ static inline int mkdirat(int dirfd, const char *path, int mode) {
 static inline ssize_t readlink(const char *path, char *buf, size_t bufsize) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::vfs,
-	    static_cast<uint64_t>(ops::readlink),
+	    static_cast<uint64_t>(ops::READLINK),
 	    reinterpret_cast<uint64_t>(path),
 	    reinterpret_cast<uint64_t>(buf),
 	    static_cast<uint64_t>(bufsize)
@@ -259,7 +171,7 @@ static inline ssize_t readlink(const char *path, char *buf, size_t bufsize) {
 static inline ssize_t readlinkat(int dirfd, const char *path, char *buf, size_t bufsize) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::vfs,
-	    static_cast<uint64_t>(ops::readlinkat),
+	    static_cast<uint64_t>(ops::READLINKAT),
 	    static_cast<uint64_t>(dirfd),
 	    reinterpret_cast<uint64_t>(path),
 	    reinterpret_cast<uint64_t>(buf),
@@ -271,7 +183,7 @@ static inline ssize_t readlinkat(int dirfd, const char *path, char *buf, size_t 
 static inline int symlink(const char *target, const char *linkpath) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::vfs,
-	    static_cast<uint64_t>(ops::symlink),
+	    static_cast<uint64_t>(ops::SYMLINK),
 	    reinterpret_cast<uint64_t>(target),
 	    reinterpret_cast<uint64_t>(linkpath)
 	);
@@ -281,7 +193,7 @@ static inline int symlink(const char *target, const char *linkpath) {
 static inline int symlinkat_vfs(const char *target, int dirfd, const char *linkpath) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::vfs,
-	    static_cast<uint64_t>(ops::symlinkat),
+	    static_cast<uint64_t>(ops::SYMLINKAT),
 	    reinterpret_cast<uint64_t>(target),
 	    static_cast<uint64_t>(dirfd),
 	    reinterpret_cast<uint64_t>(linkpath)
@@ -292,7 +204,7 @@ static inline int symlinkat_vfs(const char *target, int dirfd, const char *linkp
 static inline int stat_path(const char *path, void *statbuf) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::vfs,
-	    static_cast<uint64_t>(ops::stat),
+	    static_cast<uint64_t>(ops::STAT),
 	    reinterpret_cast<uint64_t>(path),
 	    reinterpret_cast<uint64_t>(statbuf)
 	);
@@ -302,7 +214,7 @@ static inline int stat_path(const char *path, void *statbuf) {
 static inline int lstat_path(const char *path, void *statbuf) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::vfs,
-	    static_cast<uint64_t>(ops::lstat),
+	    static_cast<uint64_t>(ops::LSTAT),
 	    reinterpret_cast<uint64_t>(path),
 	    reinterpret_cast<uint64_t>(statbuf)
 	);
@@ -312,7 +224,7 @@ static inline int lstat_path(const char *path, void *statbuf) {
 static inline int fstat_fd(int fd, void *statbuf) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::vfs,
-	    static_cast<uint64_t>(ops::fstat),
+	    static_cast<uint64_t>(ops::FSTAT),
 	    static_cast<uint64_t>(fd),
 	    reinterpret_cast<uint64_t>(statbuf)
 	);
@@ -322,7 +234,7 @@ static inline int fstat_fd(int fd, void *statbuf) {
 static inline int fstat_close_fd(int fd, void *statbuf, int *stat_result) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::vfs,
-	    static_cast<uint64_t>(ops::fstat_close),
+	    static_cast<uint64_t>(ops::FSTAT_CLOSE),
 	    static_cast<uint64_t>(fd),
 	    reinterpret_cast<uint64_t>(statbuf),
 	    reinterpret_cast<uint64_t>(stat_result)
@@ -341,7 +253,7 @@ static inline int metadata_batch(
 ) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::vfs,
-	    static_cast<uint64_t>(ops::metadata_batch),
+	    static_cast<uint64_t>(ops::METADATA_BATCH),
 	    reinterpret_cast<uint64_t>(header),
 	    reinterpret_cast<uint64_t>(entries),
 	    reinterpret_cast<uint64_t>(results)
@@ -352,7 +264,7 @@ static inline int metadata_batch(
 static inline int statat_path(int dirfd, const char *path, int flags, void *statbuf) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::vfs,
-	    static_cast<uint64_t>(ops::statat),
+	    static_cast<uint64_t>(ops::STATAT),
 	    static_cast<uint64_t>(dirfd),
 	    reinterpret_cast<uint64_t>(path),
 	    reinterpret_cast<uint64_t>(statbuf),
@@ -364,7 +276,7 @@ static inline int statat_path(int dirfd, const char *path, int flags, void *stat
 static inline int utimensat_path(int dirfd, const char *path, const void *times, int flags) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::vfs,
-	    static_cast<uint64_t>(ops::utimensat),
+	    static_cast<uint64_t>(ops::UTIMENSAT),
 	    static_cast<uint64_t>(dirfd),
 	    reinterpret_cast<uint64_t>(path),
 	    reinterpret_cast<uint64_t>(times),
@@ -376,7 +288,7 @@ static inline int utimensat_path(int dirfd, const char *path, const void *times,
 static inline int umount(const char *target) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::vfs,
-	    static_cast<uint64_t>(ops::umount),
+	    static_cast<uint64_t>(ops::UMOUNT),
 	    reinterpret_cast<uint64_t>(target)
 	);
 	return static_cast<int>((int64_t)r);
@@ -384,7 +296,7 @@ static inline int umount(const char *target) {
 
 static inline int dup(int oldfd) {
 	uint64_t r = syscall(
-	    ker::abi::callnums::vfs, static_cast<uint64_t>(ops::dup), static_cast<uint64_t>(oldfd)
+	    ker::abi::callnums::vfs, static_cast<uint64_t>(ops::DUP), static_cast<uint64_t>(oldfd)
 	);
 	return static_cast<int>((int64_t)r);
 }
@@ -392,7 +304,7 @@ static inline int dup(int oldfd) {
 static inline int dup2(int oldfd, int newfd, int flags = 0) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::vfs,
-	    static_cast<uint64_t>(ops::dup2),
+	    static_cast<uint64_t>(ops::DUP2),
 	    static_cast<uint64_t>(oldfd),
 	    static_cast<uint64_t>(newfd),
 	    static_cast<uint64_t>(flags)
@@ -403,7 +315,7 @@ static inline int dup2(int oldfd, int newfd, int flags = 0) {
 static inline int getcwd(char *buf, size_t size) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::vfs,
-	    static_cast<uint64_t>(ops::getcwd),
+	    static_cast<uint64_t>(ops::GETCWD),
 	    reinterpret_cast<uint64_t>(buf),
 	    static_cast<uint64_t>(size)
 	);
@@ -412,14 +324,14 @@ static inline int getcwd(char *buf, size_t size) {
 
 static inline int chdir(const char *path) {
 	uint64_t r = syscall(
-	    ker::abi::callnums::vfs, static_cast<uint64_t>(ops::chdir), reinterpret_cast<uint64_t>(path)
+	    ker::abi::callnums::vfs, static_cast<uint64_t>(ops::CHDIR), reinterpret_cast<uint64_t>(path)
 	);
 	return static_cast<int>((int64_t)r);
 }
 
 static inline int fchdir_vfs(int fd) {
 	uint64_t r = syscall(
-	    ker::abi::callnums::vfs, static_cast<uint64_t>(ops::fchdir), static_cast<uint64_t>(fd)
+	    ker::abi::callnums::vfs, static_cast<uint64_t>(ops::FCHDIR), static_cast<uint64_t>(fd)
 	);
 	return static_cast<int>((int64_t)r);
 }
@@ -427,7 +339,7 @@ static inline int fchdir_vfs(int fd) {
 static inline int access(const char *path, int mode) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::vfs,
-	    static_cast<uint64_t>(ops::access),
+	    static_cast<uint64_t>(ops::ACCESS),
 	    reinterpret_cast<uint64_t>(path),
 	    static_cast<uint64_t>(mode)
 	);
@@ -437,7 +349,7 @@ static inline int access(const char *path, int mode) {
 static inline int unlink(const char *path) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::vfs,
-	    static_cast<uint64_t>(ops::unlink),
+	    static_cast<uint64_t>(ops::UNLINK),
 	    reinterpret_cast<uint64_t>(path)
 	);
 	return static_cast<int>((int64_t)r);
@@ -445,7 +357,7 @@ static inline int unlink(const char *path) {
 
 static inline int rmdir(const char *path) {
 	uint64_t r = syscall(
-	    ker::abi::callnums::vfs, static_cast<uint64_t>(ops::rmdir), reinterpret_cast<uint64_t>(path)
+	    ker::abi::callnums::vfs, static_cast<uint64_t>(ops::RMDIR), reinterpret_cast<uint64_t>(path)
 	);
 	return static_cast<int>((int64_t)r);
 }
@@ -453,7 +365,7 @@ static inline int rmdir(const char *path) {
 static inline int rename(const char *oldpath, const char *newpath) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::vfs,
-	    static_cast<uint64_t>(ops::rename),
+	    static_cast<uint64_t>(ops::RENAME),
 	    reinterpret_cast<uint64_t>(oldpath),
 	    reinterpret_cast<uint64_t>(newpath)
 	);
@@ -463,7 +375,7 @@ static inline int rename(const char *oldpath, const char *newpath) {
 static inline int chmod(const char *path, mode_t mode) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::vfs,
-	    static_cast<uint64_t>(ops::chmod),
+	    static_cast<uint64_t>(ops::CHMOD),
 	    reinterpret_cast<uint64_t>(path),
 	    static_cast<uint64_t>(mode)
 	);
@@ -473,7 +385,7 @@ static inline int chmod(const char *path, mode_t mode) {
 static inline int truncate(int fd, off_t length) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::vfs,
-	    static_cast<uint64_t>(ops::truncate),
+	    static_cast<uint64_t>(ops::TRUNCATE),
 	    static_cast<uint64_t>(fd),
 	    static_cast<uint64_t>(length)
 	);
@@ -483,7 +395,7 @@ static inline int truncate(int fd, off_t length) {
 static inline int pipe(int pipefd[2], int flags = 0) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::vfs,
-	    static_cast<uint64_t>(ops::pipe),
+	    static_cast<uint64_t>(ops::PIPE),
 	    reinterpret_cast<uint64_t>(pipefd),
 	    static_cast<uint64_t>(flags)
 	);
@@ -493,7 +405,7 @@ static inline int pipe(int pipefd[2], int flags = 0) {
 static inline ssize_t pread(int fd, void *buf, size_t count, off_t offset) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::vfs,
-	    static_cast<uint64_t>(ops::pread),
+	    static_cast<uint64_t>(ops::PREAD),
 	    static_cast<uint64_t>(fd),
 	    reinterpret_cast<uint64_t>(buf),
 	    static_cast<uint64_t>(count),
@@ -505,7 +417,7 @@ static inline ssize_t pread(int fd, void *buf, size_t count, off_t offset) {
 static inline ssize_t pwrite(int fd, const void *buf, size_t count, off_t offset) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::vfs,
-	    static_cast<uint64_t>(ops::pwrite),
+	    static_cast<uint64_t>(ops::PWRITE),
 	    static_cast<uint64_t>(fd),
 	    reinterpret_cast<uint64_t>(buf),
 	    static_cast<uint64_t>(count),
@@ -517,7 +429,7 @@ static inline ssize_t pwrite(int fd, const void *buf, size_t count, off_t offset
 static inline ssize_t sendfile(int outfd, int infd, off_t *offset, size_t count) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::vfs,
-	    static_cast<uint64_t>(ops::sendfile),
+	    static_cast<uint64_t>(ops::SENDFILE),
 	    static_cast<uint64_t>(outfd),
 	    static_cast<uint64_t>(infd),
 	    reinterpret_cast<uint64_t>(offset),
@@ -529,7 +441,7 @@ static inline ssize_t sendfile(int outfd, int infd, off_t *offset, size_t count)
 static inline int fcntl(int fd, int cmd, uint64_t arg) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::vfs,
-	    static_cast<uint64_t>(ops::fcntl),
+	    static_cast<uint64_t>(ops::FCNTL),
 	    static_cast<uint64_t>(fd),
 	    static_cast<uint64_t>(cmd),
 	    arg
@@ -540,7 +452,7 @@ static inline int fcntl(int fd, int cmd, uint64_t arg) {
 static inline int fchmod(int fd, mode_t mode) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::vfs,
-	    static_cast<uint64_t>(ops::fchmod),
+	    static_cast<uint64_t>(ops::FCHMOD),
 	    static_cast<uint64_t>(fd),
 	    static_cast<uint64_t>(mode)
 	);
@@ -550,7 +462,7 @@ static inline int fchmod(int fd, mode_t mode) {
 static inline int fchmodat_vfs(int dirfd, const char *path, mode_t mode, int flags) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::vfs,
-	    static_cast<uint64_t>(ops::fchmodat),
+	    static_cast<uint64_t>(ops::FCHMODAT),
 	    static_cast<uint64_t>(dirfd),
 	    reinterpret_cast<uint64_t>(path),
 	    static_cast<uint64_t>(mode),
@@ -562,7 +474,7 @@ static inline int fchmodat_vfs(int dirfd, const char *path, mode_t mode, int fla
 static inline int chown(const char *path, uid_t owner, gid_t group) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::vfs,
-	    static_cast<uint64_t>(ops::chown),
+	    static_cast<uint64_t>(ops::CHOWN),
 	    reinterpret_cast<uint64_t>(path),
 	    static_cast<uint64_t>(owner),
 	    static_cast<uint64_t>(group)
@@ -573,7 +485,7 @@ static inline int chown(const char *path, uid_t owner, gid_t group) {
 static inline int fchown(int fd, uid_t owner, gid_t group) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::vfs,
-	    static_cast<uint64_t>(ops::fchown),
+	    static_cast<uint64_t>(ops::FCHOWN),
 	    static_cast<uint64_t>(fd),
 	    static_cast<uint64_t>(owner),
 	    static_cast<uint64_t>(group)
@@ -584,7 +496,7 @@ static inline int fchown(int fd, uid_t owner, gid_t group) {
 static inline int fchownat_vfs(int dirfd, const char *path, uid_t owner, gid_t group, int flags) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::vfs,
-	    static_cast<uint64_t>(ops::fchownat),
+	    static_cast<uint64_t>(ops::FCHOWNAT),
 	    static_cast<uint64_t>(dirfd),
 	    reinterpret_cast<uint64_t>(path),
 	    static_cast<uint64_t>(owner),
@@ -597,7 +509,7 @@ static inline int fchownat_vfs(int dirfd, const char *path, uid_t owner, gid_t g
 static inline int faccessat(int dirfd, const char *path, int mode, int flags) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::vfs,
-	    static_cast<uint64_t>(ops::faccessat),
+	    static_cast<uint64_t>(ops::FACCESSAT),
 	    static_cast<uint64_t>(dirfd),
 	    reinterpret_cast<uint64_t>(path),
 	    static_cast<uint64_t>(mode),
@@ -609,7 +521,7 @@ static inline int faccessat(int dirfd, const char *path, int mode, int flags) {
 static inline int unlinkat(int dirfd, const char *path, int flags) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::vfs,
-	    static_cast<uint64_t>(ops::unlinkat),
+	    static_cast<uint64_t>(ops::UNLINKAT),
 	    static_cast<uint64_t>(dirfd),
 	    reinterpret_cast<uint64_t>(path),
 	    static_cast<uint64_t>(flags)
@@ -620,7 +532,7 @@ static inline int unlinkat(int dirfd, const char *path, int flags) {
 static inline int renameat(int olddirfd, const char *oldpath, int newdirfd, const char *newpath) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::vfs,
-	    static_cast<uint64_t>(ops::renameat),
+	    static_cast<uint64_t>(ops::RENAMEAT),
 	    static_cast<uint64_t>(olddirfd),
 	    reinterpret_cast<uint64_t>(oldpath),
 	    static_cast<uint64_t>(newdirfd),
@@ -632,7 +544,7 @@ static inline int renameat(int olddirfd, const char *oldpath, int newdirfd, cons
 static inline int epoll_create_vfs(int flags) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::vfs,
-	    static_cast<uint64_t>(ops::epoll_create),
+	    static_cast<uint64_t>(ops::EPOLL_CREATE),
 	    static_cast<uint64_t>(flags)
 	);
 	return static_cast<int>((int64_t)r);
@@ -641,7 +553,7 @@ static inline int epoll_create_vfs(int flags) {
 static inline int epoll_ctl_vfs(int epfd, int op, int fd, void *event) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::vfs,
-	    static_cast<uint64_t>(ops::epoll_ctl),
+	    static_cast<uint64_t>(ops::EPOLL_CTL),
 	    static_cast<uint64_t>(epfd),
 	    static_cast<uint64_t>(op),
 	    static_cast<uint64_t>(fd),
@@ -653,7 +565,7 @@ static inline int epoll_ctl_vfs(int epfd, int op, int fd, void *event) {
 static inline int epoll_pwait_vfs(int epfd, void *events, int maxevents, int timeout) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::vfs,
-	    static_cast<uint64_t>(ops::epoll_pwait),
+	    static_cast<uint64_t>(ops::EPOLL_PWAIT),
 	    static_cast<uint64_t>(epfd),
 	    reinterpret_cast<uint64_t>(events),
 	    static_cast<uint64_t>(maxevents),
@@ -665,7 +577,7 @@ static inline int epoll_pwait_vfs(int epfd, void *events, int maxevents, int tim
 static inline int ioctl_vfs(int fd, unsigned long cmd, unsigned long arg) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::vfs,
-	    static_cast<uint64_t>(ops::ioctl),
+	    static_cast<uint64_t>(ops::IOCTL),
 	    static_cast<uint64_t>(fd),
 	    static_cast<uint64_t>(cmd),
 	    static_cast<uint64_t>(arg)
@@ -675,20 +587,20 @@ static inline int ioctl_vfs(int fd, unsigned long cmd, unsigned long arg) {
 
 static inline int fsync_vfs(int fd) {
 	uint64_t r = syscall(
-	    ker::abi::callnums::vfs, static_cast<uint64_t>(ops::fsync), static_cast<uint64_t>(fd)
+	    ker::abi::callnums::vfs, static_cast<uint64_t>(ops::FSYNC), static_cast<uint64_t>(fd)
 	);
 	return static_cast<int>((int64_t)r);
 }
 
 static inline int sync_vfs() {
-	uint64_t r = syscall(ker::abi::callnums::vfs, static_cast<uint64_t>(ops::sync));
+	uint64_t r = syscall(ker::abi::callnums::vfs, static_cast<uint64_t>(ops::SYNC));
 	return static_cast<int>((int64_t)r);
 }
 
 static inline int link_vfs(const char *oldpath, const char *newpath) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::vfs,
-	    static_cast<uint64_t>(ops::link),
+	    static_cast<uint64_t>(ops::LINK),
 	    reinterpret_cast<uint64_t>(oldpath),
 	    reinterpret_cast<uint64_t>(newpath)
 	);
@@ -699,7 +611,7 @@ static inline int
 linkat_vfs(int olddirfd, const char *oldpath, int newdirfd, const char *newpath, int flags) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::vfs,
-	    static_cast<uint64_t>(ops::linkat),
+	    static_cast<uint64_t>(ops::LINKAT),
 	    static_cast<uint64_t>(olddirfd),
 	    reinterpret_cast<uint64_t>(oldpath),
 	    static_cast<uint64_t>(newdirfd),
@@ -712,7 +624,7 @@ linkat_vfs(int olddirfd, const char *oldpath, int newdirfd, const char *newpath,
 static inline int wki_rule_add_vfs(const char *prefix, uint32_t route) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::vfs,
-	    static_cast<uint64_t>(ops::wki_rule_add),
+	    static_cast<uint64_t>(ops::WKI_RULE_ADD),
 	    reinterpret_cast<uint64_t>(prefix),
 	    static_cast<uint64_t>(route)
 	);
@@ -723,7 +635,7 @@ static inline int
 wki_rule_get_vfs(uint32_t index, char *prefix_buf, size_t prefix_buf_size, uint32_t *route_out) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::vfs,
-	    static_cast<uint64_t>(ops::wki_rule_get),
+	    static_cast<uint64_t>(ops::WKI_RULE_GET),
 	    static_cast<uint64_t>(index),
 	    reinterpret_cast<uint64_t>(prefix_buf),
 	    static_cast<uint64_t>(prefix_buf_size),
@@ -733,7 +645,7 @@ wki_rule_get_vfs(uint32_t index, char *prefix_buf, size_t prefix_buf_size, uint3
 }
 
 static inline int wki_rule_clear_vfs() {
-	uint64_t r = syscall(ker::abi::callnums::vfs, static_cast<uint64_t>(ops::wki_rule_clear));
+	uint64_t r = syscall(ker::abi::callnums::vfs, static_cast<uint64_t>(ops::WKI_RULE_CLEAR));
 	return static_cast<int>((int64_t)r);
 }
 
@@ -742,7 +654,7 @@ static inline int wki_rule_get_default_vfs(
 ) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::vfs,
-	    static_cast<uint64_t>(ops::wki_rule_get_default),
+	    static_cast<uint64_t>(ops::WKI_RULE_GET_DEFAULT),
 	    static_cast<uint64_t>(index),
 	    reinterpret_cast<uint64_t>(prefix_buf),
 	    static_cast<uint64_t>(prefix_buf_size),
@@ -754,7 +666,7 @@ static inline int wki_rule_get_default_vfs(
 static inline int pivot_root_vfs(const char *new_root, const char *put_old) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::vfs,
-	    static_cast<uint64_t>(ops::pivot_root),
+	    static_cast<uint64_t>(ops::PIVOT_ROOT),
 	    reinterpret_cast<uint64_t>(new_root),
 	    reinterpret_cast<uint64_t>(put_old)
 	);
@@ -764,7 +676,7 @@ static inline int pivot_root_vfs(const char *new_root, const char *put_old) {
 static inline int statvfs_path(const char *path, void *buf) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::vfs,
-	    static_cast<uint64_t>(ops::statvfs),
+	    static_cast<uint64_t>(ops::STATVFS),
 	    reinterpret_cast<uint64_t>(path),
 	    reinterpret_cast<uint64_t>(buf)
 	);
@@ -774,7 +686,7 @@ static inline int statvfs_path(const char *path, void *buf) {
 static inline int fstatvfs_fd(int fd, void *buf) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::vfs,
-	    static_cast<uint64_t>(ops::fstatvfs),
+	    static_cast<uint64_t>(ops::FSTATVFS),
 	    static_cast<uint64_t>(fd),
 	    reinterpret_cast<uint64_t>(buf)
 	);
@@ -784,7 +696,7 @@ static inline int fstatvfs_fd(int fd, void *buf) {
 static inline int realpath(const char *path, char *buf, size_t bufsize) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::vfs,
-	    static_cast<uint64_t>(ops::realpath),
+	    static_cast<uint64_t>(ops::REALPATH),
 	    reinterpret_cast<uint64_t>(path),
 	    reinterpret_cast<uint64_t>(buf),
 	    static_cast<uint64_t>(bufsize)

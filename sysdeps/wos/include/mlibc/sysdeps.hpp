@@ -17,6 +17,7 @@ struct WosSysdepTags :
     Readlinkat,
     Truncate,
     Ftruncate,
+    FdToPath,
     Openat,
     IfIndextoname,
     IfNametoindex,

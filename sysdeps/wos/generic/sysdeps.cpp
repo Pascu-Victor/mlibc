@@ -5,9 +5,11 @@
 #include <fcntl.h>
 #include <limits.h>
 #include <mlibc/all-sysdeps.hpp>
+#include <mlibc/allocator.hpp>
 #include <mlibc/debug.hpp>
 #include <mlibc/dlapi.hpp>
 #include <mlibc/fsfd_target.hpp>
+#include <mlibc/lock.hpp>
 #include <mlibc/tcb.hpp>
 #include <mlibc/thread.hpp>
 #include <sched.h>
@@ -49,6 +51,31 @@
 
 #include <callnums/shm.h>
 
+#if __MLIBC_POSIX_OPTION
+static_assert(sizeof(struct ipc_perm) == sizeof(ker::abi::shm::IpcPerm));
+static_assert(alignof(struct ipc_perm) == alignof(ker::abi::shm::IpcPerm));
+static_assert(offsetof(struct ipc_perm, __ipc_perm_key) == offsetof(ker::abi::shm::IpcPerm, key));
+static_assert(offsetof(struct ipc_perm, uid) == offsetof(ker::abi::shm::IpcPerm, uid));
+static_assert(offsetof(struct ipc_perm, gid) == offsetof(ker::abi::shm::IpcPerm, gid));
+static_assert(offsetof(struct ipc_perm, cuid) == offsetof(ker::abi::shm::IpcPerm, cuid));
+static_assert(offsetof(struct ipc_perm, cgid) == offsetof(ker::abi::shm::IpcPerm, cgid));
+static_assert(offsetof(struct ipc_perm, mode) == offsetof(ker::abi::shm::IpcPerm, mode));
+static_assert(offsetof(struct ipc_perm, __ipc_perm_seq) == offsetof(ker::abi::shm::IpcPerm, seq));
+static_assert(offsetof(struct ipc_perm, __unused) == offsetof(ker::abi::shm::IpcPerm, unused));
+
+static_assert(sizeof(struct shmid_ds) == sizeof(ker::abi::shm::ShmidDs));
+static_assert(alignof(struct shmid_ds) == alignof(ker::abi::shm::ShmidDs));
+static_assert(offsetof(struct shmid_ds, shm_perm) == offsetof(ker::abi::shm::ShmidDs, shm_perm));
+static_assert(offsetof(struct shmid_ds, shm_segsz) == offsetof(ker::abi::shm::ShmidDs, shm_segsz));
+static_assert(offsetof(struct shmid_ds, shm_atime) == offsetof(ker::abi::shm::ShmidDs, shm_atime));
+static_assert(offsetof(struct shmid_ds, shm_dtime) == offsetof(ker::abi::shm::ShmidDs, shm_dtime));
+static_assert(offsetof(struct shmid_ds, shm_ctime) == offsetof(ker::abi::shm::ShmidDs, shm_ctime));
+static_assert(offsetof(struct shmid_ds, shm_cpid) == offsetof(ker::abi::shm::ShmidDs, shm_cpid));
+static_assert(offsetof(struct shmid_ds, shm_lpid) == offsetof(ker::abi::shm::ShmidDs, shm_lpid));
+static_assert(offsetof(struct shmid_ds, shm_nattch) == offsetof(ker::abi::shm::ShmidDs, shm_nattch));
+static_assert(offsetof(struct shmid_ds, __unused) == offsetof(ker::abi::shm::ShmidDs, unused));
+#endif
+
 // SafeStack support: This variable is accessed by the compiler-generated code
 // It needs to be in TLS storage and properly initialized
 // The actual initialization will be done by the kernel when setting up TLS
@@ -67,6 +94,22 @@ constexpr size_t kMaxCallTraceFrames = 64;
 constexpr uintptr_t kMaxFrameStride = 1024 * 1024;
 
 bool panicActive = false;
+
+#if __MLIBC_POSIX_OPTION && !MLIBC_BUILDING_RTLD
+
+constexpr auto defaultResourceLimits() -> std::array<struct rlimit, RLIMIT_NLIMITS> {
+	std::array<struct rlimit, RLIMIT_NLIMITS> limits{};
+	for (auto &limit : limits) {
+		limit.rlim_cur = RLIM_INFINITY;
+		limit.rlim_max = RLIM_INFINITY;
+	}
+	return limits;
+}
+
+constinit auto resourceLimits = defaultResourceLimits();
+FutexLock resourceLimitsLock;
+
+#endif
 
 void panicLog(uint64_t cookie, const char *message) {
 	if (cookie != 0) {
@@ -115,7 +158,7 @@ int pselect_sleep_for_timeout_ms(int timeout_ms, const sigset_t *sigmask) {
 	timespec rem{.tv_sec = 0, .tv_nsec = 0};
 	uint64_t r = syscall(
 	    ker::abi::callnums::time,
-	    static_cast<uint64_t>(ker::abi::sys_time_ops::nanosleep),
+	    static_cast<uint64_t>(ker::abi::sys_time_ops::NANOSLEEP),
 	    reinterpret_cast<uint64_t>(&req),
 	    reinterpret_cast<uint64_t>(&rem)
 	);
@@ -858,7 +901,7 @@ int Sysdeps<Sleep>::operator()(time_t *secs, long *nanos) {
 
 	uint64_t r = syscall(
 	    ker::abi::callnums::time,
-	    static_cast<uint64_t>(ker::abi::sys_time_ops::nanosleep),
+	    static_cast<uint64_t>(ker::abi::sys_time_ops::NANOSLEEP),
 	    reinterpret_cast<uint64_t>(&req),
 	    reinterpret_cast<uint64_t>(&rem)
 	);
@@ -894,6 +937,14 @@ int Sysdeps<Rename>::operator()(const char *old_path, const char *new_path) {
 	int r = ker::abi::vfs::renameat(AT_FDCWD, old_path, AT_FDCWD, new_path);
 	if (r < 0)
 		return -r;
+	return 0;
+}
+
+int Sysdeps<FdToPath>::operator()(int fd, char **out) {
+	frg::string path{getAllocator()};
+	frg::output_to(path) << frg::fmt("/proc/self/fd/{}", fd);
+	*out = path.data();
+	path.detach();
 	return 0;
 }
 
@@ -1074,7 +1125,7 @@ int Sysdeps<Ptrace>::operator()(long req, pid_t pid, void *addr, void *data, lon
 int Sysdeps<Shmget>::operator()(int *shm_id, key_t key, size_t size, int shmflg) {
 	auto result = static_cast<int64_t>(syscall(
 	    ker::abi::callnums::shm,
-	    static_cast<uint64_t>(ker::abi::shm::ops::get),
+	    static_cast<uint64_t>(ker::abi::shm::ops::GET),
 	    static_cast<uint64_t>(static_cast<int64_t>(key)),
 	    size,
 	    static_cast<uint64_t>(shmflg)
@@ -1088,7 +1139,7 @@ int Sysdeps<Shmget>::operator()(int *shm_id, key_t key, size_t size, int shmflg)
 int Sysdeps<Shmat>::operator()(void **seg_start, int shmid, const void *shmaddr, int shmflg) {
 	auto result = static_cast<int64_t>(syscall(
 	    ker::abi::callnums::shm,
-	    static_cast<uint64_t>(ker::abi::shm::ops::attach),
+	    static_cast<uint64_t>(ker::abi::shm::ops::ATTACH),
 	    static_cast<uint64_t>(shmid),
 	    reinterpret_cast<uint64_t>(shmaddr),
 	    static_cast<uint64_t>(shmflg)
@@ -1102,7 +1153,7 @@ int Sysdeps<Shmat>::operator()(void **seg_start, int shmid, const void *shmaddr,
 int Sysdeps<Shmdt>::operator()(const void *shmaddr) {
 	auto result = static_cast<int64_t>(syscall(
 	    ker::abi::callnums::shm,
-	    static_cast<uint64_t>(ker::abi::shm::ops::detach),
+	    static_cast<uint64_t>(ker::abi::shm::ops::DETACH),
 	    reinterpret_cast<uint64_t>(shmaddr)
 	));
 	if (result < 0)
@@ -1113,7 +1164,7 @@ int Sysdeps<Shmdt>::operator()(const void *shmaddr) {
 int Sysdeps<Shmctl>::operator()(int *idx, int shmid, int cmd, struct shmid_ds *buf) {
 	auto result = static_cast<int64_t>(syscall(
 	    ker::abi::callnums::shm,
-	    static_cast<uint64_t>(ker::abi::shm::ops::ctl),
+	    static_cast<uint64_t>(ker::abi::shm::ops::CTL),
 	    static_cast<uint64_t>(shmid),
 	    static_cast<uint64_t>(cmd),
 	    reinterpret_cast<uint64_t>(buf)
@@ -1575,17 +1626,33 @@ int Sysdeps<Pselect>::operator()(
 }
 
 int Sysdeps<GetRlimit>::operator()(int resource, struct rlimit *limit) {
-	(void)resource;
-	if (limit) {
-		limit->rlim_cur = RLIM_INFINITY;
-		limit->rlim_max = RLIM_INFINITY;
-	}
+	if (resource < 0 || resource >= RLIMIT_NLIMITS)
+		return EINVAL;
+	if (!limit)
+		return EFAULT;
+
+	resourceLimitsLock.lock();
+	*limit = resourceLimits[static_cast<size_t>(resource)];
+	resourceLimitsLock.unlock();
 	return 0;
 }
 
 int Sysdeps<SetRlimit>::operator()(int resource, const struct rlimit *limit) {
-	(void)resource;
-	(void)limit;
+	if (resource < 0 || resource >= RLIMIT_NLIMITS)
+		return EINVAL;
+	if (!limit)
+		return EFAULT;
+	if (limit->rlim_cur > limit->rlim_max)
+		return EINVAL;
+
+	resourceLimitsLock.lock();
+	auto &current = resourceLimits[static_cast<size_t>(resource)];
+	if (limit->rlim_max > current.rlim_max) {
+		resourceLimitsLock.unlock();
+		return EPERM;
+	}
+	current = *limit;
+	resourceLimitsLock.unlock();
 	return 0;
 }
 

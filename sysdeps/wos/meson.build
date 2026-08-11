@@ -79,9 +79,14 @@ if not no_headers
     install_headers(
         'include/callnums/futex.h',
         'include/callnums/multiproc.h',
+        'include/callnums/net.h',
+        'include/callnums/power.h',
         'include/callnums/process.h',
         'include/callnums/shm.h',
         'include/callnums/sys_log.h',
+        'include/callnums/time.h',
+        'include/callnums/vfs.h',
+        'include/callnums/vmem.h',
         subdir: 'callnums',
     )
 

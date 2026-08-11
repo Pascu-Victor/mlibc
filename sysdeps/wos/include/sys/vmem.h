@@ -1,25 +1,11 @@
 #pragma once
+#include <callnums/vmem.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
 #include <sys/syscall.h>
 
 namespace ker {
-
-namespace abi::vmem {
-
-// Operations
-enum class ops : uint64_t {
-	anon_allocate = 0,
-	anon_free = 1,
-	protect = 2,
-	mremap = 3,
-	msync = 4,
-	swapon = 5,
-	swapoff = 6,
-};
-
-} // namespace abi::vmem
 
 // Userspace wrapper functions
 namespace vmem {
@@ -30,7 +16,7 @@ static inline int64_t
 allocate(void **addr, uint64_t size, uint64_t prot, uint64_t flags, void *hint = nullptr) {
 	uint64_t result = syscall(
 	    abi::callnums::vmem,
-	    static_cast<uint64_t>(abi::vmem::ops::anon_allocate),
+	    static_cast<uint64_t>(abi::vmem::ops::ANON_ALLOCATE),
 	    reinterpret_cast<uint64_t>(hint),
 	    size,
 	    prot,
@@ -52,7 +38,7 @@ allocate(void **addr, uint64_t size, uint64_t prot, uint64_t flags, void *hint =
 static inline int64_t free(void *addr, uint64_t size) {
 	uint64_t result = syscall(
 	    abi::callnums::vmem,
-	    static_cast<uint64_t>(abi::vmem::ops::anon_free),
+	    static_cast<uint64_t>(abi::vmem::ops::ANON_FREE),
 	    reinterpret_cast<uint64_t>(addr),
 	    size,
 	    0, // unused
@@ -97,7 +83,7 @@ map(void **addr,
 static inline int64_t protect(void *addr, uint64_t size, uint64_t prot) {
 	uint64_t result = syscall(
 	    abi::callnums::vmem,
-	    static_cast<uint64_t>(abi::vmem::ops::protect),
+	    static_cast<uint64_t>(abi::vmem::ops::PROTECT),
 	    reinterpret_cast<uint64_t>(addr),
 	    size,
 	    prot,
@@ -111,7 +97,7 @@ static inline int64_t
 remap(void **addr, void *old_addr, uint64_t old_size, uint64_t new_size, uint64_t flags) {
 	uint64_t result = syscall(
 	    abi::callnums::vmem,
-	    static_cast<uint64_t>(abi::vmem::ops::mremap),
+	    static_cast<uint64_t>(abi::vmem::ops::MREMAP),
 	    reinterpret_cast<uint64_t>(old_addr),
 	    old_size,
 	    new_size,
@@ -130,7 +116,7 @@ remap(void **addr, void *old_addr, uint64_t old_size, uint64_t new_size, uint64_
 static inline int64_t sync(void *addr, uint64_t size, uint64_t flags) {
 	uint64_t result = syscall(
 	    abi::callnums::vmem,
-	    static_cast<uint64_t>(abi::vmem::ops::msync),
+	    static_cast<uint64_t>(abi::vmem::ops::MSYNC),
 	    reinterpret_cast<uint64_t>(addr),
 	    size,
 	    flags,
@@ -143,7 +129,7 @@ static inline int64_t sync(void *addr, uint64_t size, uint64_t flags) {
 static inline int64_t swapon(const char *path, int flags) {
 	uint64_t result = syscall(
 	    abi::callnums::vmem,
-	    static_cast<uint64_t>(abi::vmem::ops::swapon),
+	    static_cast<uint64_t>(abi::vmem::ops::SWAPON),
 	    reinterpret_cast<uint64_t>(path),
 	    static_cast<uint64_t>(flags),
 	    0,
@@ -156,7 +142,7 @@ static inline int64_t swapon(const char *path, int flags) {
 static inline int64_t swapoff(const char *path) {
 	uint64_t result = syscall(
 	    abi::callnums::vmem,
-	    static_cast<uint64_t>(abi::vmem::ops::swapoff),
+	    static_cast<uint64_t>(abi::vmem::ops::SWAPOFF),
 	    reinterpret_cast<uint64_t>(path),
 	    0,
 	    0,

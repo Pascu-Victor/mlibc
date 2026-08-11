@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <locale.h>
 #include <math.h>
 #include <stddef.h>

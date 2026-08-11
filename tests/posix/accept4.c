@@ -66,7 +66,9 @@ static int socket_setup(void)
 
 	memset(&addr, 0, sizeof(struct sockaddr_in));
 	addr.sin_family = AF_INET;
-	addr.sin_addr.s_addr = htonl(INADDR_ANY);
+	// Connecting to INADDR_ANY is a Linux extension rather than portable socket
+	// behavior. Use loopback so this target-runtime test remains hermetic.
+	addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
 	addr.sin_port = htons(0);
 
 	int socket_fd = socket(AF_INET, SOCK_STREAM, 0);
