@@ -1348,7 +1348,9 @@ int Sysdeps<MsgSend>::operator()(int fd, const struct msghdr *hdr, int flags, ss
 	const iovec *iov = &hdr->msg_iov[0];
 	ssize_t r;
 	if (hdr->msg_name) {
-		r = ker::abi::net::sendto(fd, iov->iov_base, iov->iov_len, flags, hdr->msg_name);
+		r = ker::abi::net::sendto_ex(
+		    fd, iov->iov_base, iov->iov_len, flags, hdr->msg_name, hdr->msg_namelen
+		);
 	} else {
 		r = ker::abi::net::send(fd, iov->iov_base, iov->iov_len, flags);
 	}
@@ -1367,10 +1369,9 @@ int Sysdeps<Sendto>::operator()(
     socklen_t addr_length,
     ssize_t *length
 ) {
-	(void)addr_length;
 	ssize_t r;
 	if (sock_addr) {
-		r = ker::abi::net::sendto(fd, buffer, size, flags, sock_addr);
+		r = ker::abi::net::sendto_ex(fd, buffer, size, flags, sock_addr, addr_length);
 	} else {
 		r = ker::abi::net::send(fd, buffer, size, flags);
 	}
@@ -1386,7 +1387,11 @@ int Sysdeps<MsgRecv>::operator()(int fd, struct msghdr *hdr, int flags, ssize_t 
 	const iovec *iov = &hdr->msg_iov[0];
 	ssize_t r;
 	if (hdr->msg_name) {
-		r = ker::abi::net::recvfrom(fd, iov->iov_base, iov->iov_len, flags, hdr->msg_name);
+		size_t address_length = hdr->msg_namelen;
+		r = ker::abi::net::recvfrom_ex(
+		    fd, iov->iov_base, iov->iov_len, flags, hdr->msg_name, &address_length
+		);
+		hdr->msg_namelen = static_cast<socklen_t>(address_length);
 	} else {
 		r = ker::abi::net::recv(fd, iov->iov_base, iov->iov_len, flags);
 	}
@@ -1405,10 +1410,12 @@ int Sysdeps<Recvfrom>::operator()(
     socklen_t *addr_length,
     ssize_t *length
 ) {
-	(void)addr_length;
 	ssize_t r;
 	if (sock_addr) {
-		r = ker::abi::net::recvfrom(fd, buffer, size, flags, sock_addr);
+		size_t address_length = addr_length ? *addr_length : 0;
+		r = ker::abi::net::recvfrom_ex(fd, buffer, size, flags, sock_addr, &address_length);
+		if (r >= 0 && addr_length)
+			*addr_length = static_cast<socklen_t>(address_length);
 	} else {
 		r = ker::abi::net::recv(fd, buffer, size, flags);
 	}

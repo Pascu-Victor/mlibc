@@ -123,6 +123,8 @@ struct WosSysdepTags :
     Statvfs,
     Fstatvfs,
     Statx,
+    InetConfigured,
+    Getifaddrs,
 #endif // __MLIBC_POSIX_OPTION
 
 #if __MLIBC_GLIBC_OPTION

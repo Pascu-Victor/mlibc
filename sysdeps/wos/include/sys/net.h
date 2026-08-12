@@ -125,6 +125,53 @@ static inline ssize_t recvfrom(int fd, void *buf, size_t len, int flags, void *a
 	return static_cast<ssize_t>((int64_t)r);
 }
 
+static inline ssize_t
+sendto_ex(int fd, const void *buf, size_t len, int flags, const void *addr, size_t addr_len) {
+	SockaddrIoV1 io{
+	    .size = sizeof(SockaddrIoV1),
+	    .version = SOCKADDR_IO_VERSION_1,
+	    .reserved = 0,
+	    .address = reinterpret_cast<uint64_t>(addr),
+	    .address_length = addr_len,
+	    .result_length = 0,
+	};
+	uint64_t r = syscall(
+	    ker::abi::callnums::net,
+	    static_cast<uint64_t>(ops::SENDTO_EX),
+	    static_cast<uint64_t>(fd),
+	    reinterpret_cast<uint64_t>(buf),
+	    static_cast<uint64_t>(len),
+	    static_cast<uint64_t>(flags),
+	    reinterpret_cast<uint64_t>(&io)
+	);
+	return static_cast<ssize_t>((int64_t)r);
+}
+
+static inline ssize_t
+recvfrom_ex(int fd, void *buf, size_t len, int flags, void *addr, size_t *addr_len) {
+	uint64_t result_len = 0;
+	SockaddrIoV1 io{
+	    .size = sizeof(SockaddrIoV1),
+	    .version = SOCKADDR_IO_VERSION_1,
+	    .reserved = 0,
+	    .address = reinterpret_cast<uint64_t>(addr),
+	    .address_length = addr_len ? *addr_len : 0,
+	    .result_length = addr_len ? reinterpret_cast<uint64_t>(&result_len) : 0,
+	};
+	uint64_t r = syscall(
+	    ker::abi::callnums::net,
+	    static_cast<uint64_t>(ops::RECVFROM_EX),
+	    static_cast<uint64_t>(fd),
+	    reinterpret_cast<uint64_t>(buf),
+	    static_cast<uint64_t>(len),
+	    static_cast<uint64_t>(flags),
+	    reinterpret_cast<uint64_t>(&io)
+	);
+	if (static_cast<int64_t>(r) >= 0 && addr_len)
+		*addr_len = static_cast<size_t>(result_len);
+	return static_cast<ssize_t>((int64_t)r);
+}
+
 static inline int setsockopt(int fd, int level, int optname, const void *optval, size_t optlen) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::net,
@@ -246,6 +293,43 @@ static inline int netctl_link_set(const void *req) {
 	uint64_t r = syscall(
 	    ker::abi::callnums::net,
 	    static_cast<uint64_t>(ops::NETCTL_LINK_SET),
+	    reinterpret_cast<uint64_t>(req)
+	);
+	return static_cast<int>((int64_t)r);
+}
+
+static inline int netctl_addr_set_v2(const void *req) {
+	uint64_t r = syscall(
+	    ker::abi::callnums::net,
+	    static_cast<uint64_t>(ops::NETCTL_ADDR_SET_V2),
+	    reinterpret_cast<uint64_t>(req)
+	);
+	return static_cast<int>((int64_t)r);
+}
+
+static inline int netctl_route_list(void *out, size_t *count) {
+	uint64_t r = syscall(
+	    ker::abi::callnums::net,
+	    static_cast<uint64_t>(ops::NETCTL_ROUTE_LIST),
+	    reinterpret_cast<uint64_t>(out),
+	    reinterpret_cast<uint64_t>(count)
+	);
+	return static_cast<int>((int64_t)r);
+}
+
+static inline int netctl_route_set(const void *req) {
+	uint64_t r = syscall(
+	    ker::abi::callnums::net,
+	    static_cast<uint64_t>(ops::NETCTL_ROUTE_SET),
+	    reinterpret_cast<uint64_t>(req)
+	);
+	return static_cast<int>((int64_t)r);
+}
+
+static inline int netctl_route_del(const void *req) {
+	uint64_t r = syscall(
+	    ker::abi::callnums::net,
+	    static_cast<uint64_t>(ops::NETCTL_ROUTE_DEL),
 	    reinterpret_cast<uint64_t>(req)
 	);
 	return static_cast<int>((int64_t)r);

@@ -15,6 +15,7 @@ rtld_dso_sources += files(
 
 libc_sources += files(
     'generic/sysdeps.cpp',
+    'generic/net_config.cpp',
     'generic/thread.cpp',
     'generic/entry.cpp',
     'sys/logging.cpp',
