@@ -597,7 +597,9 @@ extern "C" void *interpreterMain(uintptr_t *entry_stack) {
 #endif
 #ifdef AT_RANDOM
 				case AT_RANDOM:
-					mlibc::infoLogger() << "AT_RANDOM: 0x" << frg::hex_fmt{*value} << frg::endlog;
+					// Do not log the entropy address. Besides avoiding a layout
+					// disclosure, this keeps verbose rtld diagnostics incapable of
+					// becoming a future entropy side channel.
 					break;
 #endif
 #ifdef AT_EXECFN
@@ -741,8 +743,11 @@ extern "C" void *interpreterMain(uintptr_t *entry_stack) {
 
 #ifndef MLIBC_STATIC_BUILD
 	auto ldso_soname = reinterpret_cast<const char *>(ldso_base + strtab_offset + soname_str);
+	// relocateSelf() completed before interpreterMain(). Treat ld.so as older than
+	// the first normal link transaction so a DT_NEEDED edge back to its SONAME
+	// cannot apply REL/RELA/RELR entries a second time.
 	auto ldso = initialRepository->injectObjectFromDts(
-	    ldso_soname, frg::string<MemoryAllocator>{getAllocator()}, ldso_base, _DYNAMIC, 1
+	    ldso_soname, frg::string<MemoryAllocator>{getAllocator()}, ldso_base, _DYNAMIC, 0
 	);
 
 	auto ldso_ehdr = reinterpret_cast<elf_ehdr *>(__ehdr_start);
@@ -751,6 +756,15 @@ extern "C" void *interpreterMain(uintptr_t *entry_stack) {
 	ldso->phdrPointer = ldso_phdr;
 	ldso->phdrCount = ldso_ehdr->e_phnum;
 	ldso->phdrEntrySize = ldso_ehdr->e_phentsize;
+	for (size_t i = 0; i < ldso->phdrCount; ++i) {
+		auto phdr = reinterpret_cast<elf_phdr *>(
+		    reinterpret_cast<uintptr_t>(ldso->phdrPointer) + i * ldso->phdrEntrySize
+		);
+		if (phdr->p_type == PT_GNU_RELRO && phdr->p_memsz) {
+			ldso->relroStart = phdr->p_vaddr;
+			ldso->relroSize = phdr->p_memsz;
+		}
+	}
 
 	// We can't initialise the ldso object after the executable SO,
 	// so we have to set the ldso path after loading both.
@@ -767,6 +781,11 @@ extern "C" void *interpreterMain(uintptr_t *entry_stack) {
 	executableSO->inLinkMap = true;
 	Loader linker{globalScope.get(), executableSO, true, 1};
 	linker.linkObjects(executableSO);
+#ifndef MLIBC_STATIC_BUILD
+	// The interpreter relocates itself before constructing the normal link BFS,
+	// so protect its RELRO range explicitly after that BFS is fully relocated.
+	linker.protectRelro(ldso);
+#endif
 
 	mlibc::initStackGuard(stack_entropy);
 

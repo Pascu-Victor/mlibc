@@ -203,6 +203,12 @@ struct SharedObject {
 	// base address this shared object was loaded to
 	uintptr_t baseAddress;
 
+	// PT_GNU_RELRO range, relative to baseAddress. Relocations must finish
+	// before this range is made read-only.
+	uintptr_t relroStart = 0;
+	size_t relroSize = 0;
+	bool relroProtected = false;
+
 	Scope *localScope;
 
 	// pointers to the dynamic table, GOT and entry point
@@ -525,6 +531,7 @@ public:
 
 public:
 	void linkObjects(SharedObject *root);
+	void protectRelro(SharedObject *object);
 
 private:
 	void _buildLinkBfs(SharedObject *root);

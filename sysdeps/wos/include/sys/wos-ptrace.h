@@ -29,6 +29,8 @@ enum class request : uint64_t {
 	GET_REMOTE_INFO = 0x5705,
 	SET_HW_BREAK = 0x5706,
 	DEL_HW_BREAK = 0x5707,
+	SYSCALL_WAIT = 0x5708,
+	GET_IMAGE_CATALOG = 0x5709,
 };
 
 enum class regset : uint64_t {
@@ -118,6 +120,46 @@ struct ImageList {
 	size_t capacity;
 	size_t count;
 };
+
+inline constexpr uint32_t IMAGE_CATALOG_VERSION = 1;
+
+enum class image_snapshot_status : uint32_t {
+	COMPLETE = 0,
+	STATIC_IMAGE = 1,
+	UNAVAILABLE = 2,
+	INCONSISTENT = 3,
+	TRUNCATED = 4,
+};
+
+struct ImageCatalogRecord {
+	static constexpr size_t PATH_LEN = 256;
+	static constexpr size_t BUILD_ID_LEN = 32;
+	char path[PATH_LEN];
+	uint64_t load_base;
+	uint64_t image_start;
+	uint64_t image_end;
+	uint64_t text_addr;
+	uint64_t text_size;
+	uint64_t entry;
+	uint64_t dynamic_addr;
+	uint32_t flags;
+	uint32_t build_id_size;
+	uint8_t build_id[BUILD_ID_LEN];
+};
+
+struct ImageCatalogList {
+	uint32_t version;
+	uint32_t record_size;
+	ImageCatalogRecord *images;
+	size_t capacity;
+	size_t count;
+	image_snapshot_status snapshot_status;
+	uint32_t reserved;
+};
+
+static_assert(sizeof(ImageRecord) == 296);
+static_assert(sizeof(ImageCatalogRecord) == 352);
+static_assert(sizeof(ImageCatalogList) == 40);
 
 struct Event {
 	stop_reason reason;

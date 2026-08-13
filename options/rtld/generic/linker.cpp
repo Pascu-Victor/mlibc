@@ -27,6 +27,7 @@ uintptr_t libraryBase = 0x41000000;
 #endif
 
 constexpr bool eagerBinding = true;
+static_assert(eagerBinding, "complete RELRO requires eager PLT binding");
 namespace {
 
 const char *linkerErrorToString(LinkerError error) {
@@ -330,6 +331,306 @@ void closeOrDie(int fd) {
 }
 
 uintptr_t alignUp(uintptr_t address, size_t align) { return (address + align - 1) & ~(align - 1); }
+
+namespace {
+
+constexpr uint64_t dsoPageSize = mlibc::page_size;
+constexpr uint64_t dsoPageMask = dsoPageSize - 1;
+constexpr uint64_t dsoReservationAlignment = 0x200000;
+constexpr uint64_t maximumFileExtent = static_cast<uint64_t>(INT64_MAX) + 1;
+#if MLIBC_MMAP_ALLOCATE_DSO
+constexpr uint64_t maximumLoadAlignment = dsoPageSize;
+#else
+constexpr uint64_t maximumLoadAlignment = dsoReservationAlignment;
+#endif
+
+static_assert((dsoPageSize & dsoPageMask) == 0);
+static_assert((dsoReservationAlignment & (dsoReservationAlignment - 1)) == 0);
+
+struct ProgramHeaderValidation {
+	uintptr_t reservationSize = 0;
+	uintptr_t relroStart = 0;
+	size_t relroSize = 0;
+};
+
+bool checkedAdd(uint64_t lhs, uint64_t rhs, uint64_t &result) {
+	if (lhs > UINT64_MAX - rhs)
+		return false;
+	result = lhs + rhs;
+	return true;
+}
+
+bool checkedPageAlignUp(uint64_t value, uint64_t &result) {
+	if (value > UINT64_MAX - dsoPageMask)
+		return false;
+	result = (value + dsoPageMask) & ~dsoPageMask;
+	return true;
+}
+
+bool isPowerOfTwo(uint64_t value) { return value && !(value & (value - 1)); }
+
+bool isValidReservationEnd(uint64_t end) {
+	if (!end || end > UINTPTR_MAX)
+		return false;
+#if defined(__x86_64__)
+	// WOS and the other x86-64 rtld targets use the lower canonical half for userspace.
+	constexpr uint64_t userCanonicalTop = 0x0000800000000000ULL;
+	if (end >= userCanonicalTop)
+		return false;
+#endif
+	return true;
+}
+
+bool supportedProgramHeaderType(uint32_t type) {
+	switch (type) {
+		case PT_NULL:
+		case PT_LOAD:
+		case PT_DYNAMIC:
+		case PT_INTERP:
+		case PT_NOTE:
+		case PT_PHDR:
+		case PT_TLS:
+		case PT_RISCV_ATTRIBUTES:
+		case PT_GNU_EH_FRAME:
+		case PT_GNU_RELRO:
+		case PT_GNU_STACK:
+		case PT_GNU_PROPERTY:
+			return true;
+		default:
+			return false;
+	}
+}
+
+const elf_phdr &programHeaderAt(const char *buffer, size_t index) {
+	return reinterpret_cast<const elf_phdr *>(buffer)[index];
+}
+
+bool loadPageRange(const elf_phdr &phdr, uint64_t &start, uint64_t &end) {
+	if (phdr.p_type != PT_LOAD || !phdr.p_memsz)
+		return false;
+
+	uint64_t byteEnd;
+	if (!checkedAdd(phdr.p_vaddr, phdr.p_memsz, byteEnd) || !checkedPageAlignUp(byteEnd, end))
+		return false;
+	start = phdr.p_vaddr & ~dsoPageMask;
+	return start < end;
+}
+
+bool rangeCoveredByLoadPages(
+    const char *buffer, size_t count, uint64_t start, uint64_t end, bool requireNonExecutable
+) {
+	uint64_t cursor = start;
+	while (cursor < end) {
+		uint64_t coveredUntil = cursor;
+		for (size_t i = 0; i < count; ++i) {
+			auto const &phdr = programHeaderAt(buffer, i);
+			uint64_t loadStart;
+			uint64_t loadEnd;
+			if (!loadPageRange(phdr, loadStart, loadEnd) || cursor < loadStart || cursor >= loadEnd
+			    || (requireNonExecutable && ((phdr.p_flags & PF_R) == 0 || (phdr.p_flags & PF_X))))
+				continue;
+			if (loadEnd > coveredUntil)
+				coveredUntil = loadEnd;
+		}
+		if (coveredUntil == cursor)
+			return false;
+		cursor = coveredUntil < end ? coveredUntil : end;
+	}
+	return true;
+}
+
+bool fileImageCoveredByLoad(
+    const char *buffer, size_t count, uint64_t virtualStart, uint64_t fileStart, uint64_t size
+) {
+	if (!size)
+		return true;
+
+	uint64_t virtualEnd;
+	uint64_t fileEnd;
+	if (!checkedAdd(virtualStart, size, virtualEnd) || !checkedAdd(fileStart, size, fileEnd))
+		return false;
+
+	for (size_t i = 0; i < count; ++i) {
+		auto const &load = programHeaderAt(buffer, i);
+		if (load.p_type != PT_LOAD || !load.p_filesz || virtualStart < load.p_vaddr
+		    || fileStart < load.p_offset)
+			continue;
+
+		uint64_t loadVirtualEnd;
+		uint64_t loadFileEnd;
+		if (!checkedAdd(load.p_vaddr, load.p_filesz, loadVirtualEnd)
+		    || !checkedAdd(load.p_offset, load.p_filesz, loadFileEnd))
+			continue;
+		if (virtualEnd <= loadVirtualEnd && fileEnd <= loadFileEnd
+		    && virtualStart - load.p_vaddr == fileStart - load.p_offset)
+			return true;
+	}
+	return false;
+}
+
+bool rangeCoveredByLoadSegments(
+    const char *buffer, size_t count, uint64_t start, uint64_t size, bool requireNonExecutable
+) {
+	uint64_t end;
+	if (!checkedAdd(start, size, end))
+		return false;
+
+	uint64_t cursor = start;
+	while (cursor < end) {
+		uint64_t coveredUntil = cursor;
+		for (size_t i = 0; i < count; ++i) {
+			auto const &load = programHeaderAt(buffer, i);
+			if (load.p_type != PT_LOAD || !load.p_memsz || cursor < load.p_vaddr
+			    || (requireNonExecutable && ((load.p_flags & PF_R) == 0 || (load.p_flags & PF_X))))
+				continue;
+
+			uint64_t loadEnd;
+			if (!checkedAdd(load.p_vaddr, load.p_memsz, loadEnd) || cursor >= loadEnd)
+				continue;
+			if (loadEnd > coveredUntil)
+				coveredUntil = loadEnd;
+		}
+		if (coveredUntil == cursor)
+			return false;
+		cursor = coveredUntil < end ? coveredUntil : end;
+	}
+	return true;
+}
+
+bool validateProgramHeaders(const char *buffer, size_t count, ProgramHeaderValidation &validation) {
+	validation = {};
+	bool foundLoad = false;
+	uint64_t highestAddress = 0;
+	size_t dynamicCount = 0;
+	size_t tlsCount = 0;
+	size_t relroCount = 0;
+
+	for (size_t i = 0; i < count; ++i) {
+		auto const &phdr = programHeaderAt(buffer, i);
+		uint64_t fileEnd;
+		if (!supportedProgramHeaderType(phdr.p_type) || (phdr.p_flags & ~(PF_R | PF_W | PF_X))
+		    || phdr.p_filesz > SIZE_MAX || phdr.p_offset > INT64_MAX
+		    || (phdr.p_memsz && (phdr.p_memsz > SIZE_MAX || phdr.p_vaddr > UINTPTR_MAX))
+		    || !checkedAdd(phdr.p_offset, phdr.p_filesz, fileEnd) || fileEnd > maximumFileExtent)
+			return false;
+
+		if (phdr.p_type == PT_LOAD) {
+			uint64_t segmentEnd;
+			uint64_t alignedEnd;
+			if (phdr.p_filesz > phdr.p_memsz || (phdr.p_flags & (PF_W | PF_X)) == (PF_W | PF_X)
+			    || (phdr.p_offset & dsoPageMask) != (phdr.p_vaddr & dsoPageMask)
+			    || phdr.p_align > maximumLoadAlignment
+			    || (phdr.p_align > 1
+			        && (!isPowerOfTwo(phdr.p_align)
+			            || (phdr.p_offset & (phdr.p_align - 1))
+			                   != (phdr.p_vaddr & (phdr.p_align - 1))))
+			    || !checkedAdd(phdr.p_vaddr, phdr.p_memsz, segmentEnd)
+			    || !checkedPageAlignUp(segmentEnd, alignedEnd)
+			    || (alignedEnd && !isValidReservationEnd(alignedEnd)))
+				return false;
+
+			if (phdr.p_memsz) {
+				foundLoad = true;
+				if (alignedEnd > highestAddress)
+					highestAddress = alignedEnd;
+			}
+		} else if (phdr.p_type == PT_DYNAMIC) {
+			++dynamicCount;
+			if (dynamicCount != 1 || phdr.p_filesz > phdr.p_memsz || phdr.p_filesz < sizeof(elf_dyn)
+			    || phdr.p_memsz < sizeof(elf_dyn) || (phdr.p_filesz % sizeof(elf_dyn))
+			    || (phdr.p_memsz % sizeof(elf_dyn)))
+				return false;
+		} else if (phdr.p_type == PT_TLS) {
+			uint64_t tlsEnd;
+			++tlsCount;
+			if (tlsCount != 1 || phdr.p_filesz > phdr.p_memsz || phdr.p_align > SIZE_MAX
+			    || (phdr.p_memsz && !isPowerOfTwo(phdr.p_align))
+			    || (phdr.p_align > 1
+			        && (!isPowerOfTwo(phdr.p_align)
+			            || (phdr.p_offset & (phdr.p_align - 1))
+			                   != (phdr.p_vaddr & (phdr.p_align - 1))))
+			    || !checkedAdd(phdr.p_vaddr, phdr.p_memsz, tlsEnd)
+			    || (tlsEnd && !isValidReservationEnd(tlsEnd)))
+				return false;
+		} else if (phdr.p_type == PT_GNU_RELRO) {
+			++relroCount;
+			uint64_t relroEnd;
+			uint64_t alignedRelroEnd;
+			if (relroCount != 1 || !checkedAdd(phdr.p_vaddr, phdr.p_memsz, relroEnd)
+			    || !checkedPageAlignUp(relroEnd, alignedRelroEnd)
+			    || (alignedRelroEnd && !isValidReservationEnd(alignedRelroEnd)))
+				return false;
+		} else if (phdr.p_type == PT_GNU_STACK && (phdr.p_flags & PF_X)) {
+			return false;
+		}
+	}
+
+	if (!foundLoad || dynamicCount != 1 || !isValidReservationEnd(highestAddress))
+		return false;
+
+	for (size_t i = 0; i < count; ++i) {
+		auto const &lhs = programHeaderAt(buffer, i);
+		uint64_t lhsStart;
+		uint64_t lhsEnd;
+		if (!loadPageRange(lhs, lhsStart, lhsEnd))
+			continue;
+		for (size_t j = i + 1; j < count; ++j) {
+			auto const &rhs = programHeaderAt(buffer, j);
+			uint64_t rhsStart;
+			uint64_t rhsEnd;
+			if (!loadPageRange(rhs, rhsStart, rhsEnd) || lhsStart >= rhsEnd || rhsStart >= lhsEnd)
+				continue;
+
+			uint64_t lhsByteEnd;
+			uint64_t rhsByteEnd;
+			if (!checkedAdd(lhs.p_vaddr, lhs.p_memsz, lhsByteEnd)
+			    || !checkedAdd(rhs.p_vaddr, rhs.p_memsz, rhsByteEnd))
+				return false;
+			if (lhs.p_vaddr < rhsByteEnd && rhs.p_vaddr < lhsByteEnd)
+				return false;
+
+			constexpr uint32_t permissionMask = PF_R | PF_W | PF_X;
+			if ((lhs.p_flags & permissionMask) != (rhs.p_flags & permissionMask))
+				return false;
+		}
+	}
+
+	for (size_t i = 0; i < count; ++i) {
+		auto const &phdr = programHeaderAt(buffer, i);
+		if (phdr.p_type == PT_DYNAMIC) {
+			if (!rangeCoveredByLoadSegments(buffer, count, phdr.p_vaddr, phdr.p_memsz, true)
+			    || !fileImageCoveredByLoad(
+			        buffer, count, phdr.p_vaddr, phdr.p_offset, phdr.p_filesz
+			    ))
+				return false;
+		} else if (phdr.p_type == PT_TLS) {
+			uint64_t tlsEnd;
+			if (!checkedAdd(phdr.p_vaddr, phdr.p_memsz, tlsEnd) || tlsEnd > highestAddress
+			    || !fileImageCoveredByLoad(
+			        buffer, count, phdr.p_vaddr, phdr.p_offset, phdr.p_filesz
+			    ))
+				return false;
+		} else if (phdr.p_type == PT_GNU_RELRO && phdr.p_memsz) {
+			uint64_t relroEnd;
+			uint64_t alignedRelroEnd;
+			if (!checkedAdd(phdr.p_vaddr, phdr.p_memsz, relroEnd)
+			    || !checkedPageAlignUp(relroEnd, alignedRelroEnd)
+			    || alignedRelroEnd > highestAddress
+			    || !rangeCoveredByLoadSegments(buffer, count, phdr.p_vaddr, phdr.p_memsz, true)
+			    || !rangeCoveredByLoadPages(
+			        buffer, count, phdr.p_vaddr & ~dsoPageMask, alignedRelroEnd, true
+			    ))
+				return false;
+			validation.relroStart = static_cast<uintptr_t>(phdr.p_vaddr);
+			validation.relroSize = static_cast<size_t>(phdr.p_memsz);
+		}
+	}
+
+	validation.reservationSize = static_cast<uintptr_t>(highestAddress);
+	return true;
+}
+
+} // namespace
 
 // --------------------------------------------------------
 // ObjectRepository
@@ -740,6 +1041,12 @@ void ObjectRepository::_fetchFromPhdrs(
 					    (char *)(object->baseAddress + phdr->p_vaddr), getAllocator()
 					};
 			} break;
+			case PT_GNU_RELRO:
+				if (phdr->p_memsz) {
+					object->relroStart = phdr->p_vaddr;
+					object->relroSize = phdr->p_memsz;
+				}
+				break;
 			default:
 				// FIXME warn about unknown phdrs
 				break;
@@ -768,65 +1075,101 @@ frg::expected<LinkerError, void> ObjectRepository::_fetchFromFile(SharedObject *
 	    || ehdr.e_ident[EI_CLASS] != ELF_CLASS)
 		return LinkerError::wrongElfType;
 
+	size_t phdrBufferSize;
+	if (!ehdr.e_phnum || ehdr.e_phentsize != sizeof(elf_phdr)
+	    || __builtin_mul_overflow(
+	        static_cast<size_t>(ehdr.e_phnum),
+	        static_cast<size_t>(ehdr.e_phentsize),
+	        &phdrBufferSize
+	    ))
+		return LinkerError::invalidProgramHeader;
+
+	uint64_t phdrTableEnd;
+	if (!checkedAdd(ehdr.e_phoff, phdrBufferSize, phdrTableEnd) || phdrTableEnd > maximumFileExtent)
+		return LinkerError::invalidProgramHeader;
+
 	// read the elf program headers
-	auto phdr_buffer = (char *)getAllocator().allocate(ehdr.e_phnum * ehdr.e_phentsize);
+	auto phdr_buffer = (char *)getAllocator().allocate(phdrBufferSize);
 	if (!phdr_buffer)
 		return LinkerError::outOfMemory;
 
-	if (!tryPreadExactly(
-	        fd, ehdr.e_phoff, phdr_buffer, ehdr.e_phnum * ehdr.e_phentsize, object->path.data()
-	    )) {
-		getAllocator().deallocate(phdr_buffer, ehdr.e_phnum * ehdr.e_phentsize);
+	if (!tryPreadExactly(fd, ehdr.e_phoff, phdr_buffer, phdrBufferSize, object->path.data())) {
+		getAllocator().deallocate(phdr_buffer, phdrBufferSize);
 		return LinkerError::invalidProgramHeader;
 	}
+
+	ProgramHeaderValidation validation;
+	if (!validateProgramHeaders(phdr_buffer, ehdr.e_phnum, validation)) {
+		getAllocator().deallocate(phdr_buffer, phdrBufferSize);
+		return LinkerError::invalidProgramHeader;
+	}
+
+	// Probe every declared file payload before reserving address space. This catches
+	// truncated DSOs without adding Stat to the runtime linker's minimal sysdep contract.
+	char extentProbe;
+	for (size_t i = 0; i < ehdr.e_phnum; ++i) {
+		auto const &phdr = programHeaderAt(phdr_buffer, i);
+		if (!phdr.p_filesz)
+			continue;
+		uint64_t const lastByte = phdr.p_offset + phdr.p_filesz - 1;
+		if (!tryPreadExactly(
+		        fd,
+		        static_cast<int64_t>(lastByte),
+		        &extentProbe,
+		        sizeof(extentProbe),
+		        object->path.data()
+		    )) {
+			getAllocator().deallocate(phdr_buffer, phdrBufferSize);
+			return LinkerError::invalidProgramHeader;
+		}
+	}
+
+#if !MLIBC_MMAP_ALLOCATE_DSO
+	uint64_t alignedReservationSize;
+	uint64_t validatedLibraryEnd;
+	if (!checkedAdd(
+	        validation.reservationSize, dsoReservationAlignment - 1, alignedReservationSize
+	    )) {
+		getAllocator().deallocate(phdr_buffer, phdrBufferSize);
+		return LinkerError::invalidProgramHeader;
+	}
+	alignedReservationSize &= ~(dsoReservationAlignment - 1);
+	if (!checkedAdd(libraryBase, alignedReservationSize, validatedLibraryEnd)
+	    || !isValidReservationEnd(validatedLibraryEnd)) {
+		getAllocator().deallocate(phdr_buffer, phdrBufferSize);
+		return LinkerError::invalidProgramHeader;
+	}
+#endif
 
 	object->phdrPointer = phdr_buffer;
 	object->phdrCount = ehdr.e_phnum;
 	object->phdrEntrySize = ehdr.e_phentsize;
+	object->relroStart = validation.relroStart;
+	object->relroSize = validation.relroSize;
 
 	// Allocate virtual address space for the DSO.
-	constexpr size_t hugeSize = 0x200000;
+	uintptr_t const highest_address = validation.reservationSize;
 
-	uintptr_t highest_address = 0;
-	for (int i = 0; i < ehdr.e_phnum; i++) {
-		auto phdr = (elf_phdr *)(phdr_buffer + i * ehdr.e_phentsize);
-
-		if (phdr->p_type != PT_LOAD)
-			continue;
-
-		auto limit = phdr->p_vaddr + phdr->p_memsz;
-		if (limit > highest_address)
-			highest_address = limit;
-	}
-
-	__ensure(!(object->baseAddress & (hugeSize - 1)));
-
-	highest_address = (highest_address + mlibc::page_size - 1) & ~(mlibc::page_size - 1);
+	__ensure(!(object->baseAddress & (dsoReservationAlignment - 1)));
 
 #if MLIBC_MMAP_ALLOCATE_DSO
 	void *mappedAddr = nullptr;
 
 	if (mlibc::sysdep<VmMap>(
-	        nullptr,
-	        highest_address - object->baseAddress,
-	        PROT_NONE,
-	        MAP_PRIVATE | MAP_ANONYMOUS,
-	        -1,
-	        0,
-	        &mappedAddr
+	        nullptr, highest_address, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0, &mappedAddr
 	    )) {
 		mlibc::infoLogger() << "sys_vm_map failed when allocating address space for DSO \""
 		                    << object->name << "\""
 		                    << ", base " << (void *)object->baseAddress << ", requested "
-		                    << (highest_address - object->baseAddress) << " bytes" << frg::endlog;
-		getAllocator().deallocate(phdr_buffer, ehdr.e_phnum * ehdr.e_phentsize);
+		                    << highest_address << " bytes" << frg::endlog;
+		getAllocator().deallocate(phdr_buffer, phdrBufferSize);
 		return LinkerError::outOfMemory;
 	}
 
 	object->baseAddress = reinterpret_cast<uintptr_t>(mappedAddr);
 #else
 	object->baseAddress = libraryBase;
-	libraryBase += (highest_address + (hugeSize - 1)) & ~(hugeSize - 1);
+	libraryBase = static_cast<uintptr_t>(validatedLibraryEnd);
 #endif
 
 	if (rtldConfig.debug)
@@ -834,22 +1177,18 @@ frg::expected<LinkerError, void> ObjectRepository::_fetchFromFile(SharedObject *
 		                    << (void *)object->baseAddress << frg::endlog;
 
 	// Load all segments.
-	constexpr size_t pageSize = 0x1000;
-	for (int i = 0; i < ehdr.e_phnum; i++) {
-		auto phdr = (elf_phdr *)(phdr_buffer + i * ehdr.e_phentsize);
+	constexpr size_t pageSize = mlibc::page_size;
+	for (size_t i = 0; i < ehdr.e_phnum; i++) {
+		auto phdr = &programHeaderAt(phdr_buffer, i);
 
 		if (phdr->p_type == PT_LOAD) {
 			size_t misalign = phdr->p_vaddr & (pageSize - 1);
 			if (!phdr->p_memsz)
 				continue;
-			__ensure(phdr->p_memsz >= phdr->p_filesz);
-
-			// If the following condition is violated, we cannot use mmap() the segment;
-			// however, GCC only generates ELF files that satisfy this.
-			__ensure(misalign == (phdr->p_offset & (pageSize - 1)));
 
 			auto map_address = object->baseAddress + phdr->p_vaddr - misalign;
-			auto backed_map_size = (phdr->p_filesz + misalign + pageSize - 1) & ~(pageSize - 1);
+			auto backed_map_size =
+			    phdr->p_filesz ? (phdr->p_filesz + misalign + pageSize - 1) & ~(pageSize - 1) : 0;
 			auto total_map_size = (phdr->p_memsz + misalign + pageSize - 1) & ~(pageSize - 1);
 			auto initial_prot = PROT_READ | PROT_WRITE;
 
@@ -945,16 +1284,9 @@ frg::expected<LinkerError, void> ObjectRepository::_fetchFromFile(SharedObject *
 			object->tlsImagePtr = (void *)(object->baseAddress + phdr->p_vaddr);
 		} else if (phdr->p_type == PT_DYNAMIC) {
 			object->dynamic = (elf_dyn *)(object->baseAddress + phdr->p_vaddr);
-		} else if (
-		    phdr->p_type == PT_INTERP || phdr->p_type == PT_PHDR || phdr->p_type == PT_NOTE
-		    || phdr->p_type == PT_RISCV_ATTRIBUTES || phdr->p_type == PT_GNU_EH_FRAME
-		    || phdr->p_type == PT_GNU_RELRO || phdr->p_type == PT_GNU_STACK
-		    || phdr->p_type == PT_GNU_PROPERTY
-		) {
-			// ignore the phdr
 		} else {
-			mlibc::panicLogger() << "Unexpected PHDR type 0x" << frg::hex_fmt(phdr->p_type)
-			                     << " in DSO " << object->name << frg::endlog;
+			// All remaining supported metadata headers were validated before reserving
+			// address space and do not need runtime-linker processing here.
 		}
 	}
 
@@ -2132,6 +2464,12 @@ void Loader::linkObjects(SharedObject *root) {
 		processLateRelocations(object);
 	}
 
+	// WOS uses eager PLT binding, so no relocation target remains writable for
+	// lazy binding after this point. Apply complete RELRO only after regular,
+	// PLT, and copy relocations have all finished.
+	for (auto object : _linkBfs)
+		protectRelro(object);
+
 	for (auto object : _linkBfs) {
 		object->wasLinked = true;
 
@@ -2147,6 +2485,28 @@ void Loader::linkObjects(SharedObject *root) {
 		linkMap->next = &(object->linkMap);
 		object->inLinkMap = true;
 	}
+}
+
+void Loader::protectRelro(SharedObject *object) {
+	if (object->relroProtected || object->relroSize == 0)
+		return;
+
+	constexpr uintptr_t pageMask = mlibc::page_size - 1;
+	uintptr_t const start = object->baseAddress + object->relroStart;
+	uintptr_t const end = start + object->relroSize;
+	__ensure(start >= object->baseAddress);
+	__ensure(end >= start);
+
+	uintptr_t const pageStart = start & ~pageMask;
+	uintptr_t const pageEnd = alignUp(end, mlibc::page_size);
+	__ensure(pageEnd >= pageStart);
+	if constexpr (!mlibc::IsImplemented<VmProtect>)
+		__ensure(!"sys_vm_protect not provided");
+	if (mlibc::sysdep_or_panic<VmProtect>(
+	        reinterpret_cast<void *>(pageStart), pageEnd - pageStart, PROT_READ
+	    ))
+		__ensure(!"sys_vm_protect failed for PT_GNU_RELRO");
+	object->relroProtected = true;
 }
 
 void Loader::_buildTlsMaps() {

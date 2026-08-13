@@ -4,5 +4,15 @@ lib_native_fake = shared_library('native-fake', 'empty.c', native: true, install
 test_link_with += [lib_fake]
 test_native_link_with += [lib_native_fake]
 
-configure_file(input: 'fake-lib', output: 'libfoo.so', install_dir: 'fake', copy: true)
+malformed_elf = files('make-malformed-elf.py')
+malformed_libfoo = custom_target('malformed-libfoo',
+	input: lib_fake,
+	output: 'libfoo.so',
+	command: [py, malformed_elf, '@INPUT@', '@OUTPUT@'],
+	build_by_default: true,
+	install: true,
+	install_dir: 'fake',
+)
+test_depends += [malformed_libfoo]
+
 configure_file(input: 'fake-lib', output: 'libnative-foo.so', install_dir: 'fake', copy: true)
