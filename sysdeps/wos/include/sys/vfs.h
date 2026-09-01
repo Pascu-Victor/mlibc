@@ -704,5 +704,145 @@ static inline int realpath(const char *path, char *buf, size_t bufsize) {
 	return static_cast<int>((int64_t)r);
 }
 
+static inline int
+setxattr(const char *path, const char *name, const void *value, size_t size, int flags) {
+	uint64_t r = syscall(
+	    ker::abi::callnums::vfs,
+	    static_cast<uint64_t>(ops::SETXATTR),
+	    reinterpret_cast<uint64_t>(path),
+	    reinterpret_cast<uint64_t>(name),
+	    reinterpret_cast<uint64_t>(value),
+	    static_cast<uint64_t>(size),
+	    static_cast<uint64_t>(flags)
+	);
+	return static_cast<int>((int64_t)r);
+}
+
+static inline int
+lsetxattr(const char *path, const char *name, const void *value, size_t size, int flags) {
+	uint64_t r = syscall(
+	    ker::abi::callnums::vfs,
+	    static_cast<uint64_t>(ops::LSETXATTR),
+	    reinterpret_cast<uint64_t>(path),
+	    reinterpret_cast<uint64_t>(name),
+	    reinterpret_cast<uint64_t>(value),
+	    static_cast<uint64_t>(size),
+	    static_cast<uint64_t>(flags)
+	);
+	return static_cast<int>((int64_t)r);
+}
+
+static inline int fsetxattr(int fd, const char *name, const void *value, size_t size, int flags) {
+	uint64_t r = syscall(
+	    ker::abi::callnums::vfs,
+	    static_cast<uint64_t>(ops::FSETXATTR),
+	    static_cast<uint64_t>(fd),
+	    reinterpret_cast<uint64_t>(name),
+	    reinterpret_cast<uint64_t>(value),
+	    static_cast<uint64_t>(size),
+	    static_cast<uint64_t>(flags)
+	);
+	return static_cast<int>((int64_t)r);
+}
+
+static inline ssize_t getxattr(const char *path, const char *name, void *value, size_t size) {
+	uint64_t r = syscall(
+	    ker::abi::callnums::vfs,
+	    static_cast<uint64_t>(ops::GETXATTR),
+	    reinterpret_cast<uint64_t>(path),
+	    reinterpret_cast<uint64_t>(name),
+	    reinterpret_cast<uint64_t>(value),
+	    static_cast<uint64_t>(size)
+	);
+	return static_cast<ssize_t>((int64_t)r);
+}
+
+static inline ssize_t lgetxattr(const char *path, const char *name, void *value, size_t size) {
+	uint64_t r = syscall(
+	    ker::abi::callnums::vfs,
+	    static_cast<uint64_t>(ops::LGETXATTR),
+	    reinterpret_cast<uint64_t>(path),
+	    reinterpret_cast<uint64_t>(name),
+	    reinterpret_cast<uint64_t>(value),
+	    static_cast<uint64_t>(size)
+	);
+	return static_cast<ssize_t>((int64_t)r);
+}
+
+static inline ssize_t fgetxattr(int fd, const char *name, void *value, size_t size) {
+	uint64_t r = syscall(
+	    ker::abi::callnums::vfs,
+	    static_cast<uint64_t>(ops::FGETXATTR),
+	    static_cast<uint64_t>(fd),
+	    reinterpret_cast<uint64_t>(name),
+	    reinterpret_cast<uint64_t>(value),
+	    static_cast<uint64_t>(size)
+	);
+	return static_cast<ssize_t>((int64_t)r);
+}
+
+static inline ssize_t listxattr(const char *path, char *list, size_t size) {
+	uint64_t r = syscall(
+	    ker::abi::callnums::vfs,
+	    static_cast<uint64_t>(ops::LISTXATTR),
+	    reinterpret_cast<uint64_t>(path),
+	    reinterpret_cast<uint64_t>(list),
+	    static_cast<uint64_t>(size)
+	);
+	return static_cast<ssize_t>((int64_t)r);
+}
+
+static inline ssize_t llistxattr(const char *path, char *list, size_t size) {
+	uint64_t r = syscall(
+	    ker::abi::callnums::vfs,
+	    static_cast<uint64_t>(ops::LLISTXATTR),
+	    reinterpret_cast<uint64_t>(path),
+	    reinterpret_cast<uint64_t>(list),
+	    static_cast<uint64_t>(size)
+	);
+	return static_cast<ssize_t>((int64_t)r);
+}
+
+static inline ssize_t flistxattr(int fd, char *list, size_t size) {
+	uint64_t r = syscall(
+	    ker::abi::callnums::vfs,
+	    static_cast<uint64_t>(ops::FLISTXATTR),
+	    static_cast<uint64_t>(fd),
+	    reinterpret_cast<uint64_t>(list),
+	    static_cast<uint64_t>(size)
+	);
+	return static_cast<ssize_t>((int64_t)r);
+}
+
+static inline int removexattr(const char *path, const char *name) {
+	uint64_t r = syscall(
+	    ker::abi::callnums::vfs,
+	    static_cast<uint64_t>(ops::REMOVEXATTR),
+	    reinterpret_cast<uint64_t>(path),
+	    reinterpret_cast<uint64_t>(name)
+	);
+	return static_cast<int>((int64_t)r);
+}
+
+static inline int lremovexattr(const char *path, const char *name) {
+	uint64_t r = syscall(
+	    ker::abi::callnums::vfs,
+	    static_cast<uint64_t>(ops::LREMOVEXATTR),
+	    reinterpret_cast<uint64_t>(path),
+	    reinterpret_cast<uint64_t>(name)
+	);
+	return static_cast<int>((int64_t)r);
+}
+
+static inline int fremovexattr(int fd, const char *name) {
+	uint64_t r = syscall(
+	    ker::abi::callnums::vfs,
+	    static_cast<uint64_t>(ops::FREMOVEXATTR),
+	    static_cast<uint64_t>(fd),
+	    reinterpret_cast<uint64_t>(name)
+	);
+	return static_cast<int>((int64_t)r);
+}
+
 } // namespace ker::abi::vfs
 #endif /* __cplusplus */

@@ -2397,6 +2397,95 @@ int Sysdeps<Fstatvfs>::operator()(int fd, struct statvfs *out) {
 	return 0;
 }
 
+int Sysdeps<Setxattr>::operator()(
+    const char *path, const char *name, const void *value, size_t size, int flags
+) {
+	int r = ker::abi::vfs::setxattr(path, name, value, size, flags);
+	return r < 0 ? -r : 0;
+}
+
+int Sysdeps<Lsetxattr>::operator()(
+    const char *path, const char *name, const void *value, size_t size, int flags
+) {
+	int r = ker::abi::vfs::lsetxattr(path, name, value, size, flags);
+	return r < 0 ? -r : 0;
+}
+
+int Sysdeps<Fsetxattr>::operator()(
+    int fd, const char *name, const void *value, size_t size, int flags
+) {
+	int r = ker::abi::vfs::fsetxattr(fd, name, value, size, flags);
+	return r < 0 ? -r : 0;
+}
+
+int Sysdeps<Getxattr>::operator()(
+    const char *path, const char *name, void *value, size_t size, ssize_t *nread
+) {
+	ssize_t r = ker::abi::vfs::getxattr(path, name, value, size);
+	if (r < 0)
+		return static_cast<int>(-r);
+	*nread = r;
+	return 0;
+}
+
+int Sysdeps<Lgetxattr>::operator()(
+    const char *path, const char *name, void *value, size_t size, ssize_t *nread
+) {
+	ssize_t r = ker::abi::vfs::lgetxattr(path, name, value, size);
+	if (r < 0)
+		return static_cast<int>(-r);
+	*nread = r;
+	return 0;
+}
+
+int
+Sysdeps<Fgetxattr>::operator()(int fd, const char *name, void *value, size_t size, ssize_t *nread) {
+	ssize_t r = ker::abi::vfs::fgetxattr(fd, name, value, size);
+	if (r < 0)
+		return static_cast<int>(-r);
+	*nread = r;
+	return 0;
+}
+
+int Sysdeps<Listxattr>::operator()(const char *path, char *list, size_t size, ssize_t *nread) {
+	ssize_t r = ker::abi::vfs::listxattr(path, list, size);
+	if (r < 0)
+		return static_cast<int>(-r);
+	*nread = r;
+	return 0;
+}
+
+int Sysdeps<Llistxattr>::operator()(const char *path, char *list, size_t size, ssize_t *nread) {
+	ssize_t r = ker::abi::vfs::llistxattr(path, list, size);
+	if (r < 0)
+		return static_cast<int>(-r);
+	*nread = r;
+	return 0;
+}
+
+int Sysdeps<Flistxattr>::operator()(int fd, char *list, size_t size, ssize_t *nread) {
+	ssize_t r = ker::abi::vfs::flistxattr(fd, list, size);
+	if (r < 0)
+		return static_cast<int>(-r);
+	*nread = r;
+	return 0;
+}
+
+int Sysdeps<Removexattr>::operator()(const char *path, const char *name) {
+	int r = ker::abi::vfs::removexattr(path, name);
+	return r < 0 ? -r : 0;
+}
+
+int Sysdeps<Lremovexattr>::operator()(const char *path, const char *name) {
+	int r = ker::abi::vfs::lremovexattr(path, name);
+	return r < 0 ? -r : 0;
+}
+
+int Sysdeps<Fremovexattr>::operator()(int fd, const char *name) {
+	int r = ker::abi::vfs::fremovexattr(fd, name);
+	return r < 0 ? -r : 0;
+}
+
 int Sysdeps<Getcpu>::operator()(int *cpu) {
 	*cpu = (int)ker::multiproc::getcurrent_cpu();
 	return 0;

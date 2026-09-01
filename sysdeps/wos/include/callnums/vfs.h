@@ -67,6 +67,18 @@ enum class ops : uint64_t {
 	FCHOWNAT,
 	FSTAT_CLOSE,
 	METADATA_BATCH,
+	SETXATTR,
+	LSETXATTR,
+	FSETXATTR,
+	GETXATTR,
+	LGETXATTR,
+	FGETXATTR,
+	LISTXATTR,
+	LLISTXATTR,
+	FLISTXATTR,
+	REMOVEXATTR,
+	LREMOVEXATTR,
+	FREMOVEXATTR,
 	open = OPEN,
 	read = READ,
 	write = WRITE,
@@ -130,7 +142,23 @@ enum class ops : uint64_t {
 	fchownat = FCHOWNAT,
 	fstat_close = FSTAT_CLOSE,
 	metadata_batch = METADATA_BATCH,
+	setxattr = SETXATTR,
+	lsetxattr = LSETXATTR,
+	fsetxattr = FSETXATTR,
+	getxattr = GETXATTR,
+	lgetxattr = LGETXATTR,
+	fgetxattr = FGETXATTR,
+	listxattr = LISTXATTR,
+	llistxattr = LLISTXATTR,
+	flistxattr = FLISTXATTR,
+	removexattr = REMOVEXATTR,
+	lremovexattr = LREMOVEXATTR,
+	fremovexattr = FREMOVEXATTR,
 };
+
+constexpr size_t XATTR_NAME_MAX = 255;
+constexpr size_t XATTR_SIZE_MAX = 65536;
+constexpr size_t XATTR_LIST_MAX = 65536;
 
 constexpr uint16_t METADATA_BATCH_VERSION = 1;
 constexpr uint8_t METADATA_BATCH_MAX_ITEMS = 64;
@@ -157,5 +185,7 @@ struct metadata_batch_header {
 };
 
 static_assert(static_cast<uint64_t>(ops::METADATA_BATCH) == 62);
+static_assert(static_cast<uint64_t>(ops::SETXATTR) == 63);
+static_assert(static_cast<uint64_t>(ops::FREMOVEXATTR) == 74);
 static_assert(sizeof(metadata_batch_header) == 8);
 } // namespace ker::abi::vfs

@@ -17,6 +17,7 @@ libc_sources += files(
 	'generic/vfs.cpp',
 	'generic/process.cpp',
 	'generic/sys-sendfile.cpp',
+	'../linux/generic/sys-xattr.cpp',
 )
 
 if not no_headers
@@ -72,7 +73,7 @@ if not no_headers
 		# 'include/sys/vt.h',
 		'include/sys/sysinfo.h',
 		'include/sys/klog.h',
-		# 'include/sys/xattr.h',
+		'include/sys/xattr.h',
 		# 'include/sys/quota.h',
 		'include/sys/swap.h',
 		'include/sys/statfs.h',

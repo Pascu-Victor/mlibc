@@ -125,6 +125,18 @@ struct WosSysdepTags :
     Statx,
     InetConfigured,
     Getifaddrs,
+    Setxattr,
+    Lsetxattr,
+    Fsetxattr,
+    Getxattr,
+    Lgetxattr,
+    Fgetxattr,
+    Listxattr,
+    Llistxattr,
+    Flistxattr,
+    Removexattr,
+    Lremovexattr,
+    Fremovexattr,
 #endif // __MLIBC_POSIX_OPTION
 
 #if __MLIBC_GLIBC_OPTION
