@@ -306,6 +306,7 @@ int posix_spawn(
 ) {
 	pid_t pid;
 	int ec = 0, cs;
+	int fork_error = 0;
 	struct args args;
 	const posix_spawnattr_t empty_attr = {};
 	sigset_t full_sigset;
@@ -338,6 +339,7 @@ int posix_spawn(
 	 * This yields the same result in the end. */
 	// pid = clone(child, stack + sizeof stack, CLONE_VM | CLONE_VFORK | SIGCHLD, &args);
 	pid = fork();
+	fork_error = pid < 0 ? errno : 0;
 	if (!pid) {
 		child(&args);
 	}
@@ -350,7 +352,7 @@ int posix_spawn(
 		else
 			waitpid(pid, nullptr, 0);
 	} else {
-		ec = -pid;
+		ec = fork_error;
 	}
 
 	close(args.p[0]);

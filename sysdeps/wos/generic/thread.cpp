@@ -82,8 +82,16 @@ int Sysdeps<PrepareStack>::operator()(
 
 int Sysdeps<Clone>::operator()(void *tcb, pid_t *tid_out, void *stack) {
 	int64_t tid = ker::multiproc::threadCreate(tcb, stack, (void *)&__mlibc_enter_thread);
-	if (tid < 0)
+	if (tid < 0) {
+		auto *unpublished = static_cast<Tcb *>(tcb);
+		// PrepareStack gives automatic WOS stacks a guard and forces guard=0
+		// for caller-owned stacks. Never unmap a caller's explicit storage.
+		if (unpublished->guardSize != 0) {
+			auto *base = static_cast<char *>(unpublished->stackAddr) - unpublished->guardSize;
+			sysdep<AnonFree>(base, unpublished->stackSize + unpublished->guardSize);
+		}
 		return (int)(-tid);
+	}
 	if (tid_out)
 		*tid_out = (pid_t)tid;
 	return 0;

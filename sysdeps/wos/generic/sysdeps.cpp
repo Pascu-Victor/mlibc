@@ -31,6 +31,7 @@
 #include <sys/poll.h>
 #include <sys/process.h>
 #include <sys/resource.h>
+#include <sys/resource_policy.h>
 #include <sys/select.h>
 #include <sys/shm.h>
 #include <sys/socket.h>
@@ -96,22 +97,6 @@ constexpr size_t kMaxCallTraceFrames = 64;
 constexpr uintptr_t kMaxFrameStride = 1024 * 1024;
 
 bool panicActive = false;
-
-#if __MLIBC_POSIX_OPTION && !MLIBC_BUILDING_RTLD
-
-constexpr auto defaultResourceLimits() -> std::array<struct rlimit, RLIMIT_NLIMITS> {
-	std::array<struct rlimit, RLIMIT_NLIMITS> limits{};
-	for (auto &limit : limits) {
-		limit.rlim_cur = RLIM_INFINITY;
-		limit.rlim_max = RLIM_INFINITY;
-	}
-	return limits;
-}
-
-constinit auto resourceLimits = defaultResourceLimits();
-FutexLock resourceLimitsLock;
-
-#endif
 
 void panicLog(uint64_t cookie, const char *message) {
 	if (cookie != 0) {
@@ -1635,34 +1620,29 @@ int Sysdeps<Pselect>::operator()(
 }
 
 int Sysdeps<GetRlimit>::operator()(int resource, struct rlimit *limit) {
-	if (resource < 0 || resource >= RLIMIT_NLIMITS)
-		return EINVAL;
-	if (!limit)
-		return EFAULT;
-
-	resourceLimitsLock.lock();
-	*limit = resourceLimits[static_cast<size_t>(resource)];
-	resourceLimitsLock.unlock();
-	return 0;
+	static_assert(sizeof(struct rlimit) == sizeof(ker::abi::resource::Limit));
+	static_assert(offsetof(struct rlimit, rlim_cur) == offsetof(ker::abi::resource::Limit, soft));
+	static_assert(offsetof(struct rlimit, rlim_max) == offsetof(ker::abi::resource::Limit, hard));
+	static_assert(RLIM_INFINITY == ker::abi::resource::INFINITY_VALUE);
+	int64_t r = syscall(
+	    ker::abi::callnums::process,
+	    static_cast<uint64_t>(ker::abi::process::procmgmt_ops::GETRLIMIT),
+	    static_cast<uint64_t>(resource),
+	    reinterpret_cast<uint64_t>(limit),
+	    ker::abi::resource::VERSION
+	);
+	return r < 0 ? static_cast<int>(-r) : 0;
 }
 
 int Sysdeps<SetRlimit>::operator()(int resource, const struct rlimit *limit) {
-	if (resource < 0 || resource >= RLIMIT_NLIMITS)
-		return EINVAL;
-	if (!limit)
-		return EFAULT;
-	if (limit->rlim_cur > limit->rlim_max)
-		return EINVAL;
-
-	resourceLimitsLock.lock();
-	auto &current = resourceLimits[static_cast<size_t>(resource)];
-	if (limit->rlim_max > current.rlim_max) {
-		resourceLimitsLock.unlock();
-		return EPERM;
-	}
-	current = *limit;
-	resourceLimitsLock.unlock();
-	return 0;
+	int64_t r = syscall(
+	    ker::abi::callnums::process,
+	    static_cast<uint64_t>(ker::abi::process::procmgmt_ops::SETRLIMIT),
+	    static_cast<uint64_t>(resource),
+	    reinterpret_cast<uint64_t>(limit),
+	    ker::abi::resource::VERSION
+	);
+	return r < 0 ? static_cast<int>(-r) : 0;
 }
 
 int Sysdeps<SetPriority>::operator()(int which, id_t who, int prio) {

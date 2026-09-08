@@ -99,6 +99,8 @@ if not no_headers
         'include/sys/multiproc.h',
         'include/sys/net.h',
         'include/sys/process.h',
+        'include/sys/resource_policy.h',
+        'include/sys/service_resource.h',
         'include/sys/syscall.h',
         'include/sys/wos-ptrace.h',
         'include/sys/logging.h',

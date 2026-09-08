@@ -5,6 +5,7 @@
 #include <sys/callnums.h>
 #include <sys/init_control.h>
 #include <sys/resource.h>
+#include <sys/service_resource.h>
 #include <sys/syscall.h>
 #include <sys/utsname.h>
 #include <unistd.h>
@@ -83,6 +84,30 @@ inline int64_t init_status_read(abi::init_control::StatusSnapshot *status) {
 	    abi::callnums::process,
 	    (uint64_t)abi::process::procmgmt_ops::INIT_STATUS_READ,
 	    (uint64_t)(uintptr_t)status
+	);
+}
+
+inline int64_t service_resource_configure(const abi::service_resource::Configuration *config) {
+	return (int64_t)syscall(
+	    abi::callnums::process,
+	    (uint64_t)abi::process::procmgmt_ops::SERVICE_RESOURCE_CONFIGURE,
+	    (uint64_t)(uintptr_t)config
+	);
+}
+
+inline int64_t service_resource_select(uint64_t slot) {
+	return (int64_t)syscall(
+	    abi::callnums::process, (uint64_t)abi::process::procmgmt_ops::SERVICE_RESOURCE_SELECT, slot
+	);
+}
+
+inline int64_t service_resource_read(uint64_t slot, abi::service_resource::Snapshot *snapshot) {
+	return (int64_t)syscall(
+	    abi::callnums::process,
+	    (uint64_t)abi::process::procmgmt_ops::SERVICE_RESOURCE_READ,
+	    slot,
+	    (uint64_t)(uintptr_t)snapshot,
+	    (uint64_t)abi::service_resource::VERSION
 	);
 }
 

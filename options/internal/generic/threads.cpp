@@ -11,7 +11,8 @@
 #include <mlibc/threads.hpp>
 #include <mlibc/time-helpers.hpp>
 
-extern "C" Tcb *__rtld_allocateTcb();
+extern "C" Tcb *__rtld_allocateTcbWithBacking(void **backing);
+extern "C" void __rtld_freeUnpublishedTcb(Tcb *tcb, void *backing);
 extern "C" void __mlibc_run_thread_dtors();
 
 namespace {
@@ -105,7 +106,12 @@ int thread_create(
     void *__restrict user_arg,
     bool returns_int
 ) {
-	auto new_tcb = __rtld_allocateTcb();
+	if (!IsImplemented<PrepareStack> || !IsImplemented<Clone>) {
+		MLIBC_MISSING_SYSDEP();
+		return ENOSYS;
+	}
+	void *tcb_backing = nullptr;
+	auto new_tcb = __rtld_allocateTcbWithBacking(&tcb_backing);
 	pid_t tid;
 	struct __mlibc_threadattr attr = {};
 	if (!attrp) {
@@ -128,10 +134,6 @@ int thread_create(
 	// when the stack is allocated. Currently this isn't propagated to the TCB,
 	// but it should be.
 	void *stack = attr.__mlibc_stackaddr;
-	if (!IsImplemented<PrepareStack>) {
-		MLIBC_MISSING_SYSDEP();
-		return ENOSYS;
-	}
 	int ret = sysdep_or_panic<PrepareStack>(
 	    &stack,
 	    entry,
@@ -142,13 +144,10 @@ int thread_create(
 	    &new_tcb->stackAddr
 	);
 	if (ret) {
+		__rtld_freeUnpublishedTcb(new_tcb, tcb_backing);
 		return ret;
 	}
 
-	if (!IsImplemented<Clone>) {
-		MLIBC_MISSING_SYSDEP();
-		return ENOSYS;
-	}
 	new_tcb->stackSize = attr.__mlibc_stacksize;
 	new_tcb->guardSize = attr.__mlibc_guardsize;
 	new_tcb->returnValueType =
@@ -157,6 +156,7 @@ int thread_create(
 	__atomic_store_n(&new_tcb->cancelBits, 0, __ATOMIC_RELAXED);
 	int clone_result = sysdep_or_panic<Clone>(new_tcb, &tid, stack);
 	if (clone_result) {
+		__rtld_freeUnpublishedTcb(new_tcb, tcb_backing);
 		return clone_result;
 	}
 

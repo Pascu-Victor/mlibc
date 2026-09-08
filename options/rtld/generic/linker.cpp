@@ -1989,7 +1989,7 @@ void initTlsObjects(
 	}
 }
 
-Tcb *allocateTcb() {
+Tcb *allocateTcb(void **allocation_base) {
 	size_t tlsInitialSize = runtimeTlsMap->initialLimit;
 
 	// To make sure that both the TCB and TLS data are sufficiently aligned, allocate
@@ -1997,6 +1997,8 @@ Tcb *allocateTcb() {
 	size_t alignOverhead = frg::max(alignof(Tcb), tlsMaxAlignment);
 	size_t allocSize = tlsInitialSize + sizeof(Tcb) + alignOverhead;
 	auto allocation = reinterpret_cast<uintptr_t>(getAllocator().allocate(allocSize));
+	if (allocation_base)
+		*allocation_base = reinterpret_cast<void *>(allocation);
 	memset(reinterpret_cast<void *>(allocation), 0, allocSize);
 
 	uintptr_t tlsAddress, tcbAddress;

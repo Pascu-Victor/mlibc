@@ -245,10 +245,23 @@ extern "C" void *lazyRelocate(SharedObject *object, unsigned int rel_index) {
 	return (void *)p->virtualAddress();
 }
 
-extern "C" [[gnu::visibility("default")]] void *__rtld_allocateTcb() {
-	auto tcb = allocateTcb();
+extern "C" [[gnu::visibility("default")]] void *__rtld_allocateTcbWithBacking(void **backing) {
+	auto tcb = allocateTcb(backing);
 	initTlsObjects(tcb, globalScope->_objects, false);
 	return tcb;
+}
+
+extern "C" [[gnu::visibility("default")]] void *__rtld_allocateTcb() {
+	return __rtld_allocateTcbWithBacking(nullptr);
+}
+
+// Only for a TCB whose thread was never created. Its DTV contains initial TLS
+// pointers into backing (and null dynamic slots); no other thread can use it.
+extern "C" [[gnu::visibility("default")]] void __rtld_freeUnpublishedTcb(Tcb *tcb, void *backing) {
+	frg::destruct(getAllocator(), tcb->localKeys);
+	frg::destruct_n(getAllocator(), tcb->dtvPointers, tcb->dtvSize);
+	tcb->~Tcb();
+	getAllocator().free(backing);
 }
 
 extern "C" {

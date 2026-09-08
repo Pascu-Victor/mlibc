@@ -368,7 +368,7 @@ struct RuntimeTlsMap {
 
 extern frg::manual_box<RuntimeTlsMap> runtimeTlsMap;
 
-Tcb *allocateTcb();
+Tcb *allocateTcb(void **allocation_base = nullptr);
 void initTlsObjects(
     Tcb *tcb, const frg::vector<SharedObject *, MemoryAllocator> &objects, bool checkInitialized
 );
