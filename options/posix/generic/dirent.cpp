@@ -79,11 +79,15 @@ DIR *opendir(const char *path) {
 struct dirent *readdir(DIR *dir) {
 	__ensure(dir->__ent_next <= dir->__ent_limit);
 	if (dir->__ent_next == dir->__ent_limit) {
+		size_t bytes_read = 0;
 		if (int e = mlibc::sysdep_or_enosys<ReadEntries>(
-		        dir->__handle, dir->__ent_buffer, sizeof(dir->__ent_buffer), &dir->__ent_limit
+		        dir->__handle, dir->__ent_buffer, sizeof(dir->__ent_buffer), &bytes_read
 		    );
-		    e)
-			__ensure(!"mlibc::sys_read_entries() failed");
+		    e) {
+			errno = e;
+			return nullptr;
+		}
+		dir->__ent_limit = bytes_read;
 		dir->__ent_next = 0;
 		if (!dir->__ent_limit)
 			return nullptr;
@@ -129,11 +133,15 @@ int readdir_r(DIR *dir, struct dirent *entry, struct dirent **result) {
 
 	__ensure(dir->__ent_next <= dir->__ent_limit);
 	if (dir->__ent_next == dir->__ent_limit) {
+		size_t bytes_read = 0;
 		if (int e = mlibc::sysdep_or_panic<ReadEntries>(
-		        dir->__handle, dir->__ent_buffer, sizeof(dir->__ent_buffer), &dir->__ent_limit
+		        dir->__handle, dir->__ent_buffer, sizeof(dir->__ent_buffer), &bytes_read
 		    );
-		    e)
-			__ensure(!"mlibc::sys_read_entries() failed");
+		    e) {
+			*result = nullptr;
+			return e;
+		}
+		dir->__ent_limit = bytes_read;
 		dir->__ent_next = 0;
 		if (!dir->__ent_limit) {
 			*result = nullptr;
