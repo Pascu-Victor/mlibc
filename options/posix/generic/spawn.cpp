@@ -7,6 +7,7 @@
 #include <signal.h>
 #include <spawn.h>
 #include <stdlib.h>
+#include <sys/resource.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -97,18 +98,19 @@ static int child(void *args_vp) {
 
 	if (attr->__flags & POSIX_SPAWN_SETSID) {
 		if ((ret = setsid()) < 0)
-			goto fail;
+			goto fail_errno;
 	}
 
 	if (attr->__flags & POSIX_SPAWN_SETPGROUP) {
-		mlibc::infoLogger() << "mlibc: posix_spawn: ignoring SETPGROUP" << frg::endlog;
-		// if((ret = setpgid(0, attr->__pgrp)))
-		//	goto fail;
+		if (setpgid(0, attr->__pgrp) < 0) {
+			ret = -errno;
+			goto fail;
+		}
 	}
 
 	if (attr->__flags & POSIX_SPAWN_RESETIDS) {
 		if ((ret = setgid(getgid())) || (ret = setuid(getuid())))
-			goto fail;
+			goto fail_errno;
 	}
 
 	if (fa && fa->__actions) {
@@ -124,7 +126,7 @@ static int child(void *args_vp) {
 			if (op->fd == p) {
 				ret = dup(p);
 				if (ret < 0)
-					goto fail;
+					goto fail_errno;
 				close(p);
 				p = ret;
 			}
@@ -140,33 +142,46 @@ static int child(void *args_vp) {
 					}
 					if (fd != op->fd) {
 						if ((ret = dup2(fd, op->fd)) < 0)
-							goto fail;
+							goto fail_errno;
 					} else {
 						ret = fcntl(fd, F_GETFD);
+						if (ret < 0)
+							goto fail_errno;
 						ret = fcntl(fd, F_SETFD, ret & ~FD_CLOEXEC);
 						if (ret < 0)
-							goto fail;
+							goto fail_errno;
 					}
 					break;
-				case FDOP_OPEN:
+				case FDOP_OPEN: {
+					struct rlimit limit;
+					if (getrlimit(RLIMIT_NOFILE, &limit) < 0)
+						goto fail_errno;
+					if (op->fd < 0 || static_cast<rlim_t>(op->fd) >= limit.rlim_cur) {
+						ret = -EBADF;
+						goto fail;
+					}
+					close(op->fd);
 					fd = open(op->path, op->oflag, op->mode);
 					if ((ret = fd) < 0)
-						goto fail;
+						goto fail_errno;
 					if (fd != op->fd) {
 						if ((ret = dup2(fd, op->fd)) < 0)
-							goto fail;
+							goto fail_errno;
 						close(fd);
+						if ((op->oflag & O_CLOEXEC) && fcntl(op->fd, F_SETFD, FD_CLOEXEC) < 0)
+							goto fail_errno;
 					}
 					break;
+				}
 				case FDOP_CHDIR:
 					ret = chdir(op->path);
 					if (ret < 0)
-						goto fail;
+						goto fail_errno;
 					break;
 				case FDOP_FCHDIR:
 					ret = fchdir(op->fd);
 					if (ret < 0)
-						goto fail;
+						goto fail_errno;
 					break;
 			}
 		}
@@ -174,20 +189,28 @@ static int child(void *args_vp) {
 
 	/* Close-on-exec flag may have been lost if we moved the pipe
 	 * to a different fd. */
-	fcntl(p, F_SETFD, FD_CLOEXEC);
+	if (fcntl(p, F_SETFD, FD_CLOEXEC) < 0)
+		goto fail_errno;
 
-	pthread_sigmask(
+	ret = pthread_sigmask(
 	    SIG_SETMASK,
 	    (attr->__flags & POSIX_SPAWN_SETSIGMASK) ? &attr->__mask : &args->oldmask,
 	    nullptr
 	);
 
+	if (ret) {
+		ret = -ret; // pthread functions return the error directly.
+		goto fail;
+	}
+
 	if (use_execvpe)
 		execvpe(args->path, args->argv, args->envp);
 	else
 		execve(args->path, args->argv, args->envp);
-	ret = -errno;
 
+fail_errno:
+	// Libc calls report -1, with the actual failure in errno.
+	ret = -errno;
 fail:
 	/* Since sizeof errno < PIPE_BUF, the write is atomic. */
 	ret = -ret;
@@ -224,10 +247,8 @@ static bool fast_spawn_collect_actions(
 			case FDOP_DUP2:
 				break;
 			case FDOP_OPEN:
-				if ((op->oflag & O_CLOEXEC) != 0)
-					return false;
-				if (strcmp(op->path, "/dev/null") != 0 || op->oflag != O_RDONLY)
-					return false;
+				// The kernel opens with the private child's admitted credentials,
+				// preserves descriptor flags, and returns authoritative VFS errno.
 				break;
 			default:
 				return false;
@@ -257,7 +278,8 @@ static bool try_fast_spawn(
     const posix_spawn_file_actions_t *file_actions,
     const posix_spawnattr_t *__restrict attr,
     char *const argv[],
-    char *const envp[]
+    char *const envp[],
+    int &error
 ) {
 	if constexpr (!mlibc::IsImplemented<Spawn>) {
 		return false;
@@ -287,11 +309,10 @@ static bool try_fast_spawn(
 
 	const bool need_options = options.flags != 0 || action_count != 0;
 	pid_t spawned_pid = 0;
-	int ec =
-	    mlibc::sysdep<Spawn>(path, argv, envp, need_options ? &options : nullptr, &spawned_pid);
-	if (ec)
-		return false;
-	if (res)
+	error = mlibc::sysdep<Spawn>(path, argv, envp, need_options ? &options : nullptr, &spawned_pid);
+	// Once submitted, this result is authoritative. Retrying a denial through
+	// fork/exec can both weaken policy and repeat partial file-action effects.
+	if (!error && res)
 		*res = spawned_pid;
 	return true;
 }
@@ -319,9 +340,9 @@ int posix_spawn(
 	args.attr = attrs ? attrs : &empty_attr;
 	args.argv = argv;
 	args.envp = envp;
-	if (try_fast_spawn(res, path, file_actions, args.attr, argv, envp)) {
+	if (try_fast_spawn(res, path, file_actions, args.attr, argv, envp, ec)) {
 		pthread_setcancelstate(cs, nullptr);
-		return 0;
+		return ec;
 	}
 	pthread_sigmask(SIG_BLOCK, &full_sigset, &args.oldmask);
 
