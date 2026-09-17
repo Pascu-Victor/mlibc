@@ -103,6 +103,7 @@ SYSDEP_FUNC(Close, int fd);
 SYSDEP_FUNC(ClockGet, int clock, time_t *secs, long *nanos);
 SYSDEP_FUNC(ClockSet, int clock, time_t secs, long nanos);
 SYSDEP_FUNC(ClockGetres, int clock, time_t *secs, long *nanos);
+SYSDEP_FUNC(ClockNanosleep, int clock, int flags, const struct timespec *request, struct timespec *remaining);
 SYSDEP_FUNC(Sleep, time_t *secs, long *nanos);
 SYSDEP_FUNC(Isatty, int fd);
 SYSDEP_FUNC(Rmdir, const char *path);

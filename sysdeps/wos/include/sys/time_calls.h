@@ -29,14 +29,22 @@ uint64_t times(void *tms, void *out) {
 	);
 }
 
+// Preserve the original low-level overload for existing callers.
 [[gnu::weak]]
 uint64_t setitimer(int which, const void *new_value) {
-	return syscall(
-	    (long)abi::callnums::time,
-	    (uint64_t)abi::sys_time_ops::SETITIMER,
-	    (uint64_t)(uintptr_t)which,
-	    (uint64_t)new_value
-	);
+	return syscall((long)abi::callnums::time, (uint64_t)abi::sys_time_ops::SETITIMER,
+	    (uint64_t)(uintptr_t)which, (uint64_t)new_value);
+}
+
+[[gnu::weak]]
+uint64_t setitimer(int which, const void *new_value, void *old_value) {
+	abi::SetItimerRequest const request{
+	    .which = which, .reserved = 0,
+	    .new_value_address = reinterpret_cast<uint64_t>(new_value),
+	    .old_value_address = reinterpret_cast<uint64_t>(old_value)
+	};
+	return syscall((long)abi::callnums::time, (uint64_t)abi::sys_time_ops::SETITIMER_V1,
+	    reinterpret_cast<uint64_t>(&request), abi::TIME_ITIMER_VERSION);
 }
 
 [[gnu::weak]]

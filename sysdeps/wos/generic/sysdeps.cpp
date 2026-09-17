@@ -846,6 +846,36 @@ int Sysdeps<ClockGet>::operator()(int clock_id, time_t *secs, long *nanos) {
 	return 0;
 }
 
+int Sysdeps<ClockGetres>::operator()(int clock_id, time_t *secs, long *nanos) {
+	timespec resolution{};
+	int64_t result = syscall(ker::abi::callnums::time,
+	    static_cast<uint64_t>(ker::abi::sys_time_ops::CLOCK_GETRES),
+	    reinterpret_cast<uint64_t>(&resolution), static_cast<uint64_t>(clock_id));
+	if (result < 0)
+		return static_cast<int>(-result);
+	if (secs)
+		*secs = resolution.tv_sec;
+	if (nanos)
+		*nanos = resolution.tv_nsec;
+	return 0;
+}
+
+int Sysdeps<ClockNanosleep>::operator()(int clock_id, int flags, const timespec *request, timespec *remaining) {
+	if (!request)
+		return EFAULT;
+	ker::abi::ClockSleepRequest const args{
+	    .clock_id = clock_id,
+	    .flags = static_cast<uint32_t>(flags),
+	    .seconds = request->tv_sec,
+	    .nanoseconds = request->tv_nsec,
+	    .remaining_address = reinterpret_cast<uint64_t>(remaining)
+	};
+	int64_t result = syscall(ker::abi::callnums::time,
+	    static_cast<uint64_t>(ker::abi::sys_time_ops::CLOCK_NANOSLEEP),
+	    reinterpret_cast<uint64_t>(&args), ker::abi::TIME_SLEEP_VERSION);
+	return result < 0 ? static_cast<int>(-result) : 0;
+}
+
 namespace {
 constexpr clock_t wosClockTicksPerSecond = 100;
 
@@ -892,13 +922,13 @@ int Sysdeps<Sleep>::operator()(time_t *secs, long *nanos) {
 	    reinterpret_cast<uint64_t>(&req),
 	    reinterpret_cast<uint64_t>(&rem)
 	);
-	if ((int64_t)r < 0)
+	if ((int64_t)r < 0 && (int64_t)r != -EINTR)
 		return (int)(-(int64_t)r);
 	if (secs)
 		*secs = rem.tv_sec;
 	if (nanos)
 		*nanos = rem.tv_nsec;
-	return 0;
+	return (int64_t)r < 0 ? static_cast<int>(-(int64_t)r) : 0;
 }
 
 int Sysdeps<Isatty>::operator()(int fd) {
@@ -2148,12 +2178,7 @@ int Sysdeps<GetItimer>::operator()(int which, struct itimerval *curr_value) {
 int Sysdeps<SetItimer>::operator()(
     int which, const struct itimerval *new_value, struct itimerval *old_value
 ) {
-	if (old_value) {
-		uint64_t res = ker::time::getitimer(which, (void *)old_value);
-		if ((int64_t)res < 0)
-			return (int)(-(int64_t)res);
-	}
-	uint64_t res = ker::time::setitimer(which, (const void *)new_value);
+	uint64_t res = ker::time::setitimer(which, (const void *)new_value, (void *)old_value);
 	if ((int64_t)res < 0)
 		return (int)(-(int64_t)res);
 	return 0;

@@ -176,6 +176,8 @@ struct WosSysdepTags :
     Seek,
     Close,
     ClockGet,
+    ClockGetres,
+    ClockNanosleep,
     Sleep,
     Isatty,
     Rmdir,

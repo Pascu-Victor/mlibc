@@ -666,6 +666,9 @@ int nanosleep(const struct timespec *req, struct timespec *rem) {
 }
 
 int clock_getres(clockid_t clockid, struct timespec *res) {
+	struct timespec ignored;
+	if (!res)
+		res = &ignored;
 	if (int e = mlibc::sysdep_or_enosys<ClockGetres>(clockid, &res->tv_sec, &res->tv_nsec); e) {
 		errno = e;
 		return -1;
@@ -683,35 +686,35 @@ int clock_gettime(clockid_t clock, struct timespec *time) {
 
 int
 clock_nanosleep(clockid_t clockid, int flags, const struct timespec *req, struct timespec *rem) {
-	__ensure(clockid == CLOCK_REALTIME || clockid == CLOCK_MONOTONIC);
+	if (!req)
+		return EFAULT;
+	if (req->tv_sec < 0 || req->tv_nsec < 0 || req->tv_nsec >= 1000000000L || (flags & ~TIMER_ABSTIME))
+		return EINVAL;
+	if constexpr (mlibc::IsImplemented<ClockNanosleep>) {
+		return mlibc::sysdep<ClockNanosleep>(clockid, flags, req, rem);
+	}
+	if (clockid != CLOCK_REALTIME && clockid != CLOCK_MONOTONIC)
+		return EINVAL;
 
+	struct timespec relative = *req;
 	if (flags & TIMER_ABSTIME) {
 		time_t secs = 0;
 		long nanos = 0;
-		if (int e = mlibc::sysdep<ClockGet>(clockid, &secs, &nanos); e) {
-			errno = e;
-			return -1;
-		}
-
-		struct timespec relativeTime;
-
-		if (secs > req->tv_sec)
+		if (int e = mlibc::sysdep<ClockGet>(clockid, &secs, &nanos); e)
+			return e;
+		if (secs > req->tv_sec || (secs == req->tv_sec && nanos >= req->tv_nsec))
 			return 0;
-		else if (secs == req->tv_sec && nanos >= req->tv_nsec)
-			return 0;
-		else {
-			relativeTime.tv_sec = req->tv_sec - secs;
-			relativeTime.tv_nsec = req->tv_nsec - nanos;
-			if (relativeTime.tv_nsec < 0) {
-				relativeTime.tv_sec -= 1;
-				relativeTime.tv_nsec += 1e9;
-			}
+		relative.tv_sec -= secs;
+		relative.tv_nsec -= nanos;
+		if (relative.tv_nsec < 0) {
+			relative.tv_sec -= 1;
+			relative.tv_nsec += 1000000000L;
 		}
-
-		return nanosleep(&relativeTime, rem);
 	}
-
-	return nanosleep(req, rem);
+	int e = mlibc::sysdep_or_enosys<Sleep>(&relative.tv_sec, &relative.tv_nsec);
+	if (e == EINTR && !(flags & TIMER_ABSTIME) && rem)
+		*rem = relative;
+	return e;
 }
 
 int clock_settime(clockid_t clock, const struct timespec *time) {
