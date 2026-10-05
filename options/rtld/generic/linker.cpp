@@ -2259,12 +2259,23 @@ frg::optional<ObjectSymbol> resolveInObject(
 		    + hash_table->bloomSize * sizeof(elf_addr) + hash_table->nBuckets * sizeof(uint32_t)
 		);
 
-		// TODO: Use the bloom filter.
-
 		// The symbols of a given bucket are contiguous in the table.
 		if (!hash_table->nBuckets)
 			return frg::optional<ObjectSymbol>{};
 		auto hash = gnuHash(string);
+		// A missing Bloom bit proves that this object cannot export the name.
+		// Keep the chain lookup for non-standard headers rather than introducing
+		// a division by zero or an out-of-range shift into the existing fallback.
+		if (hash_table->bloomSize && !(hash_table->bloomSize & (hash_table->bloomSize - 1))
+		    && hash_table->bloomShift < 32) {
+			constexpr uint32_t word_bits = sizeof(elf_addr) * 8;
+			auto bloom = reinterpret_cast<const elf_addr *>(hash_table + 1);
+			auto word = bloom[(hash / word_bits) & (hash_table->bloomSize - 1)];
+			auto mask = (elf_addr{1} << (hash % word_bits))
+			            | (elf_addr{1} << ((hash >> hash_table->bloomShift) % word_bits));
+			if ((word & mask) != mask)
+				return frg::optional<ObjectSymbol>{};
+		}
 		auto index = buckets[hash % hash_table->nBuckets];
 
 		if (!index)
