@@ -607,6 +607,8 @@ struct MqSetAttr {};
 #endif // __MLIBC_LINUX_OPTION
 
 #if __MLIBC_WOS_OPTION
+// Optional versioned native-image startup diagnostic.
+struct PerfTrace {};
 #include <abi-bits/mode_t.h>
 #include <abi-bits/pid_t.h>
 #include <abi-bits/statx.h>

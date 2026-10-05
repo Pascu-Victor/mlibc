@@ -2,6 +2,9 @@
 #include <elf.h>
 #include <link.h>
 #include <mlibc-config.h>
+#if __MLIBC_WOS_OPTION
+#include <mlibc/perf-startup.hpp>
+#endif
 
 #include <frg/manual_box.hpp>
 #include <frg/optional.hpp>
@@ -380,6 +383,9 @@ static constexpr uint64_t supportedDtFlags1 = DF_1_NOW;
 #endif
 
 extern "C" void *interpreterMain(uintptr_t *entry_stack) {
+#if __MLIBC_WOS_OPTION
+	const auto startup_token = mlibc::perf_startup_token(entry_stack);
+#endif
 	if (rtldConfig.debug)
 		mlibc::infoLogger() << "Entering ld.so" << frg::endlog;
 	entryStack = entry_stack;
@@ -791,6 +797,9 @@ extern "C" void *interpreterMain(uintptr_t *entry_stack) {
 #endif
 
 	globalDebugInterface.head = &executableSO->linkMap;
+#if __MLIBC_WOS_OPTION
+	mlibc::perf_startup_point(startup_token, WOS_PERF_STAGE_RTLD_DEPENDENCIES_READY);
+#endif
 	executableSO->inLinkMap = true;
 	Loader linker{globalScope.get(), executableSO, true, 1};
 	linker.linkObjects(executableSO);
@@ -799,6 +808,9 @@ extern "C" void *interpreterMain(uintptr_t *entry_stack) {
 	// so protect its RELRO range explicitly after that BFS is fully relocated.
 	linker.protectRelro(ldso);
 #endif
+#if __MLIBC_WOS_OPTION
+	mlibc::perf_startup_point(startup_token, WOS_PERF_STAGE_RTLD_LINK_READY);
+#endif
 
 	mlibc::initStackGuard(stack_entropy);
 
@@ -806,6 +818,10 @@ extern "C" void *interpreterMain(uintptr_t *entry_stack) {
 	tcb->tid = earlyTcb.tid;
 	if (mlibc::sysdep<TcbSet>(tcb))
 		__ensure(!"sys_tcb_set() failed");
+#if __MLIBC_WOS_OPTION
+	// TLS image initialization remains in initObjects(), after this boundary.
+	mlibc::perf_startup_point(startup_token, WOS_PERF_STAGE_RTLD_TCB_READY);
+#endif
 
 	globalDebugInterface.ver = 1;
 	globalDebugInterface.brk = &dl_debug_state;
@@ -817,6 +833,9 @@ extern "C" void *interpreterMain(uintptr_t *entry_stack) {
 	if (rtldConfig.debug)
 		mlibc::infoLogger() << "Leaving ld.so, jump to " << (void *)executableSO->entry
 		                    << frg::endlog;
+#if __MLIBC_WOS_OPTION
+	mlibc::perf_startup_point(startup_token, WOS_PERF_STAGE_RTLD_READY);
+#endif
 	return executableSO->entry;
 }
 

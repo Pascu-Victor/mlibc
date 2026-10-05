@@ -49,6 +49,10 @@ using SysdepOf = std::conditional_t<std::derived_from<ST, Tag>, mlibc::SysdepImp
 		[[noreturn]] static void operator()(__VA_ARGS__);                                          \
 	}
 
+#if __MLIBC_WOS_OPTION
+SYSDEP_FUNC(PerfTrace, uint64_t phase, uint64_t session, uint64_t correlation, uint64_t version);
+#endif
+
 SYSDEP_FUNC_RET(void, LibcLog, const char *message);
 SYSDEP_FUNC_NORETURN(LibcPanic);
 

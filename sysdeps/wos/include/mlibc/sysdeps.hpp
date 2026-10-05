@@ -143,6 +143,7 @@ struct WosSysdepTags :
     Personality,
 #endif // __MLIBC_GLIBC_OPTION
 
+    PerfTrace,
     LibcLog,
     LibcPanic,
     FutexTid,

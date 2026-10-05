@@ -24,6 +24,12 @@ libc_sources += files(
 
 if not no_headers
     install_headers(
+        'include/mlibc/perf-startup.hpp',
+        'include/mlibc/perf-startup-asm.h',
+        subdir: 'mlibc',
+    )
+
+    install_headers(
         'include/abi-bits/access.h',
         'include/abi-bits/auxv.h',
         'include/abi-bits/blkcnt_t.h',
@@ -86,6 +92,7 @@ if not no_headers
         'include/callnums/process.h',
         'include/callnums/shm.h',
         'include/callnums/sys_log.h',
+        'include/callnums/perf_trace.h',
         'include/callnums/time.h',
         'include/callnums/vfs.h',
         'include/callnums/vmem.h',

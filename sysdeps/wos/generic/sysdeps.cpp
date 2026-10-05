@@ -51,6 +51,7 @@
 #include <wos/netctl.h>
 
 #include <callnums/shm.h>
+#include <callnums/perf_trace.h>
 
 #if __MLIBC_POSIX_OPTION
 static_assert(sizeof(struct ipc_perm) == sizeof(ker::abi::shm::IpcPerm));
@@ -89,6 +90,19 @@ extern "C" __attribute__((weak)) char *
 __cxa_demangle(const char *mangled_name, char *output_buffer, size_t *length, int *status);
 
 namespace [[gnu::visibility("hidden")]] mlibc {
+
+int Sysdeps<PerfTrace>::operator()(
+    uint64_t phase, uint64_t session, uint64_t correlation, uint64_t version
+) {
+	static_assert(static_cast<uint64_t>(ker::abi::callnums::sys_log) == WOS_PERF_TRACE_SYS_LOG);
+	static_assert(
+	    static_cast<uint64_t>(ker::abi::sys_log::sys_log_ops::PERF_TRACE) == WOS_PERF_TRACE_LOG_OP
+	);
+	auto result = syscall(
+	    ker::abi::callnums::sys_log, WOS_PERF_TRACE_LOG_OP, phase, session, correlation, version, 0
+	);
+	return static_cast<int64_t>(result) < 0 ? static_cast<int>(-static_cast<int64_t>(result)) : 0;
+}
 
 namespace {
 
