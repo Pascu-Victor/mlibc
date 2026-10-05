@@ -1238,13 +1238,21 @@ frg::expected<LinkerError, void> ObjectRepository::_fetchFromFile(SharedObject *
 					    << "mlibc: sys_vm_readahead() failed in ld.so" << frg::endlog;
 			}
 
-			// Clear the trailing area at the end of the backed mapping.
-			// We do not clear the leading area; programs are not supposed to access it.
-			memset(
-			    reinterpret_cast<void *>(map_address + misalign + phdr->p_filesz),
-			    0,
-			    phdr->p_memsz - phdr->p_filesz
-			);
+			// Anonymous tail pages are already zero-filled by VmMap. Only the BSS
+			// bytes in the last file-backed page need explicit clearing; touching
+			// the anonymous pages here would defeat their demand-zero mapping.
+			if (backed_map_size && phdr->p_memsz > phdr->p_filesz) {
+				size_t const bss_size = phdr->p_memsz - phdr->p_filesz;
+				size_t const file_tail_size = backed_map_size - (misalign + phdr->p_filesz);
+				size_t const clear_size = bss_size < file_tail_size ? bss_size : file_tail_size;
+				if (clear_size) {
+					memset(
+					    reinterpret_cast<void *>(map_address + misalign + phdr->p_filesz),
+					    0,
+					    clear_size
+					);
+				}
+			}
 #else
 			(void)backed_map_size;
 
