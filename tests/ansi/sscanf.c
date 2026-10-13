@@ -398,6 +398,77 @@ int main() {
 	assert(sscanf(" -0x1234", "%x", &int_value) == 1);
 	assert(int_value == -0x1234);
 
+	{
+		// A leading zero is a digit even when no later hexadecimal digit follows.
+		const struct {
+			const char *input;
+			unsigned long long value;
+			int consumed;
+		} hex_cases[] = {
+			{"0", 0, 1},
+			{"0 ", 0, 1},
+			{"0z", 0, 1},
+			{" \t0", 0, 3},
+			{"+0", 0, 2},
+			{"-0", 0, 2},
+			{"00", 0, 2},
+			{"0x0", 0, 3},
+			{"0X0", 0, 3},
+			{"+0x0", 0, 4},
+			{"-0X0", 0, 4},
+			{"01", 1, 2},
+			{"0a", 10, 2},
+			{"a", 10, 1},
+			{"F", 15, 1},
+			{"0x12ab", 0x12ab, 6},
+			{"-1", ~0ULL, 2},
+			{"0 root=7", 0, 1}
+		};
+		const char *hex_formats[] = {"%llx%n", "%llX%n"};
+		for (size_t f = 0; f < sizeof(hex_formats) / sizeof(*hex_formats); f++) {
+			for (size_t i = 0; i < sizeof(hex_cases) / sizeof(*hex_cases); i++) {
+				unsigned long long value = 1;
+				int consumed = -1;
+				assert(sscanf(hex_cases[i].input, hex_formats[f], &value, &consumed) == 1);
+				assert(value == hex_cases[i].value);
+				assert(consumed == hex_cases[i].consumed);
+			}
+		}
+	}
+
+	{
+		int consumed = -1;
+		assert(sscanf("0", "%*x%n", &consumed) == 0);
+		assert(consumed == 1);
+
+		unsigned long long following = 0;
+		consumed = -1;
+		assert(sscanf("0 root=7", "%*X root=%llu%n", &following, &consumed) == 1);
+		assert(following == 7);
+		assert(consumed == 8);
+	}
+
+	{
+		// A literal prefix in the format leaves a standalone zero for %llx.
+		const char input[] = "compartment spec=1 host-pid=41 exec=/app/probe network=denied "
+			"ceiling=0x0 root-bytes=33554432";
+		long long pid = -1;
+		unsigned long long ceiling = 1, root_bytes = 0;
+		char executable[128] = {0}, network[32] = {0};
+		int consumed = -1;
+		assert(sscanf(input,
+			"compartment spec=1 host-pid=%lld exec=%127s network=%31s "
+			"ceiling=0x%llx root-bytes=%llu%n",
+			&pid, executable, network, &ceiling, &root_bytes, &consumed) == 5);
+		assert(pid == 41);
+		assert(!strcmp(executable, "/app/probe"));
+		assert(!strcmp(network, "denied"));
+		assert(ceiling == 0);
+		assert(root_bytes == 33554432);
+		assert(consumed == (int)(sizeof(input) - 1));
+		assert(input[consumed] == '\0');
+	}
+
 	assert(sscanf("abc", "abc%n", &int_value) == 0);
 	assert(int_value == 3);
 	assert(sscanf("1234", "1234%hhn", &uchar_value) == 0);
