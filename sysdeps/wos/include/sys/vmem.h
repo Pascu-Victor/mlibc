@@ -3,6 +3,7 @@
 #include <stdint.h>
 
 #ifdef __cplusplus
+#include <sys/numa.h>
 #include <sys/syscall.h>
 
 namespace ker {
@@ -150,6 +151,26 @@ static inline int64_t swapoff(const char *path) {
 	);
 
 	return static_cast<int64_t>(result);
+}
+
+// Fixed-layout local NUMA observation. Returns zero or negative raw errno.
+// Prefault request/output buffers and keep them disjoint from measured pages;
+// control transport may fault normally, while PAGE_NODES never faults payload.
+static inline int64_t query_numa(const abi::vmem::numa::QueryRequest &request) {
+	return static_cast<int64_t>(syscall(
+	    abi::callnums::vmem,
+	    static_cast<uint64_t>(abi::vmem::ops::QUERY_NUMA),
+	    reinterpret_cast<uint64_t>(&request), sizeof(request), 0, 0
+	));
+}
+
+// Only LOCAL with nodes=0 is currently supported. Non-LOCAL returns -ENOTSUP.
+static inline int64_t set_memory_policy(const abi::vmem::numa::PolicyRequest &request) {
+	return static_cast<int64_t>(syscall(
+	    abi::callnums::vmem,
+	    static_cast<uint64_t>(abi::vmem::ops::SET_MEMORY_POLICY),
+	    reinterpret_cast<uint64_t>(&request), sizeof(request), 0, 0
+	));
 }
 
 } // namespace vmem

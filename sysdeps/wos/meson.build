@@ -113,6 +113,7 @@ if not no_headers
         'include/sys/logging.h',
         'include/sys/vfs.h',
         'include/sys/vmem.h',
+        'include/sys/numa.h',
         'include/sys/time_calls.h',
         'include/sys/time_ops.h',
         subdir: 'sys',

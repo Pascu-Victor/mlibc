@@ -10,6 +10,8 @@ enum class ops : uint64_t {
 	MSYNC = 4,
 	SWAPON = 5,
 	SWAPOFF = 6,
+	QUERY_NUMA = 7,
+	SET_MEMORY_POLICY = 8,
 	anon_allocate = ANON_ALLOCATE,
 	anon_free = ANON_FREE,
 	protect = PROTECT,
@@ -17,5 +19,7 @@ enum class ops : uint64_t {
 	msync = MSYNC,
 	swapon = SWAPON,
 	swapoff = SWAPOFF,
+	query_numa = QUERY_NUMA,
+	set_memory_policy = SET_MEMORY_POLICY,
 };
 } // namespace ker::abi::vmem
