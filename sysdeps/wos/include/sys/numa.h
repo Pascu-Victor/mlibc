@@ -2,6 +2,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+
 #include <type_traits>
 
 // Fixed-layout local WOS NUMA records. Node IDs are dense boot-local IDs;
@@ -20,9 +21,7 @@ enum class QueryKind : uint32_t { SUMMARY = 0, NODE = 1, SELF_POLICY = 2, PAGE_N
 enum class PolicyMode : uint32_t { LOCAL = 0, PREFERRED = 1, BIND = 2, INTERLEAVE = 3 };
 // Rejected-firmware fallback is distinguished using permanent BootStatus; no
 // firmware address, parser offset or rejected table bytes are exposed.
-enum class Provenance : uint32_t {
-    UMA_MISSING_SRAT = 0, SRAT_DEFAULT_DISTANCES = 1, SRAT_SLIT = 2, UMA_REJECTED_FIRMWARE = 3
-};
+enum class Provenance : uint32_t { UMA_MISSING_SRAT = 0, SRAT_DEFAULT_DISTANCES = 1, SRAT_SLIT = 2, UMA_REJECTED_FIRMWARE = 3 };
 enum class PageStatus : uint16_t { RESIDENT = 0, UNAVAILABLE = 1 };
 
 struct QueryRequest {
