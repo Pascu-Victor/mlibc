@@ -1,5 +1,7 @@
 #pragma once
-#include <callnums/vmem.h>
+// Use the matching installed ABI even when a kernel navigation include path
+// precedes this sysroot. Its similarly named header also declares mmap flags.
+#include "../callnums/vmem.h"
 #include <stdint.h>
 
 #ifdef __cplusplus
