@@ -162,16 +162,23 @@ static inline int64_t query_numa(const abi::vmem::numa::QueryRequest &request) {
 	return static_cast<int64_t>(syscall(
 	    abi::callnums::vmem,
 	    static_cast<uint64_t>(abi::vmem::ops::QUERY_NUMA),
-	    reinterpret_cast<uint64_t>(&request), sizeof(request), 0, 0
+	    reinterpret_cast<uint64_t>(&request),
+	    sizeof(request),
+	    0,
+	    0
 	));
 }
 
-// Only LOCAL with nodes=0 is currently supported. Non-LOCAL returns -ENOTSUP.
+// Sets the calling task's policy for future private allocation attempts.
+// Existing mappings and already issued operations retain their placement.
 static inline int64_t set_memory_policy(const abi::vmem::numa::PolicyRequest &request) {
 	return static_cast<int64_t>(syscall(
 	    abi::callnums::vmem,
 	    static_cast<uint64_t>(abi::vmem::ops::SET_MEMORY_POLICY),
-	    reinterpret_cast<uint64_t>(&request), sizeof(request), 0, 0
+	    reinterpret_cast<uint64_t>(&request),
+	    sizeof(request),
+	    0,
+	    0
 	));
 }
 
